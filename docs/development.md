@@ -145,9 +145,9 @@ Git 命令使用参数数组执行，路径按字面值处理。写操作限定�
 
 ### Windows x64 与 Ubuntu x64
 
-首批目标为 Windows 11 x64 和 Ubuntu 24.04 LTS x64。MyGo 原生界面不需要 WebView2 或 WebKitGTK；Windows 使用系统 Git，Ubuntu 的 Debian 包声明 Git、GTK 3 和 libsecret 依赖，Secret Service 由桌面会话提供。首次远程操作前应在终端配置好 Git/SSH 凭证和签名；应用继续禁止终端交互提示，没有新增账户登录或凭证配置界面。
+首批目标为 Windows 11 x64 和 Ubuntu 24.04 LTS x64。MyGo 原生界面不需要 WebView2 或 WebKitGTK；Windows 使用系统 Git，Ubuntu 的 Debian 包声明 Git、GTK 3、libsecret 和 Noto CJK 字体依赖，Secret Service 由桌面会话提供。CJK 字体用于中文界面及仓库路径，最小系统缺少字体会造成文字缺失和控件测量异常。首次远程操作前应在终端配置好 Git/SSH 凭证和签名；应用继续禁止终端交互提示，没有新增账户登录或凭证配置界面。
 
-`.github/workflows/desktop.yml` 对 PR 和主分支串行运行 Windows、Ubuntu、macOS 回归，并构建 Windows 安装器和 Ubuntu Debian 包。Go 使用 `GOMAXPROCS=2`、`-p=1`、`-parallel=2`；Ubuntu 测试使用独立的虚拟显示和 D-Bus/keyring，会话内只存合成测试密钥。各平台保留 `ui.Tester` 浅深色及紧凑布局截图供审阅，这些截图不替代真实系统窗口、输入法及快捷键验收。macOS job 不参与签名、公证或发布。
+`.github/workflows/desktop.yml` 对 PR 和主分支运行 Windows、Ubuntu、macOS 回归，并构建 Windows 安装器和 Ubuntu Debian 包。最多两个独立 runner 并行，各 runner 内的检查、测试和打包串行执行；这不会占用本机的验证预算。Go 使用 `GOMAXPROCS=2`、`-p=1`、`-parallel=2`；Ubuntu 测试使用独立的虚拟显示和 D-Bus/keyring，会话内只存合成测试密钥。各平台保留 `ui.Tester` 浅深色及紧凑布局截图供审阅，这些截图不替代真实系统窗口、输入法及快捷键验收。macOS job 不参与签名、公证或发布。
 
 手动构建新平台安装包：
 

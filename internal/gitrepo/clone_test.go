@@ -255,11 +255,16 @@ func TestCloneCancellationPreservesExternalChanges(t *testing.T) {
 			if _, err := Clone(context.Background(), external, parent, "repo"); !errors.Is(err, os.ErrExist) {
 				t.Fatalf("concurrent clone acquired the reserved target: %v", err)
 			}
+			replacementBlocked := false
 			switch change {
 			case "add file":
 				write(t, target, "keep", "external")
 			case "replace directory", "replace file", "replace symlink":
 				if err := os.Rename(target, filepath.Join(parent, "moved")); err != nil {
+					if cloneDirectoryRenameBlocked(err) {
+						replacementBlocked = true
+						break
+					}
 					t.Fatal(err)
 				}
 				switch change {
@@ -280,7 +285,7 @@ func TestCloneCancellationPreservesExternalChanges(t *testing.T) {
 			case <-time.After(5 * time.Second):
 				t.Fatal("clone process did not stop after cancellation")
 			}
-			if change == "none" {
+			if change == "none" || replacementBlocked {
 				entries, err := os.ReadDir(parent)
 				if err != nil || len(entries) != 0 {
 					t.Fatalf("cancellation left entries: %v, %v", entries, err)
@@ -344,6 +349,23 @@ func TestCloneSuccessfulTransferPreservesExternalChanges(t *testing.T) {
 			}
 			if change == "replace directory" {
 				if err := os.Rename(target, filepath.Join(parent, "moved")); err != nil {
+					if cloneDirectoryRenameBlocked(err) {
+						cancel()
+						close(release)
+						select {
+						case err := <-done:
+							if !errors.Is(err, context.Canceled) {
+								t.Fatalf("protected clone cancellation: %v", err)
+							}
+						case <-time.After(5 * time.Second):
+							t.Fatal("clone process did not stop after cancellation")
+						}
+						entries, err := os.ReadDir(parent)
+						if err != nil || len(entries) != 0 {
+							t.Fatalf("protected clone left entries: %v, %v", entries, err)
+						}
+						return
+					}
 					t.Fatal(err)
 				}
 			}

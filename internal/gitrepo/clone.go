@@ -50,8 +50,8 @@ func Clone(ctx context.Context, source, parent, name string) (*Repository, error
 		removeCloneReservation(target, owned)
 		return nil, err
 	}
-	defer root.Close()
 	defer removeCloneReservation(target, owned)
+	defer root.Close()
 	opened, err := root.Stat(".")
 	if err != nil || !os.SameFile(owned, opened) {
 		return nil, errors.New("克隆目标已被外部替换，已保留外部内容")
@@ -67,11 +67,19 @@ func Clone(ctx context.Context, source, parent, name string) (*Repository, error
 		_ = root.Remove(stage)
 		return nil, err
 	}
-	defer staging.Close()
 	staged, err := staging.Stat(".")
 	if err != nil {
+		_ = staging.Close()
 		return nil, err
 	}
+	// 清理内容后先关闭暂存 Root，再移除空目录；Windows 会锁定打开的目录句柄。
+	defer func() {
+		// 只按身份移除空暂存目录，不能沿目标路径执行递归删除。
+		if current, err := root.Lstat(stage); err == nil && os.SameFile(staged, current) {
+			_ = root.Remove(stage)
+		}
+	}()
+	defer staging.Close()
 	defer func() {
 		directory, err := staging.Open(".")
 		if err != nil {
@@ -84,10 +92,6 @@ func Clone(ctx context.Context, source, parent, name string) (*Repository, error
 		}
 		for _, entry := range entries {
 			_ = staging.RemoveAll(entry.Name())
-		}
-		// 只删除空的临时目录，不沿目标路径执行 RemoveAll。
-		if current, err := root.Lstat(stage); err == nil && os.SameFile(staged, current) {
-			_ = root.Remove(stage)
 		}
 	}()
 

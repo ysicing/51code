@@ -20,6 +20,7 @@ func TestDiscoveryAndEndpointValidation(t *testing.T) {
 	t.Setenv("MAGPIE_ADDR", "")
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 	root := filepath.Join(home, ".config", "magpie")
 	if err := os.MkdirAll(root, 0700); err != nil {
 		t.Fatal(err)
