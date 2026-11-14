@@ -164,3 +164,7 @@ func testSymlink(t *testing.T, target, link string) {
 		t.Fatal(err)
 	}
 }
+
+func cloneDirectoryRenameBlocked(err error) bool {
+	return runtime.GOOS == "windows" && errors.Is(err, syscall.Errno(32))
+}

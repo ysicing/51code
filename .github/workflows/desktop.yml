@@ -37,7 +37,7 @@ jobs:
     timeout-minutes: 45
     strategy:
       fail-fast: false
-      max-parallel: 1
+      max-parallel: 2
       matrix:
         include:
           - name: Windows x64 (unsigned)
@@ -78,7 +78,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends git libgtk-3-0t64 libsecret-1-0 gnome-keyring xvfb xauth dbus-x11 libgl1-mesa-dri libglx-mesa0 libegl-mesa0
+          sudo apt-get install -y --no-install-recommends git libgtk-3-0t64 libsecret-1-0 fonts-noto-cjk gnome-keyring xvfb xauth dbus-x11 libgl1-mesa-dri libglx-mesa0 libegl-mesa0
       - run: bun install --frozen-lockfile
       - name: Verify published release and tag before building
         if: env.RELEASE_TAG != ''

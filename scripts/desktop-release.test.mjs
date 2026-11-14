@@ -264,7 +264,7 @@ test("selects updates by explicit build target and preserves original macOS sett
     expect(config.windows?.certificate).toBeUndefined();
     expect(config.windows?.signCommand).toBeUndefined();
     expect(config.macos).toEqual(mac.macos);
-    expect(config.linux).toEqual({ formats: ["deb"], webview: false, command: "51code", categories: ["Development"], depends: ["git", "libsecret-1-0"] });
+    expect(config.linux).toEqual({ formats: ["deb"], webview: false, command: "51code", categories: ["Development"], depends: ["git", "libsecret-1-0", "fonts-noto-cjk"] });
   }
   expect(load("").updates).toEqual(process.platform === "darwin" ? mac.updates : undefined);
   expect(() => load("unsupported")).toThrow("不支持");

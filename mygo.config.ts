@@ -40,7 +40,7 @@ export default defineConfig({
     webview: false,
     command: "51code",
     categories: ["Development"],
-    depends: ["git", "libsecret-1-0"],
+    depends: ["git", "libsecret-1-0", "fonts-noto-cjk"],
   },
   // 新平台首版通过手动下载安装包升级，避免嵌入尚未发布的更新源。
   // Windows 未配置证书或 signCommand，首版安装包不提供 Authenticode 签名。
