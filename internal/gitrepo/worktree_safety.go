@@ -154,7 +154,17 @@ func (state *worktreeState) inspect(ctx context.Context, common string) error {
 		return err
 	}
 	state.RootStamp += fmt.Sprintf(":%d:%d", info.Mode(), info.ModTime().UnixNano())
-	actualCommon, err := worktreeCommonDir(ctx, root)
+	source := &Repository{Path: root}
+	// 每个工作树都要读取，合并为一次 rev-parse；裸仓库没有工作区根目录，只读共享目录。
+	options := []string{"--git-common-dir"}
+	if !state.Worktree.Bare {
+		options = append(options, "--show-toplevel", "--absolute-git-dir")
+	}
+	paths, err := source.revParsePaths(ctx, options...)
+	if err != nil {
+		return fmt.Errorf("无法读取工作树归属：%w", err)
+	}
+	actualCommon, err := worktreePath(paths[0])
 	if err != nil {
 		return fmt.Errorf("无法读取工作树归属：%w", err)
 	}
@@ -172,20 +182,11 @@ func (state *worktreeState) inspect(ctx context.Context, common string) error {
 	if state.Worktree.Bare {
 		return nil
 	}
-	source := &Repository{Path: root}
-	toplevel, err := source.git(ctx, "rev-parse", "--show-toplevel")
-	if err != nil {
-		return err
-	}
-	canonical, err := worktreePath(strings.TrimSuffix(toplevel, "\n"))
+	canonical, err := worktreePath(paths[1])
 	if err != nil || !worktreeSamePath(canonical, root) {
 		return errors.New("工作树根目录已改变，请刷新核实")
 	}
-	directory, err := source.git(ctx, "rev-parse", "--absolute-git-dir")
-	if err != nil {
-		return err
-	}
-	state.GitDir, err = worktreePath(strings.TrimSuffix(directory, "\n"))
+	state.GitDir, err = worktreePath(paths[2])
 	if err != nil {
 		return err
 	}
@@ -217,7 +218,7 @@ func (state *worktreeState) inspect(ctx context.Context, common string) error {
 	if head != state.Worktree.Head || branch != state.Worktree.Branch || detached != state.Worktree.Detached {
 		return errors.New("工作树 HEAD 或分支在读取期间已改变，请刷新")
 	}
-	operation, err := source.operation(ctx)
+	operation, err := source.operationIn(ctx, state.GitDir)
 	if err != nil {
 		return err
 	}

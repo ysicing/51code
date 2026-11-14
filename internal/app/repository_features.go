@@ -82,14 +82,6 @@ func (service *RepositoryService) CompareFileDiff(ctx context.Context, path, fro
 	return repo.CompareFileDiff(ctx, from, target, file)
 }
 
-func (service *RepositoryService) Tags(ctx context.Context, path string) ([]gitrepo.Tag, error) {
-	repo, err := service.manager.Get(path)
-	if err != nil {
-		return nil, err
-	}
-	return repo.Tags(ctx)
-}
-
 func (service *RepositoryService) CreateTag(ctx context.Context, path, name, hash string) error {
 	repo, err := service.manager.Get(path)
 	if err != nil {

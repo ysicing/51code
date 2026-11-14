@@ -21,11 +21,27 @@ type Operation struct {
 }
 
 func (repo *Repository) operation(ctx context.Context) (Operation, error) {
-	directory, err := repo.git(ctx, "rev-parse", "--absolute-git-dir")
+	directory, err := repo.gitDirectory(ctx)
 	if err != nil {
 		return Operation{}, err
 	}
-	directory = strings.TrimSuffix(directory, "\n")
+	return repo.operationIn(ctx, directory)
+}
+
+// gitDirectory 返回工作区的 Git 目录。Path 是工作区根目录且环境中的 GIT_DIR 已被清除，
+// 根目录下的 .git 为真实目录时 Git 发现的就是它，省去每次刷新启动 rev-parse；
+// 链接工作树、子模块等 .git 文件或其他布局仍交给 Git 解析。
+func (repo *Repository) gitDirectory(ctx context.Context) (string, error) {
+	directory := filepath.Join(repo.Path, ".git")
+	if info, err := os.Lstat(directory); err == nil && info.IsDir() {
+		return directory, nil
+	}
+	output, err := repo.git(ctx, "rev-parse", "--absolute-git-dir")
+	return strings.TrimSuffix(output, "\n"), err
+}
+
+// operationIn 根据已知的 Git 目录检查进行中的操作。
+func (repo *Repository) operationIn(ctx context.Context, directory string) (Operation, error) {
 	for _, marker := range []struct{ path, kind string }{
 		{"rebase-merge", "rebase"}, {"rebase-apply", "rebase"},
 		{"MERGE_HEAD", "merge"}, {"CHERRY_PICK_HEAD", "cherry-pick"}, {"REVERT_HEAD", "revert"},

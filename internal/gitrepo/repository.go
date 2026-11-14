@@ -40,7 +40,6 @@ type Snapshot struct {
 	Detached  bool      `json:"detached"`
 	Unborn    bool      `json:"unborn"`
 	Files     []File    `json:"files"`
-	Remotes   []string  `json:"remotes"`
 }
 
 type Branch struct {
@@ -71,14 +70,13 @@ func Open(ctx context.Context, path string) (*Repository, error) {
 	if err != nil {
 		return nil, err
 	}
-	inside, err := run(ctx, absolute, "", 15*time.Second, "rev-parse", "--is-inside-work-tree")
-	if err != nil || strings.TrimSpace(inside) != "true" {
+	// 一次读取两项；不在工作区（含 .git 目录内）时 --show-toplevel 会失败，同样视为非工作区。
+	output, err := run(ctx, absolute, "", 15*time.Second, "rev-parse", "--is-inside-work-tree", "--show-toplevel")
+	inside, root, _ := strings.Cut(output, "\n")
+	if err != nil || inside != "true" || root == "" {
 		return nil, errors.New("所选目录不是 Git 工作区")
 	}
-	root, err := run(ctx, absolute, "", 15*time.Second, "rev-parse", "--show-toplevel")
-	if err != nil {
-		return nil, err
-	}
+	// 根路径可能含换行，只去掉 Git 追加的末尾换行。
 	canonical, err := filepath.EvalSymlinks(strings.TrimSuffix(root, "\n"))
 	if err != nil {
 		return nil, err
@@ -233,7 +231,7 @@ func parseStatus(output string) (statusBranch, []File, error) {
 func (repo *Repository) Snapshot(ctx context.Context) (Snapshot, error) {
 	repo.mu.Lock()
 	defer repo.mu.Unlock()
-	state := Snapshot{Name: filepath.Base(repo.Path), Path: repo.Path, Files: []File{}, Remotes: []string{}}
+	state := Snapshot{Name: filepath.Base(repo.Path), Path: repo.Path, Files: []File{}}
 	branch, files, err := repo.status(ctx, true)
 	if err != nil {
 		return state, err
@@ -246,19 +244,8 @@ func (repo *Repository) Snapshot(ctx context.Context) (Snapshot, error) {
 	if !state.Unborn && !state.Detached {
 		state.Upstream, state.Ahead, state.Behind = branch.upstream, branch.ahead, branch.behind
 	}
-	if state.Operation, err = repo.operation(ctx); err != nil {
-		return state, err
-	}
-	remotes, err := repo.git(ctx, "remote")
-	if err != nil {
-		return state, err
-	}
-	for _, remote := range strings.Split(strings.TrimSpace(remotes), "\n") {
-		if remote != "" {
-			state.Remotes = append(state.Remotes, remote)
-		}
-	}
-	return state, nil
+	state.Operation, err = repo.operation(ctx)
+	return state, err
 }
 
 func validPath(path string) error {
@@ -398,25 +385,93 @@ func (repo *Repository) History(ctx context.Context, skip int) ([]Commit, error)
 	return commits, nil
 }
 
-func (repo *Repository) Branches(ctx context.Context) ([]Branch, error) {
-	repo.mu.Lock()
-	defer repo.mu.Unlock()
-	output, err := repo.git(ctx, "for-each-ref", "--format=%(refname)%00%(objectname:short)%00%(HEAD)%00%(upstream:short)%00%(symref)%00%(upstream:remotename)%00%(upstream:remoteref)", "refs/heads", "refs/remotes")
-	if err != nil {
-		return nil, err
-	}
-	branches := []Branch{}
-	defaults := make(map[string]bool)
-	targets := make(map[string]bool)
-	defaultName := ""
+// branchFormat 的字段顺序由 parseBranches 解析，References 在其后追加完整对象 ID。
+const branchFormat = "%(refname)%00%(objectname:short)%00%(HEAD)%00%(upstream:short)%00%(symref)%00%(upstream:remotename)%00%(upstream:remoteref)"
+
+// refRecords 按行拆分 for-each-ref 输出；引用名不能含换行或 NUL。
+func refRecords(output string, count int, invalid string) ([][]string, error) {
+	var records [][]string
 	for _, line := range strings.Split(strings.TrimSuffix(output, "\n"), "\n") {
 		if line == "" {
 			continue
 		}
 		fields := strings.Split(line, "\x00")
-		if len(fields) != 7 {
-			return nil, errors.New("无法解析分支")
+		if len(fields) != count {
+			return nil, errors.New(invalid)
 		}
+		records = append(records, fields)
+	}
+	return records, nil
+}
+
+func (repo *Repository) Branches(ctx context.Context) ([]Branch, error) {
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+	output, err := repo.git(ctx, "for-each-ref", "--format="+branchFormat, "refs/heads", "refs/remotes")
+	if err != nil {
+		return nil, err
+	}
+	records, err := refRecords(output, 7, "无法解析分支")
+	if err != nil {
+		return nil, err
+	}
+	return parseBranches(records), nil
+}
+
+// References 是刷新所需的全部引用。
+type References struct {
+	Branches []Branch
+	Tags     []Tag
+	Stashes  []Stash
+}
+
+// References 用一次 for-each-ref 读取分支和标签，结果与分别调用 Branches、Tags 一致；
+// 与 git stash list 相同，refs/stash 不存在时没有贮藏，不再启动进程读取。
+func (repo *Repository) References(ctx context.Context) (References, error) {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	if err := repo.lockHistory(ctx); err != nil {
+		return References{}, err
+	}
+	defer repo.mu.Unlock()
+	output, err := repo.git(ctx, "for-each-ref", "--format="+branchFormat+"%00%(objectname)",
+		"refs/heads", "refs/remotes", "refs/tags", "refs/stash")
+	if err != nil {
+		return References{}, err
+	}
+	records, err := refRecords(output, 8, "无法解析引用")
+	if err != nil {
+		return References{}, err
+	}
+	refs := References{Tags: []Tag{}, Stashes: []Stash{}}
+	var branches [][]string
+	stash := false
+	// for-each-ref 默认按引用名排序，按前缀拆分后各类内部顺序与单独读取时相同。
+	for _, fields := range records {
+		switch name := fields[0]; {
+		case strings.HasPrefix(name, "refs/heads/"), strings.HasPrefix(name, "refs/remotes/"):
+			branches = append(branches, fields[:7])
+		case strings.HasPrefix(name, "refs/tags/"):
+			refs.Tags = append(refs.Tags, Tag{Name: strings.TrimPrefix(name, "refs/tags/"), Hash: fields[7]})
+		case name == "refs/stash":
+			stash = true
+		}
+	}
+	refs.Branches = parseBranches(branches)
+	if stash {
+		if refs.Stashes, err = repo.stashes(ctx); err != nil {
+			return References{}, err
+		}
+	}
+	return refs, nil
+}
+
+func parseBranches(records [][]string) []Branch {
+	branches := []Branch{}
+	defaults := make(map[string]bool)
+	targets := make(map[string]bool)
+	defaultName := ""
+	for _, fields := range records {
 		remote := strings.HasPrefix(fields[0], "refs/remotes/")
 		name := strings.TrimPrefix(strings.TrimPrefix(fields[0], "refs/heads/"), "refs/remotes/")
 		branches = append(branches, Branch{
@@ -458,7 +513,7 @@ func (repo *Repository) Branches(ctx context.Context) ([]Branch, error) {
 		branch := &branches[index]
 		branch.Default = !branch.Remote && branch.Name == defaultName || branch.Remote && defaults[branch.Name]
 	}
-	return branches, nil
+	return branches
 }
 
 func (repo *Repository) validateBranch(ctx context.Context, name string) error {

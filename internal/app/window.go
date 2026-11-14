@@ -349,17 +349,15 @@ func (app *nativeApp) readRepository(ctx context.Context, path string, open bool
 		return nil, err
 	}
 	path = result.snapshot.Path
-	if result.branches, err = app.service.Branches(ctx, path); err != nil {
+	refs, err := app.service.References(ctx, path)
+	if err != nil {
 		return nil, err
 	}
-	if result.tags, err = app.service.Tags(ctx, path); err != nil {
-		return nil, err
-	}
+	result.branches, result.tags, result.stashes = refs.Branches, refs.Tags, refs.Stashes
 	if result.remotes, err = app.service.RemoteConfigs(ctx, path); err != nil {
 		return nil, err
 	}
-	result.stashes, err = app.service.Stashes(ctx, path)
-	return result, err
+	return result, nil
 }
 
 func (app *nativeApp) adopt(result *repositoryView) {

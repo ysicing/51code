@@ -194,24 +194,29 @@ func (repo *Repository) checkConflictAncestors(ctx context.Context, root *os.Roo
 	return nil
 }
 
-// metadataDirectories 一次读取当前 Git 目录与共享目录；路径含换行无法按行拆分时逐个读取。
+// metadataDirectories 读取当前 Git 目录与共享目录。
 func (repo *Repository) metadataDirectories(ctx context.Context) ([]string, error) {
-	output, err := repo.git(ctx, "rev-parse", "--path-format=absolute", "--absolute-git-dir", "--git-common-dir")
+	return repo.revParsePaths(ctx, "--absolute-git-dir", "--git-common-dir")
+}
+
+// revParsePaths 用一次 rev-parse 按顺序读取多个绝对路径；路径含换行无法按行拆分时逐个读取。
+func (repo *Repository) revParsePaths(ctx context.Context, options ...string) ([]string, error) {
+	output, err := repo.git(ctx, append([]string{"rev-parse", "--path-format=absolute"}, options...)...)
 	if err != nil {
 		return nil, err
 	}
-	if lines := strings.Split(strings.TrimSuffix(output, "\n"), "\n"); len(lines) == 2 {
+	if lines := strings.Split(strings.TrimSuffix(output, "\n"), "\n"); len(lines) == len(options) {
 		return lines, nil
 	}
-	var directories []string
-	for _, option := range []string{"--absolute-git-dir", "--git-common-dir"} {
-		directory, err := repo.git(ctx, "rev-parse", "--path-format=absolute", option)
+	var paths []string
+	for _, option := range options {
+		path, err := repo.git(ctx, "rev-parse", "--path-format=absolute", option)
 		if err != nil {
 			return nil, err
 		}
-		directories = append(directories, strings.TrimSuffix(directory, "\n"))
+		paths = append(paths, strings.TrimSuffix(path, "\n"))
 	}
-	return directories, nil
+	return paths, nil
 }
 
 var conflictMarker = regexp.MustCompile(`(?m)^(<{7,}|>{7,}|\|{7,})( |$)`)

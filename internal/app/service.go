@@ -103,14 +103,6 @@ func (service *RepositoryService) RemoveRepository(path string) (workspace.Libra
 	return service.manager.Remove(path)
 }
 
-func (service *RepositoryService) Stashes(ctx context.Context, path string) ([]gitrepo.Stash, error) {
-	repo, err := service.manager.Get(path)
-	if err != nil {
-		return nil, err
-	}
-	return repo.Stashes(ctx)
-}
-
 func (service *RepositoryService) StashDiff(ctx context.Context, path, hash string) (gitrepo.Diff, error) {
 	repo, err := service.manager.Get(path)
 	if err != nil {
@@ -278,12 +270,12 @@ func (service *RepositoryService) CommitDiff(ctx context.Context, path, hash str
 	return repo.CommitDiff(ctx, hash)
 }
 
-func (service *RepositoryService) Branches(ctx context.Context, path string) ([]gitrepo.Branch, error) {
+func (service *RepositoryService) References(ctx context.Context, path string) (gitrepo.References, error) {
 	repo, err := service.manager.Get(path)
 	if err != nil {
-		return nil, err
+		return gitrepo.References{}, err
 	}
-	return repo.Branches(ctx)
+	return repo.References(ctx)
 }
 
 func (service *RepositoryService) SwitchBranch(ctx context.Context, path, name string) error {

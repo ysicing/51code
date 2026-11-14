@@ -62,7 +62,7 @@ func TestSnapshotMatchesLegacyStatusCommands(t *testing.T) {
 			t.Fatal(name, err)
 		}
 		want := legacySnapshot(t, dir)
-		got.Operation, got.Name, got.Path, got.Remotes = Operation{}, "", "", nil
+		got.Operation, got.Name, got.Path = Operation{}, "", ""
 		if !reflect.DeepEqual(got, want) {
 			t.Fatalf("%s:\n got %+v\nwant %+v", name, got, want)
 		}
@@ -172,6 +172,95 @@ func TestPathFilesMatchFullStatus(t *testing.T) {
 		if !reflect.DeepEqual(want, found) {
 			t.Fatalf("%s: got %+v, want %+v", path, found, want)
 		}
+	}
+}
+
+func TestReferencesMatchSeparateReads(t *testing.T) {
+	repo, dir := fixture(t)
+	ctx := context.Background()
+	check := func(name string) {
+		t.Helper()
+		refs, err := repo.References(ctx)
+		if err != nil {
+			t.Fatal(name, err)
+		}
+		branches, err := repo.Branches(ctx)
+		if err != nil {
+			t.Fatal(name, err)
+		}
+		tags, err := repo.Tags(ctx)
+		if err != nil {
+			t.Fatal(name, err)
+		}
+		stashes, err := repo.Stashes(ctx)
+		if err != nil {
+			t.Fatal(name, err)
+		}
+		if want := (References{Branches: branches, Tags: tags, Stashes: stashes}); !reflect.DeepEqual(refs, want) {
+			t.Fatalf("%s:\n got %+v\nwant %+v", name, refs, want)
+		}
+	}
+	check("unborn")
+	write(t, dir, "a.txt", "one\n")
+	git(t, dir, "add", ".")
+	git(t, dir, "commit", "-m", "base")
+	for _, name := range []string{"a/b", "z", "stash"} {
+		git(t, dir, "branch", name)
+	}
+	git(t, dir, "tag", "a/b")
+	git(t, dir, "tag", "-a", "-m", "annotated", "v1")
+	git(t, dir, "tag", "stash")
+	git(t, dir, "remote", "add", "origin", dir)
+	git(t, dir, "fetch", "origin")
+	git(t, dir, "remote", "set-head", "origin", "z")
+	git(t, dir, "branch", "--set-upstream-to=origin/main")
+	check("branches, tags and remotes without stash")
+	write(t, dir, "a.txt", "two\n")
+	git(t, dir, "stash", "push", "-m", "first")
+	write(t, dir, "a.txt", "three\n")
+	git(t, dir, "stash", "push", "-m", "second")
+	check("with stashes")
+	git(t, dir, "stash", "clear")
+	check("after clearing stashes")
+}
+
+func TestGitDirectoryMatchesRevParse(t *testing.T) {
+	repo, dir := fixture(t)
+	ctx := context.Background()
+	git(t, dir, "commit", "--allow-empty", "-m", "base")
+	linkedPath := t.TempDir() + "/linked"
+	git(t, dir, "worktree", "add", "-b", "linked", linkedPath)
+	linked, err := Open(ctx, linkedPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, target := range []*Repository{repo, linked} {
+		got, err := target.gitDirectory(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := strings.TrimSuffix(git(t, target.Path, "rev-parse", "--absolute-git-dir"), "\n")
+		if !worktreeSamePath(got, want) {
+			t.Fatalf("%s: git dir = %q, want %q", target.Path, got, want)
+		}
+	}
+}
+
+func TestOpenRootWithNewline(t *testing.T) {
+	dir := t.TempDir() + "/line\nbreak"
+	if err := exec.Command("mkdir", "-p", dir+"/sub").Run(); err != nil {
+		t.Fatal(err)
+	}
+	git(t, dir, "init")
+	repo, err := Open(context.Background(), dir+"/sub")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !worktreeSamePath(repo.Path, dir) || !strings.HasSuffix(repo.Path, "/line\nbreak") {
+		t.Fatalf("root = %q", repo.Path)
+	}
+	if _, err := Open(context.Background(), dir+"/.git"); err == nil {
+		t.Fatal("Git 目录内部不应视为工作区")
 	}
 }
 
