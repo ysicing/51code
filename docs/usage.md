@@ -60,7 +60,7 @@ macOS 聚合缓存位于 `~/Library/Caches/51code/repository-insights/<配置目
 
 连接方式选择“自定义服务”后，可使用 OpenAI Responses、OpenAI Chat Completions 或 Claude Messages 协议。填写服务的 Base URL（例如 `https://api.openai.com/v1` 或 `https://api.anthropic.com/v1`），输入 API 密钥后点击“保存密钥”，再连接并选择模型；服务不提供模型列表时，可直接填写模型 ID。远程服务必须使用 HTTPS，本机服务允许 HTTP；免密的本机服务可留空密钥。
 
-API 密钥保存在 macOS 钥匙串中，按协议与服务地址分别管理，不写入普通设置文件。“清除密钥”只删除当前协议和地址对应的记录；输入新密钥后点击“取消”保留原有记录。更换协议或地址不会将原密钥发送给新服务；切回“自动发现本机 Magpie”继续使用原有自动连接方式。
+API 密钥保存在系统凭证存储中：macOS 钥匙串、Windows Credential Manager 或 Ubuntu Secret Service，按协议与服务地址分别管理，不写入普通设置文件。“清除密钥”只删除当前协议和地址对应的记录；输入新密钥后点击“取消”保留原有记录。凭证服务不可用或保存失败时保留输入草稿，不降级为明文保存。更换协议或地址不会将原密钥发送给新服务；切回“自动发现本机 Magpie”继续使用原有自动连接方式。
 
 尚未同意 AI 发送且未选择模型时，点击“AI 生成”会先打开应用设置的 AI 页。测试连接并选择模型后，关闭设置，再次点击“AI 生成”；配置过程不会发送暂存差异，也不会自动开始生成。已使用过 AI 的用户仍可沿用自动选择模型。
 
