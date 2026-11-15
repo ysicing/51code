@@ -27,6 +27,8 @@ AI 协议适配位于 `internal/commitai/`。空协议保留原有 Magpie 自动
 
 Windows 和 Ubuntu 的同一凭证接口使用 MyGo `Secrets.Service`，分别落到 Windows Credential Manager 和 Linux Secret Service。macOS 保留现有实现、服务名及账号生成规则。Ubuntu 除 GTK 3 外，AI 密钥保存需要 libsecret、D-Bus 会话及 Secret Service；服务缺失、锁定或拒绝访问时保留错误和未保存草稿。不会将密钥写入配置文件。`XSOURCETREE_TEST_KEYCHAIN=1` 的合成凭证读写用例支持三平台，默认关闭。
 
+MyGo `Secrets.Service` 在 macOS 同样使用系统钥匙串，指定相同服务名与账号即可复用旧记录。当前保留 macOS 实现以维持原有 64 KiB 密钥上限；MyGo 的跨平台写入上限为 2560 字节。macOS 的可选凭证测试覆盖旧实现与 MyGo 的双向读写及删除互通，仅操作独立服务下的合成记录。
+
 ### 改名兼容
 
 品牌展示名为 `51Code`，Go 模块为 `github.com/ysicing/51code`，安装包前缀使用小写 `51code`。Bundle ID 继续使用 `com.ysicing.xsourcetree`，钥匙串服务名及账号生成规则保持不变，以复用旧 API Key 和系统偏好。

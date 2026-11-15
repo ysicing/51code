@@ -17,7 +17,7 @@ func gitCallLog(t *testing.T) (reset func(), calls func(command string) int) {
 	t.Helper()
 	log := filepath.Join(t.TempDir(), "calls")
 	t.Setenv("XSOURCE_GIT_LOG", log)
-	installHistoryGitWrapper(t, `printf '%s\n' "$*" >> "$XSOURCE_GIT_LOG"; exec "$XSOURCE_REAL_GIT" "$@"`+"\n")
+	installGitTestWrapper(t, "git-call-log")
 	reset = func() {
 		if err := os.WriteFile(log, nil, 0600); err != nil {
 			t.Fatal(err)

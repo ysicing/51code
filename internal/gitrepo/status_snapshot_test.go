@@ -5,7 +5,9 @@ package gitrepo
 
 import (
 	"context"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"reflect"
 	"strconv"
 	"strings"
@@ -134,7 +136,7 @@ func TestPathFilesMatchFullStatus(t *testing.T) {
 	git(t, dir, "commit", "-m", "base")
 	write(t, dir, "modified.txt", "changed\n")
 	write(t, dir, "dir/nested.txt", "changed\n")
-	if err := exec.Command("rm", dir+"/deleted.txt").Run(); err != nil {
+	if err := os.Remove(filepath.Join(dir, "deleted.txt")); err != nil {
 		t.Fatal(err)
 	}
 	git(t, dir, "mv", "rename-me.txt", "renamed.txt")
@@ -247,19 +249,20 @@ func TestGitDirectoryMatchesRevParse(t *testing.T) {
 }
 
 func TestOpenRootWithNewline(t *testing.T) {
-	dir := t.TempDir() + "/line\nbreak"
-	if err := exec.Command("mkdir", "-p", dir+"/sub").Run(); err != nil {
+	name := portableTestPath("line\nbreak", "中文 line break")
+	dir := filepath.Join(t.TempDir(), name)
+	if err := os.MkdirAll(filepath.Join(dir, "sub"), 0700); err != nil {
 		t.Fatal(err)
 	}
 	git(t, dir, "init")
-	repo, err := Open(context.Background(), dir+"/sub")
+	repo, err := Open(context.Background(), filepath.Join(dir, "sub"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !worktreeSamePath(repo.Path, dir) || !strings.HasSuffix(repo.Path, "/line\nbreak") {
+	if !worktreeSamePath(repo.Path, dir) || filepath.Base(repo.Path) != name {
 		t.Fatalf("root = %q", repo.Path)
 	}
-	if _, err := Open(context.Background(), dir+"/.git"); err == nil {
+	if _, err := Open(context.Background(), filepath.Join(dir, ".git")); err == nil {
 		t.Fatal("Git 目录内部不应视为工作区")
 	}
 }

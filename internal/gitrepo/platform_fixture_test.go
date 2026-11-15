@@ -79,6 +79,22 @@ func gitTestChild(name string, args []string) int {
 				return fail(err)
 			}
 			return 0
+		case "insights-legacy":
+			for _, arg := range args {
+				if strings.HasPrefix(arg, "--since-as-filter=") {
+					fmt.Fprintf(os.Stderr, "fatal: unrecognized argument: %s\n", arg)
+					return 128
+				}
+			}
+		case "git-call-log":
+			file, err := os.OpenFile(os.Getenv("XSOURCE_GIT_LOG"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+			if err != nil {
+				return fail(err)
+			}
+			_, writeErr := io.WriteString(file, " "+strings.Join(args, " ")+" \n")
+			if err := errors.Join(writeErr, file.Close()); err != nil {
+				return fail(err)
+			}
 		case "identity-before-write", "identity-after-write":
 			if len(args) >= 3 && slices.Equal(args[len(args)-3:], []string{"--replace-all", "user.email", "new@example.test"}) {
 				if mode == "identity-after-write" {

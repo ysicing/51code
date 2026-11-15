@@ -29,11 +29,12 @@ func insightsCommit(t *testing.T, dir, date, name, email string) string {
 func TestInsightsAggregation(t *testing.T) {
 	repo, dir := fixture(t)
 	ctx := context.Background()
-	write(t, dir, "tabs\tand\nlines.txt", "one\ntwo\n")
+	path := portableTestPath("tabs\tand\nlines.txt", "中文 tabs and lines.txt")
+	write(t, dir, path, "one\ntwo\n")
 	write(t, dir, "binary.dat", "\x00\x01")
 	git(t, dir, "add", ".")
 	insightsCommit(t, dir, "2026-11-01T12:00:00+08:00", "Alias", "alias@example.test")
-	git(t, dir, "mv", "tabs\tand\nlines.txt", "renamed.txt")
+	git(t, dir, "mv", path, "renamed.txt")
 	insightsCommit(t, dir, "2026-11-02T12:00:00+08:00", "Canonical", "canonical@example.test")
 	insightsCommit(t, dir, "2026-11-03T12:00:00+08:00", "Canonical", "canonical@example.test")
 	write(t, dir, ".mailmap", "Canonical <canonical@example.test> Alias <alias@example.test>\n")
@@ -58,7 +59,7 @@ func TestInsightsAggregation(t *testing.T) {
 	}
 	found := false
 	for _, file := range result.Files {
-		found = found || file.Path == "tabs\tand\nlines.txt"
+		found = found || file.Path == path
 	}
 	if !found {
 		t.Fatalf("literal paths lost: %+v", result.Files)
@@ -189,11 +190,7 @@ func TestInsightsFallsBackWithoutSinceAsFilter(t *testing.T) {
 		t.Fatalf("filter result = %+v, %v", want, err)
 	}
 	// 模拟 Git 2.37 之前的版本：不认识 --since-as-filter。
-	installHistoryGitWrapper(t, `for arg in "$@"; do
-case "$arg" in --since-as-filter=*) echo "fatal: unrecognized argument: $arg" >&2; exit 128;; esac
-done
-exec "$XSOURCE_REAL_GIT" "$@"
-`)
+	installGitTestWrapper(t, "insights-legacy")
 	got, err := repo.Insights(ctx, source, from, from.AddDate(0, 0, 1))
 	if err != nil {
 		t.Fatal(err)
