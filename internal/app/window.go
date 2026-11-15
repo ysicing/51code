@@ -39,6 +39,8 @@ type nativePreferences struct {
 	FileTree             bool                        `json:"fileTree"`
 	Drafts               map[string]string           `json:"drafts"`
 	Appearance           string                      `json:"appearance"`
+	TerminalApplication  string                      `json:"terminalApplication,omitempty"`
+	LastDirectory        string                      `json:"lastDirectory,omitempty"`
 	SidebarItems         nativeSidebarItems          `json:"sidebarItems"`
 	Shortcuts            nativeShortcuts             `json:"shortcuts"`
 	UpdateCheckFrequency string                      `json:"updateCheckFrequency"`
@@ -125,6 +127,9 @@ type nativeApp struct {
 	stopLocale            func()
 	chosenLanguage        string
 	chooseLanguage        func(string)
+	openDialog            func(mygo.OpenDialogOptions) ([]string, error)
+	discoverTerminals     func() ([]nativeTerminalApplication, error)
+	terminalApplications  []nativeTerminalApplication
 	ai                    *nativeCommitAI
 	aiEditor              *nativeAISettings
 	// identityEditor 记录打开中的身份编辑器，退出时据此确认未保存的修改。
@@ -158,6 +163,7 @@ func newNativeApp(service *RepositoryService, stateFile string) *nativeApp {
 		browseState:        newNativeHistoryState(), searchState: newNativeHistoryState(),
 		refCollapsed: make(map[nativeRefKey]bool), fileCollapsed: make(map[string]bool),
 		chooseLanguage: mygo.App.SetLocale,
+		openDialog:     mygo.Dialog.Open,
 	}
 	if service != nil && service.manager != nil {
 		if err := service.manager.LoadProblem(); err != nil {
@@ -239,6 +245,7 @@ func (app *nativeApp) open() {
 	})
 	app.win.SetWindowButtonsTheme(appearanceThemeSource(app.prefs.Appearance))
 	app.post = app.win.Update
+	app.discoverTerminals = discoverTerminalApplications
 	app.stopLocale = mygo.App.OnLocaleChanged(func(_ string) {
 		app.post(func() {
 			if !app.closed {

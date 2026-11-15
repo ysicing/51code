@@ -231,9 +231,20 @@ func (app *nativeApp) chooseDirectories(title, button string, multiple bool) ([]
 	app.busy = true
 	defer func() { app.busy = busy }()
 
-	return mygo.Dialog.Open(mygo.OpenDialogOptions{
+	paths, err := app.openDialog(mygo.OpenDialogOptions{
 		Parent: app.win, Title: title, ButtonLabel: button, Directory: true, Multiple: multiple,
+		DefaultPath: app.directoryDialogPath(),
 	})
+	if err != nil || len(paths) == 0 {
+		return paths, err
+	}
+	previous := app.prefs.LastDirectory
+	app.prefs.LastDirectory = paths[0]
+	if err := app.savePreferences(); err != nil {
+		app.prefs.LastDirectory = previous
+		return nil, fmt.Errorf("%s", locales.SaveSettingsError(err.Error()))
+	}
+	return paths, nil
 }
 
 func (app *nativeApp) chooseLocal() {
@@ -323,6 +334,9 @@ func (app *nativeApp) groupChoices() ([]string, map[string]string) {
 
 func (app *nativeApp) repositoryEntryMenu(menu *ui.Menu, entry workspace.LocalRepository) {
 	unavailable := app.busy || app.closed
+	if menu.Item(locales.OpenInTerminal()).Disabled(unavailable).Chosen() {
+		app.openRepositoryTerminal(entry.Path)
+	}
 	if menu.Item(revealRepositoryLabel()).Disabled(unavailable).Chosen() {
 		if err := app.service.RevealRepository(entry.Path); err != nil {
 			app.problem = err.Error()

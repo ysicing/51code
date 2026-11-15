@@ -23,7 +23,7 @@ func TestNativeRepositoryEntryMenu(t *testing.T) {
 	if err := tester.Click(label); err != nil {
 		t.Fatal(err)
 	}
-	want := []string{revealRepositoryLabel(), "移动到分组", "-", "从列表移除…"}
+	want := []string{"在终端中打开", revealRepositoryLabel(), "移动到分组", "-", "从列表移除…"}
 	if app.dialog != nil || !slices.Equal(tester.Menu(), want) {
 		t.Fatalf("仓库操作未使用精简原生菜单: %v, %+v", tester.Menu(), app.dialog)
 	}

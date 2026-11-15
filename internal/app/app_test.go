@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -765,10 +764,7 @@ func TestNativeRepositoryActionsMenu(t *testing.T) {
 	if err := tester.Click("更多"); err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"新建标签…", "贮藏更改…", "-", "在 Finder 中显示", "打开恢复副本文件夹"}
-	if runtime.GOOS != "darwin" {
-		want[3] = "打开仓库文件夹"
-	}
+	want := []string{"新建标签…", "贮藏更改…", "-", "在终端中打开", revealRepositoryLabel(), "打开恢复副本文件夹"}
 	if got := tester.Menu(); !slices.Equal(got, want) || app.dialog != nil {
 		t.Fatalf("应直接展开仓库菜单，菜单=%v，弹窗=%v", got, app.dialog)
 	}

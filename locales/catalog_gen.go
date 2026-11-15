@@ -36,6 +36,138 @@ type Messages struct{ locale string }
 // source language.
 func In(locale string) Messages { return Messages{locale} }
 
+// InterfaceSettings says "界面"
+// in the language the app shows.
+func InterfaceSettings() string { return In(i18n.Locale()).InterfaceSettings() }
+
+// InterfaceSettings says "界面"
+// in the language of msgs.
+func (msgs Messages) InterfaceSettings() string {
+	return Catalog.Format(msgs.locale, "interfaceSettings", nil)
+}
+
+// ExternalTools says "外部工具"
+// in the language the app shows.
+func ExternalTools() string { return In(i18n.Locale()).ExternalTools() }
+
+// ExternalTools says "外部工具"
+// in the language of msgs.
+func (msgs Messages) ExternalTools() string {
+	return Catalog.Format(msgs.locale, "externalTools", nil)
+}
+
+// Terminal says "终端"
+// in the language the app shows.
+func Terminal() string { return In(i18n.Locale()).Terminal() }
+
+// Terminal says "终端"
+// in the language of msgs.
+func (msgs Messages) Terminal() string {
+	return Catalog.Format(msgs.locale, "terminal", nil)
+}
+
+// SystemDefault says "系统默认"
+// in the language the app shows.
+func SystemDefault() string { return In(i18n.Locale()).SystemDefault() }
+
+// SystemDefault says "系统默认"
+// in the language of msgs.
+func (msgs Messages) SystemDefault() string {
+	return Catalog.Format(msgs.locale, "systemDefault", nil)
+}
+
+// CommandPrompt says "命令提示符"
+// in the language the app shows.
+func CommandPrompt() string { return In(i18n.Locale()).CommandPrompt() }
+
+// CommandPrompt says "命令提示符"
+// in the language of msgs.
+func (msgs Messages) CommandPrompt() string {
+	return Catalog.Format(msgs.locale, "commandPrompt", nil)
+}
+
+// SystemTerminal says "系统终端"
+// in the language the app shows.
+func SystemTerminal() string { return In(i18n.Locale()).SystemTerminal() }
+
+// SystemTerminal says "系统终端"
+// in the language of msgs.
+func (msgs Messages) SystemTerminal() string {
+	return Catalog.Format(msgs.locale, "systemTerminal", nil)
+}
+
+// ChooseOtherApplication says "选择其他应用…"
+// in the language the app shows.
+func ChooseOtherApplication() string { return In(i18n.Locale()).ChooseOtherApplication() }
+
+// ChooseOtherApplication says "选择其他应用…"
+// in the language of msgs.
+func (msgs Messages) ChooseOtherApplication() string {
+	return Catalog.Format(msgs.locale, "chooseOtherApplication", nil)
+}
+
+// ChooseTerminalApplication says "选择终端应用"
+// in the language the app shows.
+func ChooseTerminalApplication() string { return In(i18n.Locale()).ChooseTerminalApplication() }
+
+// ChooseTerminalApplication says "选择终端应用"
+// in the language of msgs.
+func (msgs Messages) ChooseTerminalApplication() string {
+	return Catalog.Format(msgs.locale, "chooseTerminalApplication", nil)
+}
+
+// ApplicationFiles says "应用程序"
+// in the language the app shows.
+func ApplicationFiles() string { return In(i18n.Locale()).ApplicationFiles() }
+
+// ApplicationFiles says "应用程序"
+// in the language of msgs.
+func (msgs Messages) ApplicationFiles() string {
+	return Catalog.Format(msgs.locale, "applicationFiles", nil)
+}
+
+// OpenInTerminal says "在终端中打开"
+// in the language the app shows.
+func OpenInTerminal() string { return In(i18n.Locale()).OpenInTerminal() }
+
+// OpenInTerminal says "在终端中打开"
+// in the language of msgs.
+func (msgs Messages) OpenInTerminal() string {
+	return Catalog.Format(msgs.locale, "openInTerminal", nil)
+}
+
+// OpeningTerminal says "正在打开终端…"
+// in the language the app shows.
+func OpeningTerminal() string { return In(i18n.Locale()).OpeningTerminal() }
+
+// OpeningTerminal says "正在打开终端…"
+// in the language of msgs.
+func (msgs Messages) OpeningTerminal() string {
+	return Catalog.Format(msgs.locale, "openingTerminal", nil)
+}
+
+// TerminalError says "无法打开终端：{error}"
+// in the language the app shows.
+func TerminalError(error string) string { return In(i18n.Locale()).TerminalError(error) }
+
+// TerminalError says "无法打开终端：{error}"
+// in the language of msgs.
+func (msgs Messages) TerminalError(error string) string {
+	return Catalog.Format(msgs.locale, "terminalError", map[string]any{"error": error})
+}
+
+// TerminalSelectionError says "无法使用此终端：{error}"
+// in the language the app shows.
+func TerminalSelectionError(error string) string {
+	return In(i18n.Locale()).TerminalSelectionError(error)
+}
+
+// TerminalSelectionError says "无法使用此终端：{error}"
+// in the language of msgs.
+func (msgs Messages) TerminalSelectionError(error string) string {
+	return Catalog.Format(msgs.locale, "terminalSelectionError", map[string]any{"error": error})
+}
+
 // Insights says "洞察"
 // in the language the app shows.
 func Insights() string { return In(i18n.Locale()).Insights() }

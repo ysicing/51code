@@ -324,6 +324,7 @@ func (app *nativeApp) settingsDialogAt(initialTab int) {
 		})
 	}
 	app.dialog = dialog
+	app.refreshTerminalApplications(dialog)
 }
 
 func (app *nativeApp) appearancePreferences(c *ui.Context) {
@@ -413,6 +414,7 @@ func drawAppearancePreview(p *ui.Painter, bounds ui.Rect, appearance string, sel
 var nativeLanguageTags = []string{"", "zh-Hans", "zh-Hant", "en"}
 
 func (app *nativeApp) generalPreferences(c *ui.Context) {
+	ui.Text(c, locales.InterfaceSettings()).FontSize(12).TextColor(c.Theme().TextMuted)
 	ui.Row(c).FillWidth().Gap(20).AlignItems(ui.Start).Children(func() {
 		ui.Text(c, locales.Appearance()).FontSize(13).Width(92).Shrink(0).Margin(10, 0, 0)
 		app.appearancePreferences(c)
@@ -434,16 +436,26 @@ func (app *nativeApp) generalPreferences(c *ui.Context) {
 		}
 	})
 	ui.Divider(c)
-	ui.Row(c).FillWidth().Gap(20).AlignItems(ui.Start).Children(func() {
-		ui.Text(c, locales.Sidebar()).FontSize(13).Width(92).Shrink(0)
-		ui.Column(c).Grow(1).Gap(8).Children(func() {
+	ui.Text(c, locales.Sidebar()).FontSize(12).TextColor(c.Theme().TextMuted)
+	ui.Row(c).FillWidth().Gap(24).AlignItems(ui.Start).Children(func() {
+		ui.Column(c).Grow(1).MinWidth(0).Gap(8).Children(func() {
 			items := &app.prefs.SidebarItems
 			app.sidebarPreference(c, "insights", locales.Insights(), &items.Insights)
-			app.sidebarPreference(c, "search", locales.Search(), &items.Search)
 			app.sidebarPreference(c, "compare", locales.CompareVersions(), &items.Compare)
-			app.sidebarPreference(c, "stash", locales.Stash(), &items.Stash)
 			app.sidebarPreference(c, "worktrees", locales.Worktrees(), &items.Worktrees)
 		})
+		ui.Column(c).Grow(1).MinWidth(0).Gap(8).Children(func() {
+			items := &app.prefs.SidebarItems
+			app.sidebarPreference(c, "search", locales.Search(), &items.Search)
+			app.sidebarPreference(c, "stash", locales.Stash(), &items.Stash)
+		})
+	})
+	ui.Divider(c)
+	ui.Text(c, locales.ExternalTools()).FontSize(12).TextColor(c.Theme().TextMuted)
+	ui.Row(c).FillWidth().Gap(20).AlignItems(ui.Center).Children(func() {
+		ui.Text(c, locales.Terminal()).FontSize(13).Width(92).Shrink(0)
+		ui.MenuButton(c, app.terminalApplicationLabel(), app.terminalMenu).Label(locales.Terminal()).
+			Width(210).Justify(ui.SpaceBetween).Tooltip(app.prefs.TerminalApplication)
 	})
 }
 
