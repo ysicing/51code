@@ -80,6 +80,7 @@ type nativeApp struct {
 	problem               string
 	library               workspace.Library
 	languages             *nativeRepositoryLanguages
+	commitGraphs          *nativeCommitGraphs
 	group                 string
 	query                 string
 	screen                string
@@ -272,6 +273,7 @@ func (app *nativeApp) open() {
 		cacheDir = filepath.Join(directory, "51code", "repository-languages")
 	}
 	app.startRepositoryLanguages(cacheDir)
+	app.startCommitGraphs()
 }
 
 func (app *nativeApp) savePreferences() error {
@@ -407,6 +409,7 @@ func (app *nativeApp) openRepository(path string) {
 				app.browseState, app.searchState = newNativeHistoryState(), newNativeHistoryState()
 				app.searchDateEnabled = false
 				app.searchSince, app.searchUntil = time.Time{}, time.Time{}
+				app.maintainCommitGraph(result.snapshot.Path)
 			}, nil
 		})
 	})

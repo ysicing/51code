@@ -56,6 +56,11 @@ func runProcess(ctx context.Context, cmd *exec.Cmd) error {
 	return cmd.Wait()
 }
 
+// detachedProcessAttributes 不加入 KILL_ON_JOB_CLOSE 的 Job，应用退出时写入仍可完成并释放锁。
+func detachedProcessAttributes() *syscall.SysProcAttr {
+	return &syscall.SysProcAttr{HideWindow: true, CreationFlags: windows.CREATE_NO_WINDOW}
+}
+
 func resumeProcess(pid uint32) error {
 	snapshot, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPTHREAD, 0)
 	if err != nil {

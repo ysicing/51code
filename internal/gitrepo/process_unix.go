@@ -28,3 +28,8 @@ func runProcess(ctx context.Context, cmd *exec.Cmd) error {
 	}
 	return err
 }
+
+// detachedProcessAttributes 使用独立进程组，终端信号不会传给后台写入。
+func detachedProcessAttributes() *syscall.SysProcAttr {
+	return &syscall.SysProcAttr{Setpgid: true}
+}

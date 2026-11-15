@@ -66,6 +66,14 @@ func (service *RepositoryService) CommitFileDiff(ctx context.Context, path, hash
 	return repo.CommitFileDiff(ctx, hash, file)
 }
 
+func (service *RepositoryService) EnsureCommitGraph(ctx context.Context, path string) (bool, error) {
+	repo, err := service.manager.Get(path)
+	if err != nil {
+		return false, err
+	}
+	return repo.EnsureCommitGraph(ctx)
+}
+
 func (service *RepositoryService) Compare(ctx context.Context, path, base, target string, mergeBase bool) (gitrepo.Comparison, error) {
 	repo, err := service.manager.Get(path)
 	if err != nil {
