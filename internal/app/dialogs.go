@@ -321,36 +321,31 @@ func (app *nativeApp) groupChoices() ([]string, map[string]string) {
 	return options, ids
 }
 
-func (app *nativeApp) repositoryEntryDialog(entry workspace.LocalRepository) {
-	options, ids := app.groupChoices()
-	choice := options[0]
-	for label, id := range ids {
-		if id == entry.GroupID {
-			choice = label
+func (app *nativeApp) repositoryEntryMenu(menu *ui.Menu, entry workspace.LocalRepository) {
+	unavailable := app.busy || app.closed
+	if menu.Item(revealRepositoryLabel()).Disabled(unavailable).Chosen() {
+		if err := app.service.RevealRepository(entry.Path); err != nil {
+			app.problem = err.Error()
 		}
 	}
-	app.dialog = &nativeDialog{
-		title: entry.Name, detail: entry.Path, options: options, choice: choice, action: locales.MoveToGroup(),
-		submit: func(dialog *nativeDialog) {
-			group := ids[dialog.choice]
-			app.libraryChange(locales.MovingRepository(), func(_ context.Context) (workspace.Library, error) {
-				return app.service.MoveRepository(entry.Path, group)
-			})
-		},
-		body: func(c *ui.Context) {
-			if ui.Button(c, revealRepositoryLabel()).FillWidth().Clicked() {
-				if err := app.service.RevealRepository(entry.Path); err != nil {
-					app.problem = err.Error()
-				}
-			}
-			if ui.Button(c, locales.RemoveFromListMenu()).FillWidth().Clicked() {
-				app.confirm(locales.RemoveRepositoryTitle(), entry.Path+"\n"+locales.KeepDiskFiles(), locales.Remove(), func() {
-					app.libraryChange(locales.RemovingRecord(), func(_ context.Context) (workspace.Library, error) {
-						return app.service.RemoveRepository(entry.Path)
-					})
+	options, ids := app.groupChoices()
+	menu.Submenu(locales.MoveToGroup(), func(groups *ui.Menu) {
+		for _, label := range options {
+			group := ids[label]
+			if groups.Item(label).Checked(group == entry.GroupID).Disabled(unavailable).Chosen() && group != entry.GroupID {
+				app.libraryChange(locales.MovingRepository(), func(_ context.Context) (workspace.Library, error) {
+					return app.service.MoveRepository(entry.Path, group)
 				})
 			}
-		},
+		}
+	}).Disabled(unavailable)
+	menu.Separator()
+	if menu.Item(locales.RemoveFromListMenu()).Danger().Disabled(unavailable).Chosen() {
+		app.confirm(locales.RemoveRepositoryTitle(), entry.Path+"\n"+locales.KeepDiskFiles(), locales.Remove(), func() {
+			app.libraryChange(locales.RemovingRecord(), func(_ context.Context) (workspace.Library, error) {
+				return app.service.RemoveRepository(entry.Path)
+			})
+		})
 	}
 }
 

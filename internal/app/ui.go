@@ -438,9 +438,9 @@ func (app *nativeApp) libraryView(c *ui.Context) {
 							ui.Badge(c, fmt.Sprintf("%d", entry.Changes))
 						}
 					}).OnClick(func() { app.openRepository(entry.Path) })
-					if iconButton(c, locales.Manage(), nativeIcons["more"]).Clicked() {
-						app.repositoryEntryDialog(entry)
-					}
+					iconButton(c, locales.Manage()+" "+entry.Name, nativeIcons["more"]).
+						Disabled(app.busy || app.closed || app.dialog != nil).
+						Menu(func(menu *ui.Menu) { app.repositoryEntryMenu(menu, entry) })
 				})
 				ui.Divider(c)
 			}
