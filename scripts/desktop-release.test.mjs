@@ -22,6 +22,8 @@ async function fixture(check) {
     await mkdir(hooks);
     const git = (...args) => execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
     git("init", "-q");
+    git("config", "user.name", "Desktop Test");
+    git("config", "user.email", "desktop@example.test");
     git("add", "package.json");
     git("-c", `core.hooksPath=${hooks}`, "-c", "commit.gpgsign=false", "-c", "user.name=Desktop Test", "-c", "user.email=desktop@example.test", "commit", "-qm", "fixture");
     git("-c", "tag.gpgsign=false", "tag", tag);
