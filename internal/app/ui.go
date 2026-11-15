@@ -412,8 +412,12 @@ func (app *nativeApp) libraryView(c *ui.Context) {
 		ui.Scroll(c).Grow(1).MinHeight(0).FillWidth().Children(func() {
 			for _, entry := range entries {
 				entry := entry
+				languageDescription := ""
+				if app.languages != nil {
+					languageDescription = repositoryLanguageTooltip(app.languages.entries[entry.Path])
+				}
 				ui.Row(c).Key(entry.Path).FillWidth().Padding(4, 0).Gap(8).AlignItems(ui.Center).Children(func() {
-					listRow(c, entry.Name, false).Grow(1).Padding(14, 12).Children(func() {
+					listRow(c, entry.Name, false).Description(languageDescription).Grow(1).Padding(14, 12).Children(func() {
 						ui.Icon(c, nativeIcons["folder"]).FontSize(24).TextColor(c.Theme().TextMuted)
 						ui.Column(c).Grow(1).MinWidth(0).Gap(5).Children(func() {
 							ui.Text(c, entry.Name).FontSize(14).Bold().MaxLines(1)
@@ -422,6 +426,7 @@ func (app *nativeApp) libraryView(c *ui.Context) {
 								ui.Text(c, entry.Problem).TextColor(c.Theme().Danger).FontSize(12).MaxLines(1).Tooltip(entry.Problem)
 							}
 						})
+						app.repositoryLanguageBadge(c, entry.Path)
 						ui.Icon(c, nativeIcons["branch"]).TextColor(c.Theme().TextMuted)
 						ui.Text(c, entry.Branch).FontSize(12).MaxWidth(160).MaxLines(1)
 						if entry.Changes > 0 {

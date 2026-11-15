@@ -79,6 +79,7 @@ type nativeApp struct {
 	status                string
 	problem               string
 	library               workspace.Library
+	languages             *nativeRepositoryLanguages
 	group                 string
 	query                 string
 	screen                string
@@ -266,6 +267,11 @@ func (app *nativeApp) open() {
 		}
 	})
 	app.win.OnFocus(app.refreshOnFocus)
+	cacheDir := ""
+	if directory, err := os.UserCacheDir(); err == nil {
+		cacheDir = filepath.Join(directory, "51code", "repository-languages")
+	}
+	app.startRepositoryLanguages(cacheDir)
 }
 
 func (app *nativeApp) savePreferences() error {
@@ -327,6 +333,7 @@ func (app *nativeApp) runTask(label string, readOnly bool, task func(context.Con
 			if apply != nil {
 				apply()
 			}
+			app.refreshRepositoryLanguages(false)
 			if err != nil {
 				app.problem = err.Error()
 				if dialog != nil && app.dialog == dialog {
@@ -412,7 +419,14 @@ func (app *nativeApp) refresh() {
 	if app.screen == "library" || app.repository == nil {
 		app.runTask(locales.RefreshingLibrary(), true, func(ctx context.Context) (func(), error) {
 			library, err := app.service.RefreshLibrary(ctx)
-			return func() { app.library = library }, err
+			return func() {
+				// 失败时返回的是空列表，不能覆盖现有列表，否则语言缓存会按空列表被全部清理。
+				if err != nil {
+					return
+				}
+				app.library = library
+				app.refreshRepositoryLanguages(true)
+			}, err
 		})
 		return
 	}
@@ -619,6 +633,7 @@ func (app *nativeApp) showLibrary() {
 		app.cancelRead()
 		app.stopCommitAI()
 		app.screen = "library"
+		app.refreshRepositoryLanguages(false)
 	})
 }
 

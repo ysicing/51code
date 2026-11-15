@@ -13,6 +13,10 @@ import (
 )
 
 func (app *nativeApp) refreshOnFocus() {
+	if !app.closed && !app.busy && app.dialog == nil && app.screen == "library" {
+		app.refreshRepositoryLanguages(false)
+		return
+	}
 	if app.closed || app.busy || app.readTask != nil || app.focusRefresh != nil ||
 		app.dialog != nil || app.conflictDirty() || app.repository == nil || app.screen == "library" {
 		return
