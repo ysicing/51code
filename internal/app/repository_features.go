@@ -6,6 +6,7 @@ package app
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/ysicing/51code/internal/gitrepo"
 
@@ -64,6 +65,22 @@ func (service *RepositoryService) CommitFileDiff(ctx context.Context, path, hash
 		return gitrepo.Diff{}, err
 	}
 	return repo.CommitFileDiff(ctx, hash, file)
+}
+
+func (service *RepositoryService) InsightsSource(ctx context.Context, path, ref string) (gitrepo.InsightsSourceInfo, error) {
+	repo, err := service.manager.Get(path)
+	if err != nil {
+		return gitrepo.InsightsSourceInfo{}, err
+	}
+	return repo.InsightsSource(ctx, ref)
+}
+
+func (service *RepositoryService) Insights(ctx context.Context, path string, source gitrepo.InsightsSourceInfo, from, until time.Time) (gitrepo.RepositoryInsights, error) {
+	repo, err := service.manager.Get(path)
+	if err != nil {
+		return gitrepo.RepositoryInsights{}, err
+	}
+	return repo.Insights(ctx, source, from, until)
 }
 
 func (service *RepositoryService) EnsureCommitGraph(ctx context.Context, path string) (bool, error) {

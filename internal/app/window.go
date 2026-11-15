@@ -81,6 +81,7 @@ type nativeApp struct {
 	library               workspace.Library
 	languages             *nativeRepositoryLanguages
 	commitGraphs          *nativeCommitGraphs
+	insights              *nativeInsights
 	group                 string
 	query                 string
 	screen                string
@@ -150,7 +151,7 @@ func newNativeApp(service *RepositoryService, stateFile string) *nativeApp {
 		prefs: nativePreferences{
 			Sidebar: 226, Files: 360, History: 56, HistoryFiles: 280, Wrap: true, DiffLayout: "auto", Drafts: map[string]string{},
 			Appearance: appearanceSystem, Shortcuts: defaultNativeShortcuts(),
-			SidebarItems: nativeSidebarItems{Search: true, Compare: true, Stash: true, Worktrees: true},
+			SidebarItems: nativeSidebarItems{Insights: true, Search: true, Compare: true, Stash: true, Worktrees: true},
 		},
 		nativeHistoryState: newNativeHistoryState(),
 		browseState:        newNativeHistoryState(), searchState: newNativeHistoryState(),
@@ -342,6 +343,11 @@ func (app *nativeApp) runTask(label string, readOnly bool, task func(context.Con
 					dialog.problem = err.Error()
 				}
 			}
+			// 忙碌期间洞察读取会被跳过或取消，任务结束后补读；缓存键含提交 SHA，引用未变时直接命中缓存。
+			if app.screen == "insights" && app.insights != nil {
+				app.insights.checked = time.Time{}
+				app.refreshInsights(false)
+			}
 		})
 	}()
 }
@@ -374,6 +380,7 @@ func (app *nativeApp) adopt(result *repositoryView) {
 		app.stopCommitAI()
 		app.comparison = nil
 		app.worktrees = nil
+		app.insights = nil
 	}
 	app.repository, app.writable = result, true
 	app.fileMetrics = nativeFileMetrics{}

@@ -141,6 +141,13 @@ func (app *nativeApp) refreshOnFocus() {
 			if screen == "worktrees" && app.worktrees != nil && !reflect.DeepEqual(app.worktrees.items, worktrees) {
 				app.worktrees.setItems(worktrees)
 			}
+			if screen == "insights" && app.insights != nil {
+				// 引用变化（切分支、新提交）时跳过 60 秒节流，否则仅按节流间隔复查。
+				if historyReferencesChanged(repository, result) {
+					app.insights.checked = time.Time{}
+				}
+				app.refreshInsights(false)
+			}
 		})
 	}()
 }

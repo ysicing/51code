@@ -38,6 +38,7 @@ const (
 	nativeReadHistory
 	nativeReadCommit
 	nativeReadHistoryPage
+	nativeReadInsights
 )
 
 type nativeRead struct {

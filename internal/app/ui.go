@@ -142,6 +142,8 @@ func (app *nativeApp) view(c *ui.Context) {
 			ui.Split(c, &app.prefs.Sidebar, func() { app.sidebar(c) }, func() {
 				ui.Column(c).Fill().MinWidth(0).Children(func() {
 					switch app.screen {
+					case "insights":
+						app.insightsPanel(c)
 					case "library":
 						app.libraryView(c)
 					case "history", "search":
@@ -244,6 +246,9 @@ func (app *nativeApp) sidebar(c *ui.Context) {
 					}
 				})
 				ui.SidebarItem(c, "screen:history", nil, locales.CommitHistory()).Height(26).Padding(0, 8, 0, 40).FontSize(12)
+				if app.prefs.SidebarItems.Insights {
+					ui.SidebarItem(c, "screen:insights", nil, locales.Insights()).Height(26).Padding(0, 8, 0, 40).FontSize(12)
+				}
 				if app.prefs.SidebarItems.Search {
 					ui.SidebarItem(c, "screen:search", nil, locales.Search()).Height(26).Padding(0, 8, 0, 40).FontSize(12)
 				}
