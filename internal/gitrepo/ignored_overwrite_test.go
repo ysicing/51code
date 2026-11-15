@@ -154,7 +154,7 @@ func TestGlobalIdentityKeepsUnchangedIncludedValue(t *testing.T) {
 	_, home := identityFixture(t)
 	included := filepath.Join(home, "identity.inc")
 	write(t, home, "identity.inc", "[user]\n\tname = Included User\n")
-	write(t, home, ".gitconfig", "[include]\n\tpath = "+included+"\n")
+	git(t, home, "config", "--file", filepath.Join(home, ".gitconfig"), "include.path", included)
 	ctx := context.Background()
 	settings, err := GlobalIdentity(ctx)
 	if err != nil || settings.Name.Value != "Included User" || len(settings.DirectName) != 0 {
