@@ -64,8 +64,10 @@ func TestNativeHistoryFullRefs(t *testing.T) {
 		app.historyList.Columns.Widths = map[string]float32{"提交说明": 80}
 		tester.Frame()
 		row, found := tester.AccessByRole(ui.RoleRow, subject)
-		if !found || row.Bounds.H != wideRow.Bounds.H || !row.Selected {
-			t.Fatalf("窄窗口改变了紧凑行高或提交选择: %+v", row)
+		// 不同平台的缩放和浮点布局允许半个逻辑像素的舍入误差，不能增加一行。
+		if !found || row.Bounds.H > compactHistoryRowHeight(t) ||
+			row.Bounds.H > wideRow.Bounds.H+0.5 || row.Bounds.H < wideRow.Bounds.H-0.5 || !row.Selected {
+			t.Fatalf("窄窗口改变了紧凑行高或提交选择: wide=%v narrow=%+v", wideRow.Bounds.H, row)
 		}
 		for _, label := range []string{"所有分支", "显示远程分支", "搜索"} {
 			bounds, found := tester.Find(label)
