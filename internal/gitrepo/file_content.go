@@ -59,14 +59,9 @@ func (repo *Repository) diffFileContents(ctx context.Context, diff Diff, selecte
 }
 
 func (repo *Repository) commitFileContents(ctx context.Context, diff Diff, selected CommitFile, hash string) (Diff, error) {
-	// 固定实际提交及第一父提交，不把可变引用或路径表达式交给 cat-file。
-	output, err := repo.git(ctx, "rev-list", "--parents", "-n", "1", hash, "--")
+	parents, err := repo.commitParents(ctx, hash)
 	if err != nil {
 		return Diff{}, err
-	}
-	parents := strings.Fields(output)
-	if len(parents) == 0 {
-		return Diff{}, errors.New("无法读取提交及父提交")
 	}
 	oldPath := selected.Path
 	if selected.OriginalPath != "" {
@@ -160,6 +155,10 @@ func (repo *Repository) blobFileContentSized(ctx context.Context, side *FileCont
 		side.Unsupported = true
 		return side, nil
 	}
+	if content, ok := repo.cachedBlob(hash); ok {
+		setFileContentText(side, content)
+		return side, nil
+	}
 	// 先查询大小，避免把大 blob 加载到内存；对象消失或读取失败必须向上报错。
 	if size < 0 {
 		output, err := repo.git(ctx, "cat-file", "-s", hash)
@@ -179,6 +178,7 @@ func (repo *Repository) blobFileContentSized(ctx context.Context, side *FileCont
 	if err != nil {
 		return nil, err
 	}
+	repo.rememberBlob(hash, content)
 	setFileContentText(side, content)
 	return side, nil
 }

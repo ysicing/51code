@@ -18,6 +18,9 @@ import (
 type Repository struct {
 	Path string
 	mu   sync.Mutex
+	// 以下读取缓存只在持有 mu 时访问，内容均由不可变的对象 ID 决定。
+	changes changeCache
+	blobs   []cachedBlob
 }
 
 type File struct {

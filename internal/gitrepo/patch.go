@@ -428,6 +428,10 @@ func readPatchFile(root *os.Root, path string) (string, os.FileMode, bool, error
 }
 
 func (repo *Repository) patchTextBlob(ctx context.Context, hash string) (bool, error) {
+	// 缓存只保存不超过 fileContentLimit 的 blob，小于 outputLimit，不会绕过大小限制。
+	if content, ok := repo.cachedBlob(hash); ok {
+		return utf8.ValidString(content) && !strings.ContainsRune(content, 0), nil
+	}
 	size, err := repo.git(ctx, "cat-file", "-s", hash)
 	if err != nil {
 		return false, err
@@ -437,6 +441,9 @@ func (repo *Repository) patchTextBlob(ctx context.Context, hash string) (bool, e
 		return false, err
 	}
 	content, err := repo.git(ctx, "cat-file", "blob", hash)
+	if err == nil {
+		repo.rememberBlob(hash, content)
+	}
 	return err == nil && utf8.ValidString(content) && !strings.ContainsRune(content, 0), err
 }
 

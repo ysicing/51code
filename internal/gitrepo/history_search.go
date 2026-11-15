@@ -139,7 +139,12 @@ func (repo *Repository) CommitFiles(ctx context.Context, hash string) ([]CommitF
 		return nil, err
 	}
 	defer repo.mu.Unlock()
-	return repo.commitFiles(ctx, hash)
+	files, err := repo.commitFiles(ctx, hash)
+	if err != nil {
+		return nil, err
+	}
+	repo.rememberChanges(commitChangesKey(hash), files)
+	return files, nil
 }
 
 func (repo *Repository) commitFiles(ctx context.Context, hash string) ([]CommitFile, error) {
@@ -208,7 +213,7 @@ func (repo *Repository) CommitFileDiff(ctx context.Context, hash string, path st
 		return Diff{}, err
 	}
 	defer repo.mu.Unlock()
-	files, err := repo.commitFiles(ctx, hash)
+	files, err := repo.commitChanges(ctx, hash)
 	if err != nil {
 		return Diff{}, err
 	}
