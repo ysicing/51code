@@ -182,9 +182,12 @@ func TestNativeSidebarVisibilityLegacyPreferences(t *testing.T) {
 	for _, test := range []struct {
 		name, data string
 		search     bool
+		insights   bool
 	}{
-		{"旧配置", `{}`, true},
-		{"部分配置", `{"sidebarItems":{"search":false}}`, false},
+		{"旧配置", `{}`, true, true},
+		{"部分配置", `{"sidebarItems":{"search":false}}`, false, true},
+		{"洞察关闭", `{"sidebarItems":{"insights":false}}`, true, false},
+		{"洞察开启", `{"sidebarItems":{"insights":true}}`, true, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "state.json")
@@ -194,8 +197,11 @@ func TestNativeSidebarVisibilityLegacyPreferences(t *testing.T) {
 			restored := newNativeApp(app.service, path)
 			t.Cleanup(restored.cancel)
 			tester := sidebarSettingsTester(t, restored)
-			for _, label := range []string{"搜索", "版本比较", "贮藏", "工作树"} {
+			for _, label := range []string{"洞察", "搜索", "版本比较", "贮藏", "工作树"} {
 				want := label != "搜索" || test.search
+				if label == "洞察" {
+					want = test.insights
+				}
 				if checkbox, found := tester.AccessByRole(ui.RoleCheckBox, label); !found || checkbox.Checked != want {
 					t.Fatalf("配置缺失字段没有保持默认显示: %s %+v", label, checkbox)
 				}

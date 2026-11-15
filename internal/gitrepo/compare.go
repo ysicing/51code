@@ -51,6 +51,9 @@ func (repo *Repository) Compare(ctx context.Context, base, target string, mergeB
 		result.From = ancestors[0]
 	}
 	result.Files, err = repo.comparisonFiles(ctx, result.From, result.Target)
+	if err == nil {
+		repo.rememberChanges(compareChangesKey(result.From, result.Target), result.Files)
+	}
 	return result, err
 }
 
@@ -93,9 +96,14 @@ func (repo *Repository) CompareFileDiff(ctx context.Context, from, target, path 
 		return Diff{}, err
 	}
 	defer repo.mu.Unlock()
-	files, err := repo.comparisonFiles(ctx, from, target)
-	if err != nil {
-		return Diff{}, err
+	// 复用 Compare 刚读取的同一对提交的文件列表，避免每次切换文件都重新比较。
+	files, ok := repo.cachedChanges(compareChangesKey(from, target))
+	if !ok {
+		var err error
+		if files, err = repo.comparisonFiles(ctx, from, target); err != nil {
+			return Diff{}, err
+		}
+		repo.rememberChanges(compareChangesKey(from, target), files)
 	}
 	var selected *CommitFile
 	for index := range files {

@@ -6,6 +6,7 @@ package app
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/ysicing/51code/internal/gitrepo"
 
@@ -66,6 +67,30 @@ func (service *RepositoryService) CommitFileDiff(ctx context.Context, path, hash
 	return repo.CommitFileDiff(ctx, hash, file)
 }
 
+func (service *RepositoryService) InsightsSource(ctx context.Context, path, ref string) (gitrepo.InsightsSourceInfo, error) {
+	repo, err := service.manager.Get(path)
+	if err != nil {
+		return gitrepo.InsightsSourceInfo{}, err
+	}
+	return repo.InsightsSource(ctx, ref)
+}
+
+func (service *RepositoryService) Insights(ctx context.Context, path string, source gitrepo.InsightsSourceInfo, from, until time.Time) (gitrepo.RepositoryInsights, error) {
+	repo, err := service.manager.Get(path)
+	if err != nil {
+		return gitrepo.RepositoryInsights{}, err
+	}
+	return repo.Insights(ctx, source, from, until)
+}
+
+func (service *RepositoryService) EnsureCommitGraph(ctx context.Context, path string) (bool, error) {
+	repo, err := service.manager.Get(path)
+	if err != nil {
+		return false, err
+	}
+	return repo.EnsureCommitGraph(ctx)
+}
+
 func (service *RepositoryService) Compare(ctx context.Context, path, base, target string, mergeBase bool) (gitrepo.Comparison, error) {
 	repo, err := service.manager.Get(path)
 	if err != nil {
@@ -80,14 +105,6 @@ func (service *RepositoryService) CompareFileDiff(ctx context.Context, path, fro
 		return gitrepo.Diff{}, err
 	}
 	return repo.CompareFileDiff(ctx, from, target, file)
-}
-
-func (service *RepositoryService) Tags(ctx context.Context, path string) ([]gitrepo.Tag, error) {
-	repo, err := service.manager.Get(path)
-	if err != nil {
-		return nil, err
-	}
-	return repo.Tags(ctx)
 }
 
 func (service *RepositoryService) CreateTag(ctx context.Context, path, name, hash string) error {

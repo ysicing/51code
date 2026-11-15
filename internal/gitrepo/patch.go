@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -278,11 +279,15 @@ func (repo *Repository) hunkPatch(ctx context.Context, path string, staged bool)
 	if err != nil || head == "" {
 		return patch, err
 	}
-	index, err := repo.git(ctx, "ls-files", "--stage", "-z")
+	index, err := repo.indexDigest(ctx)
 	if err != nil {
 		return patch, err
 	}
-	indexMode, indexHash := patchIndexEntry(index, path)
+	entry, err := repo.git(ctx, "ls-files", "--stage", "-z", "--", path)
+	if err != nil {
+		return patch, err
+	}
+	indexMode, indexHash := patchIndexEntry(entry, path)
 	if indexHash == "" {
 		return patch, nil
 	}
@@ -317,7 +322,8 @@ func (repo *Repository) hunkPatch(ctx context.Context, path string, staged bool)
 			return patch, nil
 		}
 	}
-	for _, hash := range []string{fields[2], indexHash} {
+	// 仅工作区有改动时 HEAD 与索引是同一 blob，不重复读取。
+	for _, hash := range slices.Compact([]string{fields[2], indexHash}) {
 		supported, err := repo.patchTextBlob(ctx, hash)
 		if err != nil || !supported {
 			return patch, err
@@ -344,7 +350,7 @@ func (repo *Repository) hunkPatch(ctx context.Context, path string, staged bool)
 	if err != nil {
 		return patch, err
 	}
-	currentIndex, err := repo.git(ctx, "ls-files", "--stage", "-z")
+	currentIndex, err := repo.indexDigest(ctx)
 	if err != nil {
 		return patch, err
 	}
@@ -370,6 +376,12 @@ func (repo *Repository) hunkPatch(ctx context.Context, path string, staged bool)
 		patch.view.Hunks = append(patch.view.Hunks, PatchHunk{ID: id, Header: title})
 	}
 	return patch, nil
+}
+
+// indexDigest 摘要整个索引的路径、模式、对象和冲突阶段，任意条目变化都会使令牌失效；
+// 流式计算避免大仓库的索引列表超过输出上限。
+func (repo *Repository) indexDigest(ctx context.Context) (string, error) {
+	return runDigest(ctx, repo.Path, 30*time.Second, "ls-files", "--stage", "-z")
 }
 
 func patchIndexEntry(index, path string) (mode, hash string) {
@@ -423,6 +435,10 @@ func readPatchFile(root *os.Root, path string) (string, os.FileMode, bool, error
 }
 
 func (repo *Repository) patchTextBlob(ctx context.Context, hash string) (bool, error) {
+	// 缓存只保存不超过 fileContentLimit 的 blob，小于 outputLimit，不会绕过大小限制。
+	if content, ok := repo.cachedBlob(hash); ok {
+		return utf8.ValidString(content) && !strings.ContainsRune(content, 0), nil
+	}
 	size, err := repo.git(ctx, "cat-file", "-s", hash)
 	if err != nil {
 		return false, err
@@ -432,6 +448,9 @@ func (repo *Repository) patchTextBlob(ctx context.Context, hash string) (bool, e
 		return false, err
 	}
 	content, err := repo.git(ctx, "cat-file", "blob", hash)
+	if err == nil {
+		repo.rememberBlob(hash, content)
+	}
 	return err == nil && utf8.ValidString(content) && !strings.ContainsRune(content, 0), err
 }
 

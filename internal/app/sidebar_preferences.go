@@ -10,6 +10,7 @@ import (
 )
 
 type nativeSidebarItems struct {
+	Insights  bool `json:"insights"`
 	Search    bool `json:"search"`
 	Compare   bool `json:"compare"`
 	Stash     bool `json:"stash"`

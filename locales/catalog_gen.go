@@ -36,6 +36,176 @@ type Messages struct{ locale string }
 // source language.
 func In(locale string) Messages { return Messages{locale} }
 
+// Insights says "洞察"
+// in the language the app shows.
+func Insights() string { return In(i18n.Locale()).Insights() }
+
+// Insights says "洞察"
+// in the language of msgs.
+func (msgs Messages) Insights() string {
+	return Catalog.Format(msgs.locale, "insights", nil)
+}
+
+// InsightsLoading says "正在分析仓库…"
+// in the language the app shows.
+func InsightsLoading() string { return In(i18n.Locale()).InsightsLoading() }
+
+// InsightsLoading says "正在分析仓库…"
+// in the language of msgs.
+func (msgs Messages) InsightsLoading() string {
+	return Catalog.Format(msgs.locale, "insightsLoading", nil)
+}
+
+// InsightsPeriod says "统计范围"
+// in the language the app shows.
+func InsightsPeriod() string { return In(i18n.Locale()).InsightsPeriod() }
+
+// InsightsPeriod says "统计范围"
+// in the language of msgs.
+func (msgs Messages) InsightsPeriod() string {
+	return Catalog.Format(msgs.locale, "insightsPeriod", nil)
+}
+
+// InsightsDays says "{count} 天"
+// in the language the app shows.
+func InsightsDays(count string) string { return In(i18n.Locale()).InsightsDays(count) }
+
+// InsightsDays says "{count} 天"
+// in the language of msgs.
+func (msgs Messages) InsightsDays(count string) string {
+	return Catalog.Format(msgs.locale, "insightsDays", map[string]any{"count": count})
+}
+
+// InsightsCommits says "提交"
+// in the language the app shows.
+func InsightsCommits() string { return In(i18n.Locale()).InsightsCommits() }
+
+// InsightsCommits says "提交"
+// in the language of msgs.
+func (msgs Messages) InsightsCommits() string {
+	return Catalog.Format(msgs.locale, "insightsCommits", nil)
+}
+
+// InsightsContributors says "贡献者"
+// in the language the app shows.
+func InsightsContributors() string { return In(i18n.Locale()).InsightsContributors() }
+
+// InsightsContributors says "贡献者"
+// in the language of msgs.
+func (msgs Messages) InsightsContributors() string {
+	return Catalog.Format(msgs.locale, "insightsContributors", nil)
+}
+
+// InsightsActiveDays says "活跃天数"
+// in the language the app shows.
+func InsightsActiveDays() string { return In(i18n.Locale()).InsightsActiveDays() }
+
+// InsightsActiveDays says "活跃天数"
+// in the language of msgs.
+func (msgs Messages) InsightsActiveDays() string {
+	return Catalog.Format(msgs.locale, "insightsActiveDays", nil)
+}
+
+// InsightsFiles says "变更文件"
+// in the language the app shows.
+func InsightsFiles() string { return In(i18n.Locale()).InsightsFiles() }
+
+// InsightsFiles says "变更文件"
+// in the language of msgs.
+func (msgs Messages) InsightsFiles() string {
+	return Catalog.Format(msgs.locale, "insightsFiles", nil)
+}
+
+// InsightsActivity says "提交活跃度"
+// in the language the app shows.
+func InsightsActivity() string { return In(i18n.Locale()).InsightsActivity() }
+
+// InsightsActivity says "提交活跃度"
+// in the language of msgs.
+func (msgs Messages) InsightsActivity() string {
+	return Catalog.Format(msgs.locale, "insightsActivity", nil)
+}
+
+// InsightsChurn says "文本变更趋势"
+// in the language the app shows.
+func InsightsChurn() string { return In(i18n.Locale()).InsightsChurn() }
+
+// InsightsChurn says "文本变更趋势"
+// in the language of msgs.
+func (msgs Messages) InsightsChurn() string {
+	return Catalog.Format(msgs.locale, "insightsChurn", nil)
+}
+
+// InsightsHotspots says "文件变更热点"
+// in the language the app shows.
+func InsightsHotspots() string { return In(i18n.Locale()).InsightsHotspots() }
+
+// InsightsHotspots says "文件变更热点"
+// in the language of msgs.
+func (msgs Messages) InsightsHotspots() string {
+	return Catalog.Format(msgs.locale, "insightsHotspots", nil)
+}
+
+// InsightsTouchCount says "涉及提交"
+// in the language the app shows.
+func InsightsTouchCount() string { return In(i18n.Locale()).InsightsTouchCount() }
+
+// InsightsTouchCount says "涉及提交"
+// in the language of msgs.
+func (msgs Messages) InsightsTouchCount() string {
+	return Catalog.Format(msgs.locale, "insightsTouchCount", nil)
+}
+
+// InsightsAdded says "新增"
+// in the language the app shows.
+func InsightsAdded() string { return In(i18n.Locale()).InsightsAdded() }
+
+// InsightsAdded says "新增"
+// in the language of msgs.
+func (msgs Messages) InsightsAdded() string {
+	return Catalog.Format(msgs.locale, "insightsAdded", nil)
+}
+
+// InsightsDeleted says "删除"
+// in the language the app shows.
+func InsightsDeleted() string { return In(i18n.Locale()).InsightsDeleted() }
+
+// InsightsDeleted says "删除"
+// in the language of msgs.
+func (msgs Messages) InsightsDeleted() string {
+	return Catalog.Format(msgs.locale, "insightsDeleted", nil)
+}
+
+// InsightsEmpty says "此范围内暂无提交"
+// in the language the app shows.
+func InsightsEmpty() string { return In(i18n.Locale()).InsightsEmpty() }
+
+// InsightsEmpty says "此范围内暂无提交"
+// in the language of msgs.
+func (msgs Messages) InsightsEmpty() string {
+	return Catalog.Format(msgs.locale, "insightsEmpty", nil)
+}
+
+// InsightsNoFiles says "此范围内暂无文件变更"
+// in the language the app shows.
+func InsightsNoFiles() string { return In(i18n.Locale()).InsightsNoFiles() }
+
+// InsightsNoFiles says "此范围内暂无文件变更"
+// in the language of msgs.
+func (msgs Messages) InsightsNoFiles() string {
+	return Catalog.Format(msgs.locale, "insightsNoFiles", nil)
+}
+
+// InsightsShallow says "浅克隆：统计仅涵盖本地已有历史"
+// in the language the app shows.
+func InsightsShallow() string { return In(i18n.Locale()).InsightsShallow() }
+
+// InsightsShallow says "浅克隆：统计仅涵盖本地已有历史"
+// in the language of msgs.
+func (msgs Messages) InsightsShallow() string {
+	return Catalog.Format(msgs.locale, "insightsShallow", nil)
+}
+
 // Worktrees says "工作树"
 // in the language the app shows.
 func Worktrees() string { return In(i18n.Locale()).Worktrees() }

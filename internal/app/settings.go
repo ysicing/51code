@@ -210,6 +210,7 @@ func (app *nativeApp) settingsDialogAt(initialTab int) {
 	dialog := &nativeDialog{title: locales.ApplicationSettings(), titleText: locales.ApplicationSettings, width: 620, height: 520, dismiss: locales.Cancel()}
 	tab := initialTab
 	identity := &nativeIdentityEditor{}
+	app.identityEditor = identity
 	ai := &nativeAISettings{manual: app.prefs.AI.Endpoint != "" || app.prefs.AI.Protocol != ""}
 	app.aiEditor = ai
 	dialog.onClose = func() {
@@ -437,6 +438,7 @@ func (app *nativeApp) generalPreferences(c *ui.Context) {
 		ui.Text(c, locales.Sidebar()).FontSize(13).Width(92).Shrink(0)
 		ui.Column(c).Grow(1).Gap(8).Children(func() {
 			items := &app.prefs.SidebarItems
+			app.sidebarPreference(c, "insights", locales.Insights(), &items.Insights)
 			app.sidebarPreference(c, "search", locales.Search(), &items.Search)
 			app.sidebarPreference(c, "compare", locales.CompareVersions(), &items.Compare)
 			app.sidebarPreference(c, "stash", locales.Stash(), &items.Stash)

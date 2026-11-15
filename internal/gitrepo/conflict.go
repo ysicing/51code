@@ -153,22 +153,25 @@ func (repo *Repository) conflict(ctx context.Context, path string) (Conflict, er
 }
 
 func (repo *Repository) checkConflictAncestors(ctx context.Context, root *os.Root, path string) error {
-	metadata := []os.FileInfo{}
-	for _, option := range []string{"--absolute-git-dir", "--git-common-dir"} {
-		directory, err := repo.git(ctx, "rev-parse", "--path-format=absolute", option)
-		if err != nil {
-			return err
-		}
-		info, err := os.Stat(strings.TrimSuffix(directory, "\n"))
-		if err != nil {
-			return err
-		}
-		metadata = append(metadata, info)
-	}
+	var metadata []os.FileInfo
 	parent := ""
 	for _, part := range strings.Split(filepath.ToSlash(filepath.Dir(filepath.FromSlash(path))), "/") {
 		if part == "." {
 			continue
+		}
+		// 仅在存在祖先目录时才需要元数据目录，顶层文件不必启动 Git。
+		if metadata == nil {
+			directories, err := repo.metadataDirectories(ctx)
+			if err != nil {
+				return err
+			}
+			for _, directory := range directories {
+				info, err := os.Stat(directory)
+				if err != nil {
+					return err
+				}
+				metadata = append(metadata, info)
+			}
 		}
 		parent = filepath.Join(parent, part)
 		info, err := root.Lstat(parent)
@@ -189,6 +192,31 @@ func (repo *Repository) checkConflictAncestors(ctx context.Context, root *os.Roo
 		}
 	}
 	return nil
+}
+
+// metadataDirectories 读取当前 Git 目录与共享目录。
+func (repo *Repository) metadataDirectories(ctx context.Context) ([]string, error) {
+	return repo.revParsePaths(ctx, "--absolute-git-dir", "--git-common-dir")
+}
+
+// revParsePaths 用一次 rev-parse 按顺序读取多个绝对路径；路径含换行无法按行拆分时逐个读取。
+func (repo *Repository) revParsePaths(ctx context.Context, options ...string) ([]string, error) {
+	output, err := repo.git(ctx, append([]string{"rev-parse", "--path-format=absolute"}, options...)...)
+	if err != nil {
+		return nil, err
+	}
+	if lines := strings.Split(strings.TrimSuffix(output, "\n"), "\n"); len(lines) == len(options) {
+		return lines, nil
+	}
+	var paths []string
+	for _, option := range options {
+		path, err := repo.git(ctx, "rev-parse", "--path-format=absolute", option)
+		if err != nil {
+			return nil, err
+		}
+		paths = append(paths, strings.TrimSuffix(path, "\n"))
+	}
+	return paths, nil
 }
 
 var conflictMarker = regexp.MustCompile(`(?m)^(<{7,}|>{7,}|\|{7,})( |$)`)

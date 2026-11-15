@@ -75,6 +75,10 @@ func (app *nativeApp) switchWorkspace(screen string) {
 	app.refSelected = nativeRefKey{}
 	app.screen = screen
 	switch screen {
+	case "insights":
+		app.nativeHistoryState = newNativeHistoryState()
+		app.refreshInsights(false)
+		return
 	case "worktrees":
 		app.nativeHistoryState = newNativeHistoryState()
 		if app.worktrees == nil {

@@ -13,6 +13,10 @@ import (
 )
 
 func (app *nativeApp) refreshOnFocus() {
+	if !app.closed && !app.busy && app.dialog == nil && app.screen == "library" {
+		app.refreshRepositoryLanguages(false)
+		return
+	}
 	if app.closed || app.busy || app.readTask != nil || app.focusRefresh != nil ||
 		app.dialog != nil || app.conflictDirty() || app.repository == nil || app.screen == "library" {
 		return
@@ -137,6 +141,13 @@ func (app *nativeApp) refreshOnFocus() {
 			if screen == "worktrees" && app.worktrees != nil && !reflect.DeepEqual(app.worktrees.items, worktrees) {
 				app.worktrees.setItems(worktrees)
 			}
+			if screen == "insights" && app.insights != nil {
+				// 引用变化（切分支、新提交）时跳过 60 秒节流，否则仅按节流间隔复查。
+				if historyReferencesChanged(repository, result) {
+					app.insights.checked = time.Time{}
+				}
+				app.refreshInsights(false)
+			}
 		})
 	}()
 }
@@ -147,13 +158,17 @@ func historyReferencesChanged(previous, current *repositoryView) bool {
 }
 
 func (app *nativeApp) readFocusHistory(ctx context.Context, path string, state nativeHistoryState) ([]gitrepo.Commit, error) {
-	count := max(len(state.history), gitrepo.DefaultHistoryPageSize)
+	return app.readHistoryRange(ctx, path, state.historyResult, state.historyOffset,
+		max(len(state.history), gitrepo.DefaultHistoryPageSize))
+}
+
+// readHistoryRange 重读已加载的全部历史，刷新后保留分页进度与选中位置。
+func (app *nativeApp) readHistoryRange(ctx context.Context, path string, request nativeHistoryRequest, offset, count int) ([]gitrepo.Commit, error) {
 	commits := make([]gitrepo.Commit, 0, count)
-	request := state.historyResult
 	for len(commits) < count {
 		limit := min(count-len(commits), gitrepo.MaxHistoryPageSize)
 		page, err := app.service.SearchHistory(ctx, path, request.query, request.file,
-			state.historyOffset+len(commits), request.filter, limit)
+			offset+len(commits), request.filter, limit)
 		if err != nil {
 			return nil, err
 		}
