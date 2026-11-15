@@ -59,6 +59,10 @@ func compareNativeFiles(first, second gitrepo.File, order string, descending, st
 }
 
 func (app *nativeApp) filesFiltered() bool {
+	// 历史工作区始终展示完整分组，不继承文件变更页中暂时隐藏的文件范围。
+	if app.screen == "history" && app.historyWorking {
+		return false
+	}
 	return app.fileQuery != "" || app.fileFilter != ""
 }
 
@@ -287,7 +291,7 @@ func (app *nativeApp) changeFileRow(c *ui.Context, file gitrepo.File, staged boo
 	key := fmt.Sprintf("%t:%s", staged, file.Path)
 	ui.Row(c).Key("file:" + key).FillWidth().PaddingStart(float32(depth) * 16).Gap(2).AlignItems(ui.Center).Children(func() {
 		checked := app.selectedFiles[key]
-		if ui.Checkbox(c, &checked, "").Label(label).Disabled(file.Conflict || !app.writable).Changed() {
+		if ui.Checkbox(c, &checked, "").Label(label).Disabled(file.Conflict || !app.writable || app.readTask != nil).Changed() {
 			if checked {
 				app.selectedFiles[key] = true
 			} else {
@@ -322,7 +326,11 @@ func (app *nativeApp) changeFileRow(c *ui.Context, file gitrepo.File, staged boo
 			nativeFileIcon(c, file.Path)
 			ui.Text(c, name).FontSize(12).Grow(1).MinWidth(0).SingleLine()
 		}).Clicked() && (!selected || app.readTask != nil || app.problem != "") {
-			app.selectFile(file.Path, staged)
+			if app.screen == "history" && app.historyWorking {
+				app.selectHistoryWorkingFile(file.Path, staged)
+			} else {
+				app.selectFile(file.Path, staged)
+			}
 		}
 	})
 }

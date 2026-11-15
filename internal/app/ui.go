@@ -489,6 +489,31 @@ func (app *nativeApp) operationBar(c *ui.Context) {
 
 func (app *nativeApp) changesPanel(c *ui.Context) {
 	app.fileControls(c)
+	app.changesFileSections(c)
+	ui.Divider(c)
+	ui.Column(c).FillWidth().Padding(12).Gap(8).Disabled(!app.writable).Children(func() {
+		draft := app.prefs.Drafts[app.repository.snapshot.Path]
+		app.commitAIHeader(c)
+		if ui.TextArea(c, &draft).Bind(&app.commitInput).Label(locales.CommitMessage()).Placeholder(locales.CommitMessageHint()).Lines(3, 6).FillWidth().Changed() {
+			app.prefs.Drafts[app.repository.snapshot.Path] = draft
+			app.draftRevision++
+		}
+		app.commitAIResult(c)
+		count := 0
+		conflicts := false
+		for _, file := range app.repository.snapshot.Files {
+			if isStaged(file) {
+				count++
+			}
+			conflicts = conflicts || file.Conflict
+		}
+		if ui.PrimaryButton(c, locales.CommitFiles(count)).FillWidth().Disabled(count == 0 || conflicts || app.repository.snapshot.Operation.Kind != "" || strings.TrimSpace(draft) == "").Clicked() {
+			app.commit()
+		}
+	})
+}
+
+func (app *nativeApp) changesFileSections(c *ui.Context) {
 	area := ui.Column(c).Grow(1).MinHeight(0).FillWidth()
 	area.Children(func() {
 		height := max(1, area.LayoutBounds().H-1)
@@ -511,27 +536,6 @@ func (app *nativeApp) changesPanel(c *ui.Context) {
 			app.changesSection(c, false)
 		}).Grow(1).MinHeight(0).FillWidth().Changed() {
 			app.prefs.ChangesSplit = app.changesSplit
-		}
-	})
-	ui.Divider(c)
-	ui.Column(c).FillWidth().Padding(12).Gap(8).Disabled(!app.writable).Children(func() {
-		draft := app.prefs.Drafts[app.repository.snapshot.Path]
-		app.commitAIHeader(c)
-		if ui.TextArea(c, &draft).Bind(&app.commitInput).Label(locales.CommitMessage()).Placeholder(locales.CommitMessageHint()).Lines(3, 6).FillWidth().Changed() {
-			app.prefs.Drafts[app.repository.snapshot.Path] = draft
-			app.draftRevision++
-		}
-		app.commitAIResult(c)
-		count := 0
-		conflicts := false
-		for _, file := range app.repository.snapshot.Files {
-			if isStaged(file) {
-				count++
-			}
-			conflicts = conflicts || file.Conflict
-		}
-		if ui.PrimaryButton(c, locales.CommitFiles(count)).FillWidth().Disabled(count == 0 || conflicts || app.repository.snapshot.Operation.Kind != "" || strings.TrimSpace(draft) == "").Clicked() {
-			app.commit()
 		}
 	})
 }
@@ -606,7 +610,7 @@ func (app *nativeApp) changesSection(c *ui.Context, staged bool) {
 			}
 			ui.Badge(c, badge)
 			ui.Spacer(c)
-			if ui.Button(c, action).FontSize(12).Disabled(!app.writable || count == 0).Clicked() {
+			if ui.Button(c, action).FontSize(12).Disabled(!app.writable || app.readTask != nil || count == 0).Clicked() {
 				app.stageFiles(staged, true)
 			}
 		}).Label(locales.SectionActions(label)).FillWidth().Padding(4, 12)
@@ -641,7 +645,8 @@ func (app *nativeApp) changesSection(c *ui.Context, staged bool) {
 		}
 		if count := len(app.checkedFiles(staged)); count > 0 {
 			ui.Toolbar(c, func() {
-				if ui.Button(c, fmt.Sprintf("%s (%d)", selectedAction, count)).Label(selectedAction).Disabled(!app.writable).Clicked() {
+				if ui.Button(c, fmt.Sprintf("%s (%d)", selectedAction, count)).Label(selectedAction).
+					Disabled(!app.writable || app.readTask != nil).Clicked() {
 					app.stageFiles(staged, false)
 				}
 			}).FillWidth().Padding(4, 12).Label(locales.SectionBatchActions(label))

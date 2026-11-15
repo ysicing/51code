@@ -42,8 +42,6 @@ type nativeHistoryState struct {
 	commitFile           string
 	commitList           *ui.ListState
 	commitSelected       int
-	workingList          *ui.ListState
-	workingSelected      int
 	savedDiff            gitrepo.Diff
 	savedFile            string
 	savedStaged          bool
@@ -51,8 +49,8 @@ type nativeHistoryState struct {
 
 func newNativeHistoryState() nativeHistoryState {
 	return nativeHistoryState{
-		historySelected: -1, commitSelected: -1, workingSelected: -1,
-		historyList: &ui.ListState{}, commitList: &ui.ListState{}, workingList: &ui.ListState{},
+		historySelected: -1, commitSelected: -1,
+		historyList: &ui.ListState{}, commitList: &ui.ListState{},
 	}
 }
 

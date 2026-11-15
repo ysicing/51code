@@ -195,13 +195,15 @@ try {
     await press("关闭设置");
     await capture(`native-history-working-actions-${suffix}.png`);
   }
-  await press("暂存文件 hello.txt");
+  await press("选择 未暂存文件 hello.txt");
+  assert.equal(git("diff", "--cached", "--name-only"), "");
+  await press("暂存所选文件");
   assert.equal(git("diff", "--cached", "--name-only"), "hello.txt");
-  await shown("取消暂存文件 hello.txt");
+  await shown("选择 已暂存文件 hello.txt");
   await press("全部取消暂存");
   assert.equal(git("diff", "--cached", "--name-only"), "");
   await press("全部暂存");
-  await press("取消暂存文件 hello.txt");
+  await press("取消暂存文件");
   await press("暂存此区块");
   assert.equal(git("diff", "--cached", "--name-only"), "hello.txt");
   await press("取消此区块暂存");
@@ -209,7 +211,7 @@ try {
   await press("+原生界面变更");
   await press("应用所选行");
   assert.equal(git("show", ":hello.txt"), "原始内容\n原生界面变更");
-  await press("选择 已暂存文件 hello.txt");
+  await press("hello.txt");
   await press("选择行…");
   await press("+原生界面变更");
   await press("应用所选行");

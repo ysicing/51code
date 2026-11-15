@@ -43,7 +43,7 @@ func TestNativeHistoryWorkingFiles(t *testing.T) {
 	if !tester.HasText("已暂存文件") || !tester.HasText("未暂存文件") {
 		t.Fatal("缺少文件分组")
 	}
-	if err := tester.Click("选择 已暂存文件 hello.txt"); err != nil {
+	if err := tester.Click("hello.txt"); err != nil {
 		t.Fatal(err)
 	}
 	finish()
@@ -51,7 +51,7 @@ func TestNativeHistoryWorkingFiles(t *testing.T) {
 	if !app.staged || !strings.Contains(app.diff.Text, "+暂存版本") || strings.Contains(app.diff.Text, "工作区版本") {
 		t.Fatalf("已暂存差异混入工作区内容: %s", app.diff.Text)
 	}
-	if err := tester.Click("选择 未暂存文件 new.txt"); err != nil {
+	if err := tester.Click("new.txt"); err != nil {
 		t.Fatal(err)
 	}
 	finish()
@@ -231,7 +231,7 @@ func TestNativeHistoryWorkingReadFailureAndStagedOnly(t *testing.T) {
 	finish()
 	tester := ui.NewTester(app.view, 1024, 680)
 	if !app.staged || !strings.Contains(app.diff.Text, "已暂存内容") ||
-		!tester.HasText("已暂存文件") || tester.HasText("未暂存文件") {
+		!tester.HasText("已暂存文件") || !tester.HasText("暂无未暂存文件") {
 		t.Fatal("只有已暂存文件时选错分组")
 	}
 	nativeGit(t, path, "commit", "-m", "暂存完成")
@@ -256,6 +256,103 @@ func TestNativeHistoryWorkingReadFailureAndStagedOnly(t *testing.T) {
 	}
 }
 
+func TestNativeHistoryWorkingStagingMatchesChanges(t *testing.T) {
+	app, path, finish := nativeFixture(t)
+	writeNativeFile(t, path, "hello.txt", "修改内容\n")
+	writeNativeFile(t, path, "other.txt", "另一个文件\n")
+	app.refresh()
+	finish()
+	app.screen = "history"
+	app.searchHistory(false)
+	finish()
+	app.selectHistoryWorking()
+	finish()
+	app.fileQuery, app.fileFilter = "隐藏所有文件", "untracked"
+	tester := ui.NewTester(app.view, 1440, 900)
+	for _, name := range []string{"hello.txt", "other.txt"} {
+		if _, found := tester.AccessByRole(ui.RoleCheckBox, "选择 未暂存文件 "+name); !found {
+			t.Fatal("历史工作区缺少与文件变更一致的勾选操作", name)
+		}
+	}
+	if err := tester.Click("选择 未暂存文件 hello.txt"); err != nil {
+		t.Fatal(err)
+	}
+	if nativeGit(t, path, "diff", "--cached", "--name-only") != "" {
+		t.Fatal("勾选文件直接修改了暂存区")
+	}
+	if err := tester.Click("暂存所选文件"); err != nil {
+		t.Fatal(err)
+	}
+	finish()
+	tester.Frame()
+	if got := nativeGit(t, path, "diff", "--cached", "--name-only"); got != "hello.txt" {
+		t.Fatal("批量暂存范围错误", got)
+	}
+	if !app.historyWorking || app.selectedFile != "hello.txt" || !app.staged ||
+		app.fileQuery != "隐藏所有文件" || app.fileFilter != "untracked" {
+		t.Fatal("暂存改变了历史工作区选择或文件变更筛选条件")
+	}
+	if err := tester.Click("选择 已暂存文件 hello.txt"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tester.Click("取消暂存所选文件"); err != nil {
+		t.Fatal(err)
+	}
+	finish()
+	if nativeGit(t, path, "diff", "--cached", "--name-only") != "" || app.staged {
+		t.Fatal("取消暂存没有恢复未暂存文件选择")
+	}
+}
+
+func TestNativeHistoryWorkingSharedFileViews(t *testing.T) {
+	app, path, finish := nativeFixture(t)
+	if err := os.MkdirAll(filepath.Join(path, "src"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	writeNativeFile(t, path, "src/a.txt", "first\n")
+	writeNativeFile(t, path, "src/z.txt", "last\n")
+	app.refresh()
+	finish()
+	app.screen = "history"
+	app.searchHistory(false)
+	finish()
+	app.selectHistoryWorking()
+	finish()
+	app.prefs.FileSort, app.prefs.FileDescending = "name", true
+	tester := ui.NewTester(app.view, 1440, 900)
+	first, firstFound := tester.AccessByRole(ui.RoleButton, "src/a.txt")
+	last, lastFound := tester.AccessByRole(ui.RoleButton, "src/z.txt")
+	if !firstFound || !lastFound || last.Bounds.Y >= first.Bounds.Y {
+		t.Fatal("历史工作区未沿用文件排序偏好")
+	}
+	app.prefs.FileTree = true
+	tester.Frame()
+	if _, found := tester.AccessByRole(ui.RoleTree, "未暂存文件目录树"); !found {
+		t.Fatal("历史工作区未沿用目录树偏好")
+	}
+	if err := tester.Click("src/z.txt"); err != nil {
+		t.Fatal(err)
+	}
+	finish()
+	tester.Frame()
+	if !app.historyWorking || app.selectedFile != "src/z.txt" || app.commitHash != "" ||
+		!strings.Contains(app.diff.Text, "last") {
+		t.Fatal("共享文件行未保留历史工作区选择和差异")
+	}
+	if err := tester.Click("选择 未暂存文件 src/z.txt"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tester.Click("暂存所选文件"); err != nil {
+		t.Fatal(err)
+	}
+	finish()
+	tester.Frame()
+	if got := nativeGit(t, path, "diff", "--cached", "--name-only"); got != "src/z.txt" ||
+		!app.historyWorking || !app.staged || app.selectedFile != "src/z.txt" {
+		t.Fatal("目录树批量暂存丢失文件选择", got)
+	}
+}
+
 func TestNativeHistoryWorkingStaging(t *testing.T) {
 	app, path, finish := nativeFixture(t)
 	writeNativeFile(t, path, "hello.txt", "修改内容\n")
@@ -271,19 +368,19 @@ func TestNativeHistoryWorkingStaging(t *testing.T) {
 	app.fileQuery, app.fileFilter = "隐藏所有文件", "tracked"
 	app.historyQuery = "尚未执行的搜索"
 	tester := ui.NewTester(app.view, 1440, 900)
-	for _, action := range []string{"暂存文件 hello.txt", "取消暂存文件 hello.txt", "全部暂存", "全部取消暂存"} {
+	for _, action := range []string{"暂存文件", "取消暂存文件", "全部暂存", "全部取消暂存"} {
 		if err := tester.Click(action); err != nil {
 			t.Fatal(err)
 		}
 		finish()
 		tester.Frame()
-		staged := action == "暂存文件 hello.txt" || action == "全部暂存"
+		staged := action == "暂存文件" || action == "全部暂存"
 		if app.problem != "" || app.screen != "history" || !app.historyWorking || app.selectedFile != "hello.txt" ||
 			app.staged != staged || !app.canApplyPatch() {
 			t.Fatalf("%s 后未保留工作区与补丁: file=%s staged=%v problem=%s", action, app.selectedFile, app.staged, app.problem)
 		}
 		expected := ""
-		if action == "暂存文件 hello.txt" {
+		if action == "暂存文件" {
 			expected = "hello.txt"
 		} else if action == "全部暂存" {
 			expected = "hello.txt\nother.txt"
@@ -341,7 +438,7 @@ func TestNativeHistoryWorkingPatchActions(t *testing.T) {
 	if app.staged || !app.canApplyPatch() || len(app.patch.Hunks) != 1 {
 		t.Fatal("部分暂存后未保持未暂存区块选择")
 	}
-	if err := tester.Click("选择 已暂存文件 hello.txt"); err != nil {
+	if err := tester.Click("hello.txt"); err != nil {
 		t.Fatal(err)
 	}
 	finish()
@@ -408,6 +505,7 @@ func TestNativeHistoryWorkingWriteGuards(t *testing.T) {
 	finish()
 	app.selectHistoryWorking()
 	finish()
+	app.selectedFiles["false:hello.txt"] = true
 	for _, state := range []string{"readonly", "reading", "busy"} {
 		app.writable = state != "readonly"
 		app.busy = state == "busy"
@@ -415,7 +513,7 @@ func TestNativeHistoryWorkingWriteGuards(t *testing.T) {
 			app.readTask = &nativeRead{kind: nativeReadDiff, cancel: func() {}}
 		}
 		tester := ui.NewTester(app.view, 1800, 900)
-		for _, label := range []string{"暂存文件 hello.txt", "全部暂存", "暂存文件", "暂存此区块", "选择行…"} {
+		for _, label := range []string{"暂存所选文件", "全部暂存", "暂存文件", "暂存此区块", "选择行…"} {
 			button, found := tester.AccessByRole(ui.RoleButton, label)
 			if !found || !button.Disabled {
 				t.Fatalf("%s 未禁用 %s: %+v", state, label, button)
@@ -424,19 +522,33 @@ func TestNativeHistoryWorkingWriteGuards(t *testing.T) {
 		if app.canApplyPatch() {
 			t.Fatal("不可写状态仍允许区块操作", state)
 		}
+		checkbox, found := tester.AccessByRole(ui.RoleCheckBox, "选择 未暂存文件 hello.txt")
+		if !found || !checkbox.Disabled {
+			t.Fatal("不可写状态未禁用文件勾选", state)
+		}
 		app.readTask, app.busy, app.writable = nil, false, true
 	}
 	app.repository.snapshot.Files[0].Conflict = true
-	app.selectHistoryWorkingFile("hello.txt", false)
-	finish()
+	app.selectedFile = ""
 	tester := ui.NewTester(app.view, 1024, 680)
+	if err := tester.Click("hello.txt"); err != nil {
+		t.Fatal(err)
+	}
+	finish()
+	tester.Frame()
 	if app.conflict != nil || app.workingFileActions() || app.canApplyPatch() {
 		t.Fatal("历史页意外开放冲突编辑")
 	}
-	for _, label := range []string{"暂存文件 hello.txt", "全部暂存"} {
-		button, found := tester.AccessByRole(ui.RoleButton, label)
+	for _, control := range []struct {
+		role  ui.Role
+		label string
+	}{
+		{ui.RoleCheckBox, "选择 未暂存文件 hello.txt"},
+		{ui.RoleButton, "全部暂存"},
+	} {
+		button, found := tester.AccessByRole(control.role, control.label)
 		if !found || !button.Disabled {
-			t.Fatal("冲突文件仍可直接暂存", label)
+			t.Fatal("冲突文件仍可直接暂存", control.label)
 		}
 	}
 }
@@ -460,11 +572,19 @@ func TestNativeHistoryWorkingCompactActions(t *testing.T) {
 	for _, appearance := range []string{appearanceLight, appearanceDark} {
 		app.prefs.Appearance = appearance
 		tester := ui.NewTester(app.view, 1024, 680)
-		for _, label := range []string{"全部暂存", "全部取消暂存", "暂存文件 " + name, "取消暂存文件 " + name} {
-			button, found := tester.AccessByRole(ui.RoleButton, label)
-			if !found || button.Offscreen || button.Bounds.W < 20 || button.Bounds.X+button.Bounds.W > 1024 ||
+		for _, control := range []struct {
+			role  ui.Role
+			label string
+		}{
+			{ui.RoleButton, "全部暂存"},
+			{ui.RoleButton, "全部取消暂存"},
+			{ui.RoleCheckBox, "选择 未暂存文件 " + name},
+			{ui.RoleCheckBox, "选择 已暂存文件 " + name},
+		} {
+			button, found := tester.AccessByRole(control.role, control.label)
+			if !found || button.Offscreen || button.Bounds.W <= 0 || button.Bounds.X+button.Bounds.W > 1024 ||
 				button.Bounds.Y+button.Bounds.H > 680 {
-				t.Fatalf("窄窗口操作不可见: %s %+v", label, button)
+				t.Fatalf("窄窗口操作不可见: %s %+v", control.label, button)
 			}
 		}
 		if directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); directory != "" {

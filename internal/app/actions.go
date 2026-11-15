@@ -20,9 +20,10 @@ func (app *nativeApp) visibleFiles(staged bool) []gitrepo.File {
 		return files
 	}
 	query := strings.ToLower(app.fileQuery)
+	filtered := app.filesFiltered()
 	for _, file := range app.repository.snapshot.Files {
 		if (staged && isStaged(file) || !staged && isWorking(file)) &&
-			strings.Contains(strings.ToLower(file.Path), query) && matchesNativeFileFilter(file, app.fileFilter) {
+			(!filtered || strings.Contains(strings.ToLower(file.Path), query) && matchesNativeFileFilter(file, app.fileFilter)) {
 			files = append(files, file)
 		}
 	}
