@@ -151,19 +151,25 @@ Git 命令使用参数数组执行，路径按字面值处理。写操作限定�
 
 `.github/workflows/desktop.yml` 只对 PR 和主分支运行 Windows、Ubuntu、macOS 回归及发布脚本测试，不构建或发布安装包。最多两个独立 runner 并行，各 runner 内的测试串行执行；这不会占用本机的验证预算。Go 使用 `GOMAXPROCS=2`、`-p=1`、`-parallel=2`；Ubuntu 测试使用独立的虚拟显示和 D-Bus/keyring，会话内只存合成测试密钥。各平台保留 `ui.Tester` 浅深色及紧凑布局截图供审阅，这些截图不替代真实系统窗口、输入法及快捷键验收。
 
-三个平台的安装包都在发布用的 Mac 上交叉构建：`task release` 依次为 macOS 双架构、Windows amd64 和 Linux 双架构各调用一次 MyGo，共用一个构建号，任一平台失败都不上传、不消耗构建号。Windows 安装器需要 NSIS（`brew install makensis`，确保 `makensis` 在 PATH 中）；deb 与 rpm 由 MyGo 直接生成，无需额外工具。产物位于发布目录的 `windows-amd64/51code-setup-<版本>-amd64.exe`，以及 `linux-<amd64|arm64>/` 下的 `51code_<版本>_<arch>.deb` 和 `51code-<版本>-1.<x86_64|aarch64>.rpm`。Windows 首版未配置 Authenticode 签名，GitHub 提供校验和记录。
+三个平台的安装包都在发布用的 Mac 上交叉构建：`task release` 一次 MyGo 调用构建 macOS 双架构、Windows amd64 和 Linux 双架构，共用一个构建号，任一平台失败都不上传、不消耗构建号。Windows 安装器需要 NSIS（`brew install makensis`，确保 `makensis` 在 PATH 中）；deb 与 rpm 由 MyGo 直接生成，无需额外工具。产物位于发布目录的 `windows-amd64/51code-setup-<版本>-amd64.exe`，以及 `linux-<amd64|arm64>/` 下的 `51code_<版本>_<arch>.deb` 和 `51code-<版本>-1.<x86_64|aarch64>.rpm`。Windows 首版未配置 Authenticode 签名，GitHub 提供校验和记录。
 
-新平台只发布到 GitHub Release，不上传 CDN，也没有更新清单；设置页提供 GitHub Release 下载入口，采用手动安装升级。`mygo.config.ts` 只在 `MYGO_TARGET_OS=darwin` 时嵌入签名更新源，因此各平台必须分开调用 MyGo，不能在一次调用中混合目标系统。
+三个平台共用同一个签名更新源，各平台读取下载根地址下自己的 `update-<os>-<arch>.json`。MyGo 只在安装目录可写时自更新（`mygo.Updater.Enabled`）：
+
+- Windows 安装器按用户安装到 `%LOCALAPPDATA%\Programs`，可以自更新；原位更新由 Ed25519 验签，不重新运行未签名的安装器。
+- Linux 通过 `curl -fsSL https://c.ysicing.net/oss/apps/macOS/51code/install.sh | sh` 安装到 `~/.local`，可以自更新。
+- deb/rpm 装在 `/opt`，由包管理器负责，不能自更新；开发构建没有更新源。这些情况下菜单、设置页和右下角版本号都改为打开 GitHub Releases 手动下载，不弹出 MyGo 的“更新不可用”窗口。
+
+安装包（exe、deb、rpm）只发布到 GitHub Release；不发布 `install.ps1` 和 `SHA256SUMS`，Windows 统一用安装器安装。v0.2.0 及更早的 Windows/Linux 版本没有内嵌更新源，需要手动升级一次。
 
 ### 存储与签名
 
 更新包与清单放在自有对象存储，沿用 XStats 的 `mc` 存储别名和 CDN，使用独立目录。[release.config.json](../release.config.json) 统一维护下载根地址 `https://c.ysicing.net/oss/apps/macOS/51code`、上传目标 `c-ip/oss/apps/macOS/51code` 和签名公钥。客户端直接通过 HTTPS 检查与下载，再交由 MyGo 验签安装。存储凭证仅由发布机器的 `mc` 管理。
 
-`legacyUpdates` 保留原 `XSourceTree` 下载根地址及上传目标。每次正式发布在新目录中的安装包通过校验后，将同一份签名更新清单同步到新旧目录；旧客户端可从原入口发现并下载新品牌安装包。旧版本归档不移动、不覆盖，更新公私钥不变。MyGo 原位替换更新会保留已安装的 `.app` 文件路径，显示名称变为 51Code；通过新 DMG 安装时应用文件名为 `51Code.app`。首次改名发布仍须提升正式版本号，不能复用已发布版本。
+原 `XSourceTree` 目录（`macOS/XSourceTree`）已停止同步，其中的 macOS 清单固定在 0.2.0 并指向新目录的归档；旧客户端先更新到 0.2.0，再从新地址继续更新。该目录下的清单及 0.2.0 归档不要删除。MyGo 原位替换更新会保留已安装的 `.app` 文件路径，显示名称变为 51Code；通过新 DMG 安装时应用文件名为 `51Code.app`。
 
 同一配置的 `macos` 保存 Developer ID 证书指纹、预期团队 ID 和公证钥匙串配置名。当前复用本机的 `XStats` 公证配置，凭据和证书私钥保存在钥匙串中，不写入仓库。证书续期后须更新指纹；更换发布机器时须安装对应证书私钥并配置同名公证凭据。可用 `security find-identity -v -p codesigning` 检查证书、`xcrun notarytool history --keychain-profile XStats` 检查公证权限。
 
-Apple Silicon 和 Intel 分别读取下载根地址下的 `update-darwin-arm64.json` 和 `update-darwin-amd64.json`；当前发布完整更新包，不生成增量包。发布脚本要求两个平台的清单与归档齐全，且版本为 `x.y.z` 稳定版。
+各平台分别读取下载根地址下的 `update-darwin-<arm64|amd64>.json`、`update-windows-amd64.json` 和 `update-linux-<amd64|arm64>.json`；当前发布完整更新包，不生成增量包。发布脚本要求五个平台的清单与归档齐全，且版本为 `x.y.z` 稳定版。
 
 版本统一修改 [package.json](../package.json) 的 `version`，MyGo 构建配置、关于窗口与界面版本号均使用该版本；同时在 [CHANGELOG.md](../CHANGELOG.md) 添加对应 `## <version>` 节，构建时写入更新说明。
 
@@ -196,13 +202,13 @@ MYGO_UPDATER_PRIVATE_KEY="$(cat ~/.config/xsourcetree/update-keys/mygo-update.ke
 
 ### 发布校验与失败恢复
 
-发布脚本先验证两个架构的版本、URL、大小与 Ed25519 签名，再解开实际更新归档，检查其中的应用和 DMG：必须使用指定团队的 Developer ID Application 签名，应用须启用 Hardened Runtime，公证票据和 Gatekeeper 校验都必须通过。`release`、`publish` 和各自的 `--dry-run` 均执行这些检查；ad-hoc、开发证书、错误团队或未公证产物不能上传。
+发布脚本先验证五个平台的版本、URL、大小与 Ed25519 签名，以及 install.sh 内嵌的下载地址和公钥，再解开 macOS 更新归档，检查其中的应用和 DMG：必须使用指定团队的 Developer ID Application 签名，应用须启用 Hardened Runtime，公证票据和 Gatekeeper 校验都必须通过。`release`、`publish` 和各自的 `--dry-run` 均执行这些检查；ad-hoc、开发证书、错误团队或未公证产物不能上传。
 
-通过校验后，上传带版本号的 DMG、归档及 `<version>/update-darwin-*.json` 历史清单。版本对象通过条件 PUT 禁止覆盖；已存在且内容相同可重跑，内容不同必须提升版本，包括从 ad-hoc 改为 Developer ID 重新签名的情况。全部版本对象经 CDN 完整回读并验证 SHA-256 后，才更新两份固定更新清单并回读确认；固定清单设置 `Cache-Control: no-cache,max-age=0,must-revalidate`，CDN 需遵守该响应头，不能强制长缓存。
+通过校验后，上传带版本号的各平台归档、macOS DMG 及 `<version>/update-*.json` 历史清单。版本对象通过条件 PUT 禁止覆盖；已存在且内容相同可重跑，内容不同必须提升版本，包括从 ad-hoc 改为 Developer ID 重新签名的情况。全部版本对象经 CDN 完整回读并验证 SHA-256 后，才更新五份固定更新清单，最后更新 `install.sh`，逐个回读确认。固定清单和 `install.sh` 设置 `Cache-Control: no-cache,max-age=0,must-revalidate`，CDN 需遵守该响应头，不能强制长缓存。
 
 CDN 与更新清单验证通过后，脚本自动创建或补齐 `githubRepository`（`ysicing/51code`）中对应 `v<version>` 的 GitHub Release，附加同一产物目录中的 `51code-<version>-arm64.dmg`、`51code-<version>-amd64.dmg`、`51code-setup-<version>-amd64.exe`，以及 Linux amd64/arm64 的 deb 和 rpm，共 7 个附件。上传前只核对新平台安装包的文件格式头，防止空文件或误放产物。新 Release 先创建草稿，使用更新清单内的版本说明，确认全部附件在 GitHub 上的 SHA-256 digest 与本地一致后才公开。已有同名且 SHA-256 相同的附件直接复用，缺失附件补传，内容不同或无法校验时停止，绝不覆盖。tag 本身没有附件，正式发版不能仅有 tag 或 GitHub 自动生成的源码压缩包。
 
-同一产品发布须串行执行，新旧目录的双架构清单并非原子更新；中途失败可使用同一产物目录重跑，脚本拒绝覆盖新版本清单为旧版本。CDN 已生效但 GitHub 阶段失败会明确报告部分完成；保留原目录重跑，不重建同版本包、不回退清单。若上传失败留下同名 `starter` 占位附件，脚本会停止并提示：先在对应 Release 中核实并手动删除该占位附件，再用原产物目录重跑；脚本不自动删除附件，不允许删除已有完整附件来绕过内容冲突。`--dry-run` 仅列出 GitHub 发布计划，不验证远端 tag 或权限，不创建 Release、不上传附件。脚本不会修改存储权限、创建标签或提交推送 Git。
+同一产品发布须串行执行，各平台及新旧目录的清单并非原子更新；中途失败可使用同一产物目录重跑，脚本拒绝覆盖新版本清单为旧版本。CDN 已生效但 GitHub 阶段失败会明确报告部分完成；保留原目录重跑，不重建同版本包、不回退清单。若上传失败留下同名 `starter` 占位附件，脚本会停止并提示：先在对应 Release 中核实并手动删除该占位附件，再用原产物目录重跑；脚本不自动删除附件，不允许删除已有完整附件来绕过内容冲突。`--dry-run` 仅列出 GitHub 发布计划，不验证远端 tag 或权限，不创建 Release、不上传附件。脚本不会修改存储权限、创建标签或提交推送 Git。
 
 ### Homebrew
 

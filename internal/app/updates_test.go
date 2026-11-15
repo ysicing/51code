@@ -4,11 +4,47 @@
 package app
 
 import (
+	"errors"
 	"os"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
 )
+
+// stubSelfUpdates 固定“能否自更新”，测试结束后恢复。
+func stubSelfUpdates(t *testing.T, enabled bool) {
+	t.Helper()
+	previous := selfUpdates
+	selfUpdates = func() bool { return enabled }
+	t.Cleanup(func() { selfUpdates = previous })
+}
+
+func TestNativeVersionButtonOpensReleasesWithoutSelfUpdate(t *testing.T) {
+	stubSelfUpdates(t, false)
+	app := &nativeApp{}
+	tester := ui.NewTester(func(c *ui.Context) {
+		if app.versionButton(c) {
+			app.checkUpdates(c)
+		}
+	}, 280, 34)
+	tester.FailOpenURL(errors.New("no browser"))
+	if err := tester.Click("检查更新"); err != nil {
+		t.Fatal(err)
+	}
+	if app.problem != "no browser" {
+		t.Fatalf("打开下载页失败应在状态栏显示原因: %q", app.problem)
+	}
+	tester.FailOpenURL(nil)
+	app.problem = ""
+	if err := tester.Click("检查更新"); err != nil {
+		t.Fatal(err)
+	}
+	tester.Frame()
+	// deb/rpm 等不能自更新的安装不应弹出 mygo 的“更新不可用”窗口，而是打开下载页。
+	if urls := tester.OpenedURLs(); len(urls) != 2 || urls[1] != desktopReleasesURL || app.problem != "" {
+		t.Fatalf("不能自更新时应打开 GitHub Releases: %v, %q", urls, app.problem)
+	}
+}
 
 func TestNativeVersionUpdateEntry(t *testing.T) {
 	app := &nativeApp{}

@@ -23,14 +23,17 @@ async function fixture(run) {
       publicKey: publicKey.export({ type: "spki", format: "der" }).subarray(-32).toString("base64"),
       macos: { teamID: "TEAM123456" },
     }));
-    for (const arch of ["arm64", "amd64"]) {
-      const target = `darwin-${arch}`;
+    const key = publicKey.export({ type: "spki", format: "der" }).subarray(-32).toString("base64");
+    for (const target of release.updateTargets) {
       const folder = join(root, "build", target);
       await mkdir(folder, { recursive: true });
-      const archive = Buffer.from(`signed test archive ${arch}`);
+      const archive = Buffer.from(`signed test archive ${target}`);
       const name = `51code-1.2.3-${target}.tar.gz`;
       await writeFile(join(folder, name), archive);
-      await writeFile(join(folder, `51code-1.2.3-${arch}.dmg`), "test dmg");
+      if (target.startsWith("darwin-")) await writeFile(join(folder, `51code-1.2.3-${target.slice(7)}.dmg`), "test dmg");
+      if (target.startsWith("linux-")) {
+        await writeFile(join(folder, "install.sh"), `#!/bin/sh\nreleases='${base}/'\npublic_key='${key}'\n`);
+      }
       await writeFile(join(folder, `update-${target}.json`), JSON.stringify({
         version: "1.2.3", notes: "更新说明", size: archive.length, url: `${base}/${name}`,
         signature: sign(null, createHash("sha256").update(archive).digest(), privateKey).toString("base64"),
@@ -77,20 +80,43 @@ function storage(plan, options = {}) {
     },
     async remoteHash(url) {
       events.push(["read", url]);
-      return options.corrupt ? "wrong" : [...plan.artifacts, ...plan.feeds].find((file) => file.url === url).hash;
+      return options.corrupt ? "wrong" : [...plan.artifacts, ...plan.feeds, ...plan.scripts].find((file) => file.url === url).hash;
     },
   };
 }
 
-test("checks both architectures and rejects wrong signatures or missing packages", async () => {
+test("checks every platform's signed update and rejects wrong signatures or missing packages", async () => {
   await fixture(async (root) => {
-    expect((await releasePlan(root)).artifacts).toHaveLength(6);
-    const archive = join(root, "build/darwin-amd64/51code-1.2.3-darwin-amd64.tar.gz");
-    const original = await readFile(archive);
-    await writeFile(archive, Buffer.alloc(original.length));
-    await expect(releasePlan(root)).rejects.toThrow("签名");
-    await rm(archive);
+    const plan = await releasePlan(root);
+    // 每个平台：归档 + 版本化清单，macOS 另有 DMG。
+    expect(plan.artifacts).toHaveLength(12);
+    expect(plan.feeds.map((feed) => feed.name)).toEqual(release.updateTargets.map((target) => `update-${target}.json`));
+    for (const target of ["darwin-amd64", "linux-arm64"]) {
+      const archive = join(root, `build/${target}/51code-1.2.3-${target}.tar.gz`);
+      const original = await readFile(archive);
+      await writeFile(archive, Buffer.alloc(original.length));
+      await expect(releasePlan(root)).rejects.toThrow(`${target} 的清单、签名`);
+      await writeFile(archive, original);
+    }
+    await rm(join(root, "build/windows-amd64/update-windows-amd64.json"));
     await expect(releasePlan(root)).rejects.toThrow();
+  });
+});
+
+test("publishes install.sh only when it embeds the current update source and key", async () => {
+  await fixture(async (root) => {
+    const plan = await releasePlan(root);
+    expect(plan.scripts.map((file) => [file.object, file.url])).toEqual([
+      ["test/apps/51code/install.sh", "https://cdn.example.test/51code/install.sh"],
+    ]);
+    const script = join(root, "build/linux-arm64/install.sh");
+    const original = await readFile(script, "utf8");
+    await writeFile(script, original.replace("cdn.example.test", "other.example.test"));
+    await expect(releasePlan(root)).rejects.toThrow("install.sh");
+    for (const path of ["build/linux-amd64/install.sh", "build/linux-arm64/install.sh"]) {
+      await writeFile(join(root, path), original.replace(/public_key='[^']*'/, "public_key='stale'"));
+    }
+    await expect(releasePlan(root)).rejects.toThrow("install.sh");
   });
 });
 
@@ -112,26 +138,18 @@ test("requires valid Windows and Linux installers without sending them to the CD
   });
 });
 
-test("release builds every platform with its own target OS", () => {
-  const variants = release.releaseVariants({ XSOURCETREE_RELEASE: "1" });
-  expect(variants.map(({ args, env }) => [args.at(-1), env.MYGO_TARGET_OS, env.XSOURCETREE_RELEASE])).toEqual([
-    ["darwin/arm64,darwin/amd64", "darwin", "1"],
-    ["windows/amd64", "windows", "1"],
-    ["linux/amd64,linux/arm64", "linux", "1"],
-  ]);
-});
-
 test("publishes feeds only after all immutable objects pass CDN verification", async () => {
   await fixture(async (root) => {
     const plan = await releasePlan(root);
     const fake = storage(plan);
     await publish(plan, fake);
     const writes = fake.events.filter((args) => args.includes("cp"));
-    expect(writes).toHaveLength(8);
-    expect(writes.slice(0, 6).every((args) => args.includes("If-None-Match: *"))).toBe(true);
+    expect(writes).toHaveLength(18);
+    expect(writes.slice(0, 12).every((args) => args.includes("If-None-Match: *"))).toBe(true);
     const firstFeed = fake.events.findIndex((args) => args[0] === "cp");
-    expect(fake.events.slice(0, firstFeed).filter((args) => args[0] === "read")).toHaveLength(6);
+    expect(fake.events.slice(0, firstFeed).filter((args) => args[0] === "read")).toHaveLength(12);
     expect(writes.at(-1)).toContain("Cache-Control=no-cache,max-age=0,must-revalidate");
+    expect(writes.at(-1).at(-1)).toBe("test/apps/51code/install.sh");
   });
 });
 
@@ -154,43 +172,17 @@ test("identical artifacts are safe to retry without overwriting version objects"
     const plan = await releasePlan(root);
     const fake = storage(plan, { existing: true });
     await publish(plan, fake);
-    expect(fake.events.filter((args) => args.includes("cp"))).toHaveLength(2);
+    expect(fake.events.filter((args) => args.includes("cp"))).toHaveLength(6);
   });
 });
 
-test("keeps legacy clients on the signed update channel after renaming", async () => {
+test("rejects storage targets that escape the mc alias path", async () => {
   await fixture(async (root) => {
     const configPath = join(root, "release.config.json");
     const config = JSON.parse(await readFile(configPath, "utf8"));
-    config.legacyUpdates = {
-      downloadBase: "https://cdn.example.test/old-name",
-      storageTarget: "test/apps/old-name",
-    };
+    config.storageTarget = "test/../wrong";
     await writeFile(configPath, JSON.stringify(config));
-    const plan = await releasePlan(root);
-    expect(plan.feeds).toHaveLength(4);
-    const legacy = plan.feeds.filter((feed) => feed.object.startsWith("test/apps/old-name/"));
-    expect(legacy).toHaveLength(2);
-    for (const feed of legacy) {
-      const current = plan.feeds.find((item) => item.name === feed.name && item !== feed);
-      expect(feed.path).toBe(current.path);
-      expect(feed.hash).toBe(current.hash);
-      expect(feed.url).toBe(`https://cdn.example.test/old-name/${feed.name}`);
-      const manifest = JSON.parse(await readFile(feed.path, "utf8"));
-      expect(manifest.url).toStartWith(config.downloadBase + "/");
-    }
-    const fake = storage(plan);
-    await publish(plan, fake);
-    expect(fake.events.filter((args) => args[0] === "cp")).toHaveLength(4);
-    for (const feed of legacy) {
-      expect(fake.events.some((args) => args[0] === "read" && args[1] === feed.url)).toBe(true);
-    }
-    const ahead = storage(plan, { currentVersion: "2.0.0" });
-    await expect(publish(plan, ahead)).rejects.toThrow("禁止回退");
-    expect(ahead.events.some((args) => args.includes("cp"))).toBe(false);
-    config.legacyUpdates.storageTarget = "test/../wrong";
-    await writeFile(configPath, JSON.stringify(config));
-    await expect(releasePlan(root)).rejects.toThrow();
+    await expect(releasePlan(root)).rejects.toThrow("存储目标");
   });
 });
 

@@ -5,11 +5,32 @@ package app
 
 import (
 	"strings"
+	"sync"
 
 	"github.com/ysicing/51code/locales"
 
+	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/plugins/updater"
 	"github.com/egoist/mygo/ui"
 )
+
+// selfUpdates 报告当前安装能否自更新：构建带更新源且安装目录可写。deb/rpm 装在 /opt
+// 由包管理器负责、开发构建没有更新源，均为 false，更新入口改为打开 GitHub Releases。
+// 安装位置在运行期间不变，只探测一次（探测会在安装目录建删临时目录）；测试可替换。
+var selfUpdates = sync.OnceValue(mygo.Updater.Enabled)
+
+// checkUpdates 是版本号按钮的动作，与菜单和设置页的更新入口保持一致。
+func (app *nativeApp) checkUpdates(c *ui.Context) {
+	if selfUpdates() {
+		updater.CheckForUpdates()
+		return
+	}
+	c.OpenURLThen(desktopReleasesURL, func(err error) {
+		if err != nil {
+			app.problem = err.Error()
+		}
+	})
+}
 
 func (app *nativeApp) versionButton(c *ui.Context) bool {
 	label := locales.CheckUpdates()

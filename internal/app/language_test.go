@@ -155,6 +155,8 @@ func TestNativeLanguageMatching(t *testing.T) {
 }
 
 func TestNativeLocalizedPreferencesKeepStoredValues(t *testing.T) {
+	// 保持各平台原有覆盖：macOS 走自动更新设置，其他平台走手动下载。
+	stubSelfUpdates(t, runtime.GOOS == "darwin")
 	settingsTestUpdater.Do(func() {
 		mygo.Use(native.New(updater.Options{DisableAutomaticChecks: true, Language: "zh-Hans"}))
 	})
@@ -178,7 +180,7 @@ func TestNativeLocalizedPreferencesKeepStoredValues(t *testing.T) {
 		}
 	}
 	wantFrequency := "每天"
-	if runtime.GOOS == "darwin" {
+	if selfUpdates() {
 		if !app.settingsAutoChecks {
 			if err := tester.Click("Automatically check for updates"); err != nil {
 				t.Fatal(err)

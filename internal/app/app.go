@@ -39,8 +39,8 @@ func Run(info BuildInfo) {
 	service := &RepositoryService{manager: manager}
 	desktop := newNativeApp(service, filepath.Join(dir, "native-state.json"))
 	mygo.Use(native.New(updater.Options{
-		Interval:               nativeUpdateCheckInterval(desktop.prefs.UpdateCheckFrequency),
-		DisableAutomaticChecks: runtime.GOOS != "darwin",
+		// 不能自更新的安装（deb/rpm、开发构建）由插件自行跳过后台检查。
+		Interval: nativeUpdateCheckInterval(desktop.prefs.UpdateCheckFrequency),
 	}))
 	open := func() {
 		if desktop == nil {
@@ -78,7 +78,7 @@ func Run(info BuildInfo) {
 				}
 			}),
 		}
-		if runtime.GOOS == "darwin" {
+		if selfUpdates() {
 			updates = updater.MenuItem()
 		}
 		app.SetMenu(mygo.NewMenu(platformMenu([]*mygo.MenuItem{

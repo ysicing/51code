@@ -7,12 +7,6 @@ import { defineConfig } from "mygo-cli";
 import { version } from "./package.json";
 import release from "./release.config.json";
 
-// 跨编译入口显式设置目标 OS；保留 macOS 原有本地构建的默认行为。
-const targetOS = process.env.MYGO_TARGET_OS || (process.platform === "win32" ? "windows" : process.platform);
-if (!["darwin", "windows", "linux"].includes(targetOS)) {
-  throw new Error(`不支持的 MYGO_TARGET_OS: ${targetOS}`);
-}
-
 export default defineConfig({
   name: "51Code",
   slug: "51code",
@@ -47,11 +41,12 @@ export default defineConfig({
       rpm: ["git", "libsecret-1.so.0()(64bit)", "font(notosanscjksc)"],
     },
   },
-  // 新平台首版通过手动下载安装包升级，避免嵌入尚未发布的更新源。
-  // Windows 未配置证书或 signCommand，首版安装包不提供 Authenticode 签名。
-  ...(targetOS === "darwin" ? { updates: {
+  // Windows 未配置证书或 signCommand，安装包不提供 Authenticode 签名；更新包仍由 Ed25519 验签。
+  // 全平台共用更新源，各平台只读自己的 update-<os>-<arch>.json。安装目录不可写时（deb/rpm 装在 /opt）
+  // mygo 不自更新，应用改为引导到 GitHub Releases 手动下载。
+  updates: {
     publicKey: release.publicKey,
     url: release.downloadBase,
     deltas: 0,
-  } } : {}),
+  },
 });

@@ -272,7 +272,7 @@ func (app *nativeApp) settingsDialogAt(initialTab int) {
 								}
 							})
 						case 3:
-							if runtime.GOOS != "darwin" {
+							if !selfUpdates() {
 								app.manualUpdatePreferences(c)
 								break
 							}

@@ -86,6 +86,8 @@ func nativeIdentityFixture(t *testing.T) (*nativeApp, string, func()) {
 }
 
 func TestNativeApplicationSettingsCategories(t *testing.T) {
+	// 保持各平台原有覆盖：macOS 走自动更新设置，其他平台走手动下载。
+	stubSelfUpdates(t, runtime.GOOS == "darwin")
 	app, _, finish := nativeIdentityFixture(t)
 	mygo.App.SetPath(mygo.PathUserData, t.TempDir())
 	t.Cleanup(func() { mygo.App.SetPath(mygo.PathUserData, "") })
@@ -194,7 +196,7 @@ func TestNativeApplicationSettingsCategories(t *testing.T) {
 	if err := tester.Click("更新"); err != nil {
 		t.Fatal(err)
 	}
-	if runtime.GOOS != "darwin" {
+	if !selfUpdates() {
 		if _, found := tester.Find("自动检查更新"); found {
 			t.Fatal("手动安装的平台不应提供自动更新开关")
 		}

@@ -9,9 +9,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { binaryPath } from "mygo-cli";
 
-// variants 按目标 OS 拆分多次 mygo 调用：mygo.config.ts 按 MYGO_TARGET_OS 决定是否嵌入 macOS 更新源，
-// 不能在同一次调用里混合平台。所有调用共用一个构建号，全部成功后才递增。
-export async function build(root, args = [], run = spawnSync, variants = [{}]) {
+export async function build(root, args = [], run = spawnSync) {
   const state = resolve(root, ".mygo");
   const lock = resolve(state, "build.lock");
   await mkdir(state, { recursive: true });
@@ -52,21 +50,18 @@ export async function build(root, args = [], run = spawnSync, variants = [{}]) {
       `-X main.buildTime=${info.time}`,
     ].filter(Boolean).join(" ");
     console.log(`构建 v${version} (Build ${info.number}) · ${commit} · ${info.time}`);
-    for (const variant of variants) {
-      const result = run(binaryPath(), ["build", ...args, ...(variant.args ?? [])], {
-        cwd: root, stdio: "inherit",
-        env: {
-          ...process.env,
-          ...variant.env,
-          MYGO_LDFLAGS: flags,
-          XSOURCETREE_BUILD_NUMBER: String(info.number),
-          XSOURCETREE_BUILD_COMMIT: commit,
-          XSOURCETREE_BUILD_TIME: info.time,
-        },
-      });
-      if (result.error || result.status !== 0) {
-        throw new Error(`构建失败，未递增构建号${result.error ? `：${result.error.message}` : ""}`);
-      }
+    const result = run(binaryPath(), ["build", ...args], {
+      cwd: root, stdio: "inherit",
+      env: {
+        ...process.env,
+        MYGO_LDFLAGS: flags,
+        XSOURCETREE_BUILD_NUMBER: String(info.number),
+        XSOURCETREE_BUILD_COMMIT: commit,
+        XSOURCETREE_BUILD_TIME: info.time,
+      },
+    });
+    if (result.error || result.status !== 0) {
+      throw new Error(`构建失败，未递增构建号${result.error ? `：${result.error.message}` : ""}`);
     }
     await writeFile(`${path}.tmp`, JSON.stringify(info, null, 2) + "\n");
     await rename(`${path}.tmp`, path);

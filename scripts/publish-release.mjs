@@ -12,26 +12,24 @@ import { fileURLToPath } from "node:url";
 
 const sha256 = (data) => createHash("sha256").update(data).digest("hex");
 
+// 一次 mygo 调用构建全部平台，共用构建号；每个平台都带签名更新包与清单。
+export const updateTargets = ["darwin-arm64", "darwin-amd64", "windows-amd64", "linux-amd64", "linux-arm64"];
+
 export async function releasePlan(root, directory = "build") {
   const { version } = JSON.parse(await readFile(resolve(root, "package.json"), "utf8"));
   const config = JSON.parse(await readFile(resolve(root, "release.config.json"), "utf8"));
   if (!/^[\w-]+\/[\w.-]+$/.test(config.githubRepository ?? "")) {
     throw new Error("发布配置缺少有效的 GitHub owner/repository");
   }
-  const locations = [config, ...(config.legacyUpdates ? [config.legacyUpdates] : [])].map((location) => {
-    const base = new URL(location.downloadBase);
-    if (!/^\d+\.\d+\.\d+$/.test(version) || base.protocol !== "https:" ||
-        base.username || base.password || base.search || base.hash ||
-        !/^[\w.-]+\/[\w./-]+$/.test(location.storageTarget) ||
-        location.storageTarget.split("/").some((part) => part === "." || part === "..")) {
-      throw new Error("发布版本必须为稳定版，下载地址须为 HTTPS，存储目标须为 mc 别名下的路径");
-    }
-    return {
-      downloadBase: base.href.replace(/\/$/, ""),
-      storageTarget: location.storageTarget.replace(/\/$/, ""),
-    };
-  });
-  const [{ downloadBase, storageTarget }] = locations;
+  const base = new URL(config.downloadBase);
+  if (!/^\d+\.\d+\.\d+$/.test(version) || base.protocol !== "https:" ||
+      base.username || base.password || base.search || base.hash ||
+      !/^[\w.-]+\/[\w./-]+$/.test(config.storageTarget) ||
+      config.storageTarget.split("/").some((part) => part === "." || part === "..")) {
+    throw new Error("发布版本必须为稳定版，下载地址须为 HTTPS，存储目标须为 mc 别名下的路径");
+  }
+  const downloadBase = base.href.replace(/\/$/, "");
+  const storageTarget = config.storageTarget.replace(/\/$/, "");
   const publicKey = Buffer.from(config.publicKey, "base64");
   if (publicKey.length !== 32) throw new Error("更新公钥无效");
   const key = createPublicKey({
@@ -41,8 +39,13 @@ export async function releasePlan(root, directory = "build") {
   const artifacts = [];
   const feeds = [];
   let notes;
-  for (const arch of ["arm64", "amd64"]) {
-    const target = `darwin-${arch}`;
+  const artifact = (name, path, data) => ({
+    name, path, hash: sha256(data),
+    object: `${storageTarget}/${name}`,
+    url: `${downloadBase}/${name}`,
+  });
+  // 全平台共用更新源：每个平台的清单都须指向 CDN 上的归档，并用同一私钥签名。
+  for (const target of updateTargets) {
     const folder = resolve(root, directory, target);
     const manifestName = `update-${target}.json`;
     const manifestPath = resolve(folder, manifestName);
@@ -59,29 +62,31 @@ export async function releasePlan(root, directory = "build") {
         !verify(null, createHash("sha256").update(archive).digest(), key, signature)) {
       throw new Error(`${target} 的清单、签名或更新包不一致，请用当前配置和签名私钥重新构建`);
     }
-    const dmgName = `51code-${version}-${arch}.dmg`;
-    const dmgPath = resolve(folder, dmgName);
-    const dmg = await readFile(dmgPath);
-    if (!dmg.length) throw new Error(`${dmgName} 为空`);
-    const artifact = (name, path, data) => ({
-      name, path, hash: sha256(data),
-      object: `${storageTarget}/${name}`,
-      url: `${downloadBase}/${name}`,
-    });
-    artifacts.push(
-      artifact(archiveName, archivePath, archive),
-      artifact(dmgName, dmgPath, dmg),
-      artifact(`${version}/${manifestName}`, manifestPath, manifestData),
-    );
-    for (const location of locations) {
-      feeds.push({
-        ...artifact(manifestName, manifestPath, manifestData), version,
-        object: `${location.storageTarget}/${manifestName}`,
-        url: `${location.downloadBase}/${manifestName}`,
-      });
+    artifacts.push(artifact(archiveName, archivePath, archive));
+    const macOS = target.startsWith("darwin-");
+    if (macOS) {
+      const dmgName = `51code-${version}-${target.slice("darwin-".length)}.dmg`;
+      const dmgPath = resolve(folder, dmgName);
+      const dmg = await readFile(dmgPath);
+      if (!dmg.length) throw new Error(`${dmgName} 为空`);
+      artifacts.push(artifact(dmgName, dmgPath, dmg));
     }
+    artifacts.push(artifact(`${version}/${manifestName}`, manifestPath, manifestData));
+    feeds.push({ ...artifact(manifestName, manifestPath, manifestData), version });
   }
-  // GitHub Release 附件：双架构 DMG 加 Windows 及 Linux 双架构 deb/rpm 安装包。新平台手动下载升级，不进 CDN，也没有更新清单。
+  // Linux 推荐 `curl …/install.sh | sh` 安装到用户目录以便自更新。脚本内嵌更新地址和公钥，
+  // 固定地址随每次发布覆盖；各平台目录是同一份，内容不一致或未内嵌当前配置时拒绝发布。
+  const scripts = [];
+  const installPath = resolve(root, directory, "linux-amd64", "install.sh");
+  const install = await readFile(installPath);
+  const installText = install.toString();
+  if (!install.equals(await readFile(resolve(root, directory, "linux-arm64", "install.sh"))) ||
+      !installText.startsWith("#!/bin/sh\n") || !installText.includes(`'${config.publicKey}'`) ||
+      !installText.includes(`'${downloadBase}/'`)) {
+    throw new Error("install.sh 与当前更新地址或公钥不一致，请用当前配置重新构建");
+  }
+  scripts.push(artifact("install.sh", installPath, install));
+  // GitHub Release 附件：双架构 DMG 加 Windows 及 Linux 双架构 deb/rpm 安装包，安装包不进 CDN。
   const packages = artifacts.filter((file) => file.name.endsWith(".dmg"));
   const deb = Buffer.from("!<arch>\ndebian-binary");
   const rpm = Buffer.from([0xed, 0xab, 0xee, 0xdb]);
@@ -101,16 +106,7 @@ export async function releasePlan(root, directory = "build") {
     }
     packages.push({ name, path, hash: sha256(data) });
   }
-  return { version, artifacts, feeds, github: { repository: config.githubRepository, notes, packages } };
-}
-
-// 一次发布构建全部平台，共用构建号；每个目标 OS 单独调用 mygo，只有 macOS 嵌入更新源并签名公证。
-export function releaseVariants(env = {}) {
-  return [
-    ["darwin", "darwin/arm64,darwin/amd64"],
-    ["windows", "windows/amd64"],
-    ["linux", "linux/amd64,linux/arm64"],
-  ].map(([os, platform]) => ({ args: ["-platform", platform], env: { ...env, MYGO_TARGET_OS: os } }));
+  return { version, artifacts, feeds, scripts, github: { repository: config.githubRepository, notes, packages } };
 }
 
 export async function verifyAppleRelease(root, directory, plan, run = spawnSync) {
@@ -234,7 +230,8 @@ export async function publish(plan, { run = command, remoteHash = onlineHash } =
       throw new Error(`CDN 上的 ${file.name} 校验不一致，未发布更新清单`);
     }
   }
-  for (const feed of plan.feeds) {
+  // install.sh 与固定清单一样可覆盖，放在清单之后：脚本生效时清单已经指向新版本。
+  for (const feed of [...plan.feeds, ...plan.scripts]) {
     const result = await run([
       "cp", "--disable-multipart", "--quiet", "--json",
       "--attr", "Cache-Control=no-cache,max-age=0,must-revalidate", feed.path, feed.object,
@@ -328,26 +325,27 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       if (!process.env.MYGO_UPDATER_PRIVATE_KEY?.trim()) throw new Error("请先设置 MYGO_UPDATER_PRIVATE_KEY");
       await mkdir(resolve(root, "build"), { recursive: true });
       directory = await mkdtemp(resolve(root, "build/release-"));
-      const { build } = await import("./build.mjs");
-      try {
-        await build(root, ["-o", directory], spawnSync, releaseVariants({
-          XSOURCETREE_RELEASE: "1", GOMAXPROCS: "1", GOFLAGS: `${process.env.GOFLAGS ?? ""} -p=1`.trim(),
-        }));
-      } catch (error) {
-        throw new Error(`发布构建失败，未上传：${error.message}`);
-      }
+      const platforms = updateTargets.map((target) => target.replace("-", "/")).join(",");
+      const build = spawnSync("bun", ["run", "build", "--", "-platform", platforms, "-o", directory], {
+        cwd: root, stdio: "inherit",
+        env: {
+          ...process.env, XSOURCETREE_RELEASE: "1", GOMAXPROCS: "1",
+          GOFLAGS: `${process.env.GOFLAGS ?? ""} -p=1`.trim(),
+        },
+      });
+      if (build.error || build.status !== 0) throw new Error("发布构建失败，未上传");
       console.log(`发布产物：${directory}`);
     }
     const plan = await releasePlan(root, directory);
     await verifyAppleRelease(root, directory, plan);
     if (args.includes("--dry-run")) {
-      console.log(`已校验 ${plan.version} 的双架构更新签名、Developer ID、公证与 Gatekeeper；将先上传并回读以下对象，再发布更新清单：`);
-      console.log([...plan.artifacts, ...plan.feeds].map((file) => file.object).join("\n"));
+      console.log(`已校验 ${plan.version} 的全平台更新签名，以及 macOS 的 Developer ID、公证与 Gatekeeper；将先上传并回读以下对象，再发布更新清单和 install.sh：`);
+      console.log([...plan.artifacts, ...plan.feeds, ...plan.scripts].map((file) => file.object).join("\n"));
       console.log(`随后发布 GitHub Release：${plan.github.repository} v${plan.version}，附加以下安装包：`);
       console.log(plan.github.packages.map((file) => file.name).join("\n"));
     } else {
       await publish(plan);
-      console.log(`已发布 51Code ${plan.version}，双架构 CDN 文件及更新清单回读通过`);
+      console.log(`已发布 51Code ${plan.version}，全平台 CDN 文件、更新清单及 install.sh 回读通过`);
       try {
         const url = await publishGitHubRelease(plan);
         console.log(`GitHub Release 与 macOS、Windows、Linux 安装包已发布并校验：${url}`);

@@ -13,7 +13,6 @@ import (
 	"github.com/ysicing/51code/locales"
 
 	"github.com/egoist/mygo/plugins/sfsymbols"
-	"github.com/egoist/mygo/plugins/updater"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
 )
@@ -198,7 +197,7 @@ func (app *nativeApp) view(c *ui.Context) {
 			ui.Spacer(c)
 			app.feedbackButton(c)
 			if app.versionButton(c) {
-				updater.CheckForUpdates()
+				app.checkUpdates(c)
 			}
 		})
 	})

@@ -29,7 +29,13 @@ brew install --cask ysicing/tap/51code
 
 旧名称 `xsourcetree` 通过 Homebrew 改名映射兼容。已有安装先运行 `brew update`，需要手动迁移安装记录时运行 `brew migrate --cask ysicing/tap/51code`。
 
-Windows 和 Linux 安装包从 [GitHub Releases](https://github.com/ysicing/51code/releases) 下载：Windows 使用 `51code-setup-<版本>-amd64.exe`；Debian/Ubuntu 使用 `51code_<版本>_<amd64|arm64>.deb`，执行 `sudo apt install ./51code_<版本>_amd64.deb`；Fedora 等 RPM 发行版使用 `51code-<版本>-1.<x86_64|aarch64>.rpm`，执行 `sudo dnf install ./51code-<版本>-1.x86_64.rpm`。Windows 需先安装 [Git for Windows](https://gitforwindows.org/) 并确保 `git` 在 PATH 中；首版 Windows 安装包未提供 Authenticode 签名。新平台通过“设置 → 更新 → 下载新版本…”下载后手动升级，macOS 保留原有自动更新方式。
+Windows 和 Linux：
+
+- Windows：从 [GitHub Releases](https://github.com/ysicing/51code/releases) 下载 `51code-setup-<版本>-amd64.exe` 安装，之后自动更新。需先安装 [Git for Windows](https://gitforwindows.org/) 并确保 `git` 在 PATH 中；安装包未提供 Authenticode 签名。
+- Linux（推荐，可自动更新）：`curl -fsSL https://c.ysicing.net/oss/apps/macOS/51code/install.sh | sh`，安装到 `~/.local`。
+- Linux 软件包：从 GitHub Releases 下载 `51code_<版本>_<amd64|arm64>.deb`（`sudo apt install ./<文件>`）或 `51code-<版本>-1.<x86_64|aarch64>.rpm`（`sudo dnf install ./<文件>`）。软件包装在 `/opt`，不能自动更新，通过“设置 → 更新 → 下载新版本…”下载新包手动升级。
+
+v0.2.0 及更早的 Windows/Linux 版本需要手动升级一次，之后按上述方式更新。
 
 Linux 需要 GTK 3 桌面环境；AI 密钥保存还需要运行中的 Secret Service（如 GNOME Keyring）。最小桌面缺少凭证服务时会显示保存错误并保留草稿，不降级为明文保存。
 
