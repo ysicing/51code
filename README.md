@@ -4,7 +4,9 @@
 
 # 51Code
 
-51Code（原 XSourceTree）是轻量的开源 Git 桌面客户端，专注 SourceTree 中常用的工作流。支持 macOS、Windows 11 x64 和 Linux x64/arm64（提供 deb 与 rpm，主要在 Ubuntu 24.04 LTS 上验证），使用 Go 和 [MyGo Native UI](https://mygo.egoist.dev/docs/ui) 构建界面，使用系统 Git。
+简体中文 | [English](README.en.md)
+
+51Code 是轻量的开源 Git 桌面客户端，专注 SourceTree 中常用的工作流。支持 macOS、Windows 11 x64 和 Linux x64/arm64（提供 deb 与 rpm，主要在 Ubuntu 24.04 LTS 上验证），使用 Go 和 [MyGo Native UI](https://mygo.egoist.dev/docs/ui) 构建界面，使用系统 Git。
 
 ## 功能
 
@@ -26,8 +28,6 @@ macOS：
 ```sh
 brew install --cask ysicing/tap/51code
 ```
-
-旧名称 `xsourcetree` 通过 Homebrew 改名映射兼容。已有安装先运行 `brew update`，需要手动迁移安装记录时运行 `brew migrate --cask ysicing/tap/51code`。
 
 Windows 和 Linux：
 
