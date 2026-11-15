@@ -56,11 +56,15 @@ func TestNativeHistoryFullRefs(t *testing.T) {
 		if directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); directory != "" {
 			saveNativeScreenshot(t, tester, directory, "native-history-full-refs-"+appearance+".png")
 		}
+		wideRow, found := tester.AccessByRole(ui.RoleRow, subject)
+		if !found || wideRow.Bounds.H > compactHistoryRowHeight(t) {
+			t.Fatalf("宽窗口未保持单行紧凑布局: %+v", wideRow)
+		}
 		tester.SetSize(1024, 680)
 		app.historyList.Columns.Widths = map[string]float32{"提交说明": 80}
 		tester.Frame()
 		row, found := tester.AccessByRole(ui.RoleRow, subject)
-		if !found || row.Bounds.H > 30 || !row.Selected {
+		if !found || row.Bounds.H != wideRow.Bounds.H || !row.Selected {
 			t.Fatalf("窄窗口改变了紧凑行高或提交选择: %+v", row)
 		}
 		for _, label := range []string{"所有分支", "显示远程分支", "搜索"} {
