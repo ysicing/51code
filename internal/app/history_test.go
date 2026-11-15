@@ -15,6 +15,19 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
+func compactHistoryRowHeight(t *testing.T) float32 {
+	t.Helper()
+	// CJK 字体的单行度量可能高于 macOS；行高仍只允许一行文字加紧凑内边距。
+	tester := ui.NewTester(func(c *ui.Context) {
+		ui.Text(c, "中Ag").FontSize(14).Bold().SingleLine()
+	}, 120, 80)
+	bounds, found := tester.Find("中Ag")
+	if !found {
+		t.Fatal("无法测量系统字体的单行高度")
+	}
+	return max(30, bounds.H+11)
+}
+
 func TestNativeGraphConnections(t *testing.T) {
 	cases := map[string][]gitrepo.Commit{
 		"octopus": {
@@ -123,7 +136,7 @@ func TestNativeHistoryWorkspace(t *testing.T) {
 			app.commitHash, app.commitFile, app.commitFiles, app.diff.Text, app.problem)
 	}
 	row, ok := tester.AccessByRole(ui.RoleRow, subject)
-	if !ok || !row.Selected || row.Bounds.H > 30 || row.Description != "" {
+	if !ok || !row.Selected || row.Bounds.H > compactHistoryRowHeight(t) || row.Description != "" {
 		t.Fatalf("提交行未紧凑选中，或仍有遮挡浮层: %+v, found=%v", row, ok)
 	}
 	table, ok := tester.Find("提交历史表格")

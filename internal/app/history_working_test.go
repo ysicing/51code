@@ -37,7 +37,7 @@ func TestNativeHistoryWorkingFiles(t *testing.T) {
 		t.Fatalf("未展示未暂存差异: working=%v staged=%v diff=%s", app.historyWorking, app.staged, app.diff.Text)
 	}
 	row, ok := tester.AccessByRole(ui.RoleRow, label)
-	if !ok || !row.Selected || row.Bounds.H > 30 {
+	if !ok || !row.Selected || row.Bounds.H > compactHistoryRowHeight(t) {
 		t.Fatalf("工作区状态行未紧凑选中: %+v", row)
 	}
 	if !tester.HasText("已暂存文件") || !tester.HasText("未暂存文件") {
