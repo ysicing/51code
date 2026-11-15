@@ -81,7 +81,36 @@ export async function releasePlan(root, directory = "build") {
       });
     }
   }
-  return { version, artifacts, feeds, github: { repository: config.githubRepository, notes } };
+  // GitHub Release 附件：双架构 DMG 加 Windows 及 Linux 双架构 deb/rpm 安装包。新平台手动下载升级，不进 CDN，也没有更新清单。
+  const packages = artifacts.filter((file) => file.name.endsWith(".dmg"));
+  const deb = Buffer.from("!<arch>\ndebian-binary");
+  const rpm = Buffer.from([0xed, 0xab, 0xee, 0xdb]);
+  for (const [target, name, magic] of [
+    ["windows-amd64", `51code-setup-${version}-amd64.exe`, Buffer.from("MZ")],
+    // 文件名沿用 mygo 的命名：deb 用 Debian 架构名，rpm 用 RPM 架构名且 release 固定为 1。
+    ...[["amd64", "x86_64"], ["arm64", "aarch64"]].flatMap(([arch, rpmArch]) => [
+      [`linux-${arch}`, `51code_${version}_${arch}.deb`, deb],
+      [`linux-${arch}`, `51code-${version}-1.${rpmArch}.rpm`, rpm],
+    ]),
+  ]) {
+    const path = resolve(root, directory, target, name);
+    const data = await readFile(path);
+    // 只做格式头检查，防止空文件或误放的其他平台产物被当作安装包上传。
+    if (!data.subarray(0, magic.length).equals(magic)) {
+      throw new Error(`${name} 不是有效的安装包，请重新构建`);
+    }
+    packages.push({ name, path, hash: sha256(data) });
+  }
+  return { version, artifacts, feeds, github: { repository: config.githubRepository, notes, packages } };
+}
+
+// 一次发布构建全部平台，共用构建号；每个目标 OS 单独调用 mygo，只有 macOS 嵌入更新源并签名公证。
+export function releaseVariants(env = {}) {
+  return [
+    ["darwin", "darwin/arm64,darwin/amd64"],
+    ["windows", "windows/amd64"],
+    ["linux", "linux/amd64,linux/arm64"],
+  ].map(([os, platform]) => ({ args: ["-platform", platform], env: { ...env, MYGO_TARGET_OS: os } }));
 }
 
 export async function verifyAppleRelease(root, directory, plan, run = spawnSync) {
@@ -245,7 +274,7 @@ export async function publishGitHubRelease(plan, { run = spawnSync } = {}) {
     }
     return current;
   };
-  const packages = plan.artifacts.filter((file) => file.name.endsWith(".dmg"));
+  const { packages } = plan.github;
   const verifyAsset = (file, asset) => {
     if (asset?.state === "starter") {
       throw new Error(`GitHub 附件 ${file.name} 是上传失败留下的 starter 占位文件；请在 ${repository} 的 ${tag} Release 中核实并手动删除该占位附件，再用同一产物目录重试；脚本不会删除或覆盖附件`);
@@ -299,14 +328,14 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       if (!process.env.MYGO_UPDATER_PRIVATE_KEY?.trim()) throw new Error("请先设置 MYGO_UPDATER_PRIVATE_KEY");
       await mkdir(resolve(root, "build"), { recursive: true });
       directory = await mkdtemp(resolve(root, "build/release-"));
-      const build = spawnSync("bun", ["run", "build", "--", "-platform", "darwin/arm64,darwin/amd64", "-o", directory], {
-        cwd: root, stdio: "inherit",
-        env: {
-          ...process.env, XSOURCETREE_RELEASE: "1", GOMAXPROCS: "1",
-          GOFLAGS: `${process.env.GOFLAGS ?? ""} -p=1`.trim(),
-        },
-      });
-      if (build.error || build.status !== 0) throw new Error("发布构建失败，未上传");
+      const { build } = await import("./build.mjs");
+      try {
+        await build(root, ["-o", directory], spawnSync, releaseVariants({
+          XSOURCETREE_RELEASE: "1", GOMAXPROCS: "1", GOFLAGS: `${process.env.GOFLAGS ?? ""} -p=1`.trim(),
+        }));
+      } catch (error) {
+        throw new Error(`发布构建失败，未上传：${error.message}`);
+      }
       console.log(`发布产物：${directory}`);
     }
     const plan = await releasePlan(root, directory);
@@ -314,14 +343,14 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     if (args.includes("--dry-run")) {
       console.log(`已校验 ${plan.version} 的双架构更新签名、Developer ID、公证与 Gatekeeper；将先上传并回读以下对象，再发布更新清单：`);
       console.log([...plan.artifacts, ...plan.feeds].map((file) => file.object).join("\n"));
-      console.log(`随后发布 GitHub Release：${plan.github.repository} v${plan.version}，附加双架构 DMG：`);
-      console.log(plan.artifacts.filter((file) => file.name.endsWith(".dmg")).map((file) => file.name).join("\n"));
+      console.log(`随后发布 GitHub Release：${plan.github.repository} v${plan.version}，附加以下安装包：`);
+      console.log(plan.github.packages.map((file) => file.name).join("\n"));
     } else {
       await publish(plan);
       console.log(`已发布 51Code ${plan.version}，双架构 CDN 文件及更新清单回读通过`);
       try {
         const url = await publishGitHubRelease(plan);
-        console.log(`GitHub Release 与双架构安装包已发布并校验：${url}`);
+        console.log(`GitHub Release 与 macOS、Windows、Linux 安装包已发布并校验：${url}`);
       } catch (error) {
         throw new Error(`CDN 与更新清单已发布，GitHub Release 尚未完成；请保留同一产物目录重试：${error.message}`);
       }

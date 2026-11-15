@@ -36,6 +36,16 @@ async function fixture(run) {
         signature: sign(null, createHash("sha256").update(archive).digest(), privateKey).toString("base64"),
       }));
     }
+    for (const [target, name, data] of [
+      ["windows-amd64", "51code-setup-1.2.3-amd64.exe", "MZ test installer"],
+      ["linux-amd64", "51code_1.2.3_amd64.deb", "!<arch>\ndebian-binary test package"],
+      ["linux-arm64", "51code_1.2.3_arm64.deb", "!<arch>\ndebian-binary test package"],
+      ["linux-amd64", "51code-1.2.3-1.x86_64.rpm", Buffer.from([0xed, 0xab, 0xee, 0xdb, 3, 0])],
+      ["linux-arm64", "51code-1.2.3-1.aarch64.rpm", Buffer.from([0xed, 0xab, 0xee, 0xdb, 3, 0])],
+    ]) {
+      await mkdir(join(root, "build", target), { recursive: true });
+      await writeFile(join(root, "build", target, name), data);
+    }
     await run(root);
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -82,6 +92,33 @@ test("checks both architectures and rejects wrong signatures or missing packages
     await rm(archive);
     await expect(releasePlan(root)).rejects.toThrow();
   });
+});
+
+test("requires valid Windows and Linux installers without sending them to the CDN", async () => {
+  await fixture(async (root) => {
+    const plan = await releasePlan(root);
+    expect(plan.artifacts.some((file) => /\.(exe|deb|rpm)$/.test(file.name))).toBe(false);
+    // RPM 头不是 ASCII，按字符串比较会误判；deb 内容放进 rpm 文件名也必须被拒绝。
+    const rpm = join(root, "build/linux-arm64/51code-1.2.3-1.aarch64.rpm");
+    const original = await readFile(rpm);
+    await writeFile(rpm, "!<arch>\ndebian-binary misplaced");
+    await expect(releasePlan(root)).rejects.toThrow("51code-1.2.3-1.aarch64.rpm 不是有效的安装包");
+    await writeFile(rpm, original);
+    const installer = join(root, "build/windows-amd64/51code-setup-1.2.3-amd64.exe");
+    await writeFile(installer, "");
+    await expect(releasePlan(root)).rejects.toThrow("不是有效的安装包");
+    await rm(installer);
+    await expect(releasePlan(root)).rejects.toThrow();
+  });
+});
+
+test("release builds every platform with its own target OS", () => {
+  const variants = release.releaseVariants({ XSOURCETREE_RELEASE: "1" });
+  expect(variants.map(({ args, env }) => [args.at(-1), env.MYGO_TARGET_OS, env.XSOURCETREE_RELEASE])).toEqual([
+    ["darwin/arm64,darwin/amd64", "darwin", "1"],
+    ["windows/amd64", "windows", "1"],
+    ["linux/amd64,linux/arm64", "linux", "1"],
+  ]);
 });
 
 test("publishes feeds only after all immutable objects pass CDN verification", async () => {
@@ -210,10 +247,10 @@ test("refuses failed extraction, signature, stapling and Gatekeeper checks", asy
 
 function github(plan, options = {}) {
   const events = [];
-  const packages = plan.artifacts.filter((file) => file.name.endsWith(".dmg"));
+  const { packages } = plan.github;
   let current = options.existing ? {
     tag_name: "v1.2.3", draft: options.draft ?? false, prerelease: false,
-    assets: packages.slice(0, options.partial ? 1 : 2).map((file) => ({
+    assets: packages.slice(0, options.partial ? 1 : packages.length).map((file) => ({
       name: file.name, state: "uploaded", digest: `sha256:${file.hash}`,
     })),
   } : null;
@@ -269,7 +306,7 @@ function github(plan, options = {}) {
   };
 }
 
-test("publishes both DMGs on the existing version tag after verifying uploaded digests", async () => {
+test("publishes DMGs and Windows/Linux installers on the existing version tag after verifying uploaded digests", async () => {
   await fixture(async (root) => {
     const plan = await releasePlan(root);
     const fake = github(plan);
@@ -278,6 +315,8 @@ test("publishes both DMGs on the existing version tag after verifying uploaded d
     expect(fake.current.draft).toBe(false);
     expect(fake.current.assets.map((file) => file.name)).toEqual([
       "51code-1.2.3-arm64.dmg", "51code-1.2.3-amd64.dmg",
+      "51code-setup-1.2.3-amd64.exe", "51code_1.2.3_amd64.deb", "51code-1.2.3-1.x86_64.rpm",
+      "51code_1.2.3_arm64.deb", "51code-1.2.3-1.aarch64.rpm",
     ]);
     expect(fake.events.every((args) => args.includes("github.com") ||
       args.includes("github.com/ysicing/51code"))).toBe(true);
@@ -296,10 +335,10 @@ test("resumes partial drafts and skips matching assets on already published rele
     ]) {
       const fake = github(plan, options);
       await release.publishGitHubRelease(plan, fake);
-      expect(fake.current.assets).toHaveLength(2);
+      expect(fake.current.assets).toHaveLength(7);
       expect(fake.current.draft).toBe(false);
       expect(fake.events.some((args) => args[1] === "create")).toBe(false);
-      expect(fake.events.filter((args) => args[1] === "upload")).toHaveLength(options.partial ? 1 : 0);
+      expect(fake.events.filter((args) => args[1] === "upload")).toHaveLength(options.partial ? 6 : 0);
       expect(fake.events.filter((args) => args[1] === "edit")).toHaveLength(options.draft ? 1 : 0);
     }
   });
@@ -358,7 +397,7 @@ test("reports failed starter uploads and resumes after the operator removes only
     fake.current.assets.splice(0, 1);
     options.starterFailure = false;
     await release.publishGitHubRelease(plan, fake);
-    expect(fake.current.assets).toHaveLength(2);
+    expect(fake.current.assets).toHaveLength(7);
     expect(fake.current.draft).toBe(false);
   });
 });

@@ -47,7 +47,7 @@ task build
 
 产物位于 `build/darwin-arm64/`（Intel 机器为 `darwin-amd64`）。本地构建默认使用 ad-hoc 签名；正式发布由发布脚本启用 Developer ID 签名、Hardened Runtime、Apple 公证和票据装订。应用更新包另用 Ed25519 签名校验，不能替代 macOS 的代码签名与公证。
 
-`task build`、`bun run build` 和正式发布统一经过 `scripts/build.mjs`。每次成功构建，构建号递增 1，同次双架构构建共用一个号；失败不会消耗构建号。计数及最近一次成功构建的信息保存在当前工作区的 `.mygo/build-info.json`，不提交 Git；删除该文件或换用新工作区会从 1 开始，正式发布应沿用发布工作区的记录。
+`task build`、`bun run build` 和正式发布统一经过 `scripts/build.mjs`。每次成功构建，构建号递增 1，同次构建的全部架构和平台共用一个号；失败不会消耗构建号。计数及最近一次成功构建的信息保存在当前工作区的 `.mygo/build-info.json`，不提交 Git；删除该文件或换用新工作区会从 1 开始，正式发布应沿用发布工作区的记录。
 
 正式版本仍由 `package.json` 的 `version` 控制，不随本地构建自动修改。右下角状态栏显示例如 `v0.0.1 (12)`，点击打开“关于”窗口；悬停和“关于”窗口可查看构建号、Git short commit 和构建时间。未提交修改的构建附加 `-dirty`。时间以 UTC 写入构建，界面按本地时区显示；macOS 安装包同时写入 `CFBundleVersion`、`XSourceTreeCommit` 和 `XSourceTreeBuildTime`。更新清单、下载文件名和版本 tag 继续使用正式版本号。`task dev` 和直接 `go build` 不递增打包构建号。
 
@@ -145,24 +145,15 @@ Git 命令使用参数数组执行，路径按字面值处理。写操作限定�
 
 以下命令均在仓库根目录执行。
 
-### Windows x64 与 Ubuntu x64
+### Windows x64 与 Linux x64/arm64
 
-首批目标为 Windows 11 x64 和 Ubuntu 24.04 LTS x64。MyGo 原生界面不需要 WebView2 或 WebKitGTK；Windows 使用系统 Git，Ubuntu 的 Debian 包声明 Git、GTK 3、libsecret 和 Noto CJK 字体依赖，Secret Service 由桌面会话提供。CJK 字体用于中文界面及仓库路径，最小系统缺少字体会造成文字缺失和控件测量异常。首次远程操作前应在终端配置好 Git/SSH 凭证和签名；应用继续禁止终端交互提示，没有新增账户登录或凭证配置界面。
+首批目标为 Windows 11 x64 和 Linux x64/arm64，回归测试在 Ubuntu 24.04 LTS x64 上运行；arm64 和 RPM 发行版只做交叉构建与包元数据检查，未在真机回归。MyGo 原生界面不需要 WebView2 或 WebKitGTK；Windows 使用系统 Git。Linux 的 deb 与 rpm 都声明 Git、GTK 3、libsecret 和 Noto CJK 字体依赖：deb 用 Debian 包名，rpm 用 `libsecret-1.so.0()(64bit)` 和 `font(notosanscjksc)` 能力，以兼容不同 RPM 发行版的包名差异（见 `mygo.config.ts`）。Secret Service 由桌面会话提供。CJK 字体用于中文界面及仓库路径，最小系统缺少字体会造成文字缺失和控件测量异常。首次远程操作前应在终端配置好 Git/SSH 凭证和签名；应用继续禁止终端交互提示，没有新增账户登录或凭证配置界面。
 
-`.github/workflows/desktop.yml` 对 PR 和主分支运行 Windows、Ubuntu、macOS 回归，并构建 Windows 安装器和 Ubuntu Debian 包。最多两个独立 runner 并行，各 runner 内的检查、测试和打包串行执行；这不会占用本机的验证预算。Go 使用 `GOMAXPROCS=2`、`-p=1`、`-parallel=2`；Ubuntu 测试使用独立的虚拟显示和 D-Bus/keyring，会话内只存合成测试密钥。各平台保留 `ui.Tester` 浅深色及紧凑布局截图供审阅，这些截图不替代真实系统窗口、输入法及快捷键验收。macOS job 不参与签名、公证或发布。
+`.github/workflows/desktop.yml` 只对 PR 和主分支运行 Windows、Ubuntu、macOS 回归及发布脚本测试，不构建或发布安装包。最多两个独立 runner 并行，各 runner 内的测试串行执行；这不会占用本机的验证预算。Go 使用 `GOMAXPROCS=2`、`-p=1`、`-parallel=2`；Ubuntu 测试使用独立的虚拟显示和 D-Bus/keyring，会话内只存合成测试密钥。各平台保留 `ui.Tester` 浅深色及紧凑布局截图供审阅，这些截图不替代真实系统窗口、输入法及快捷键验收。
 
-手动构建新平台安装包：
+三个平台的安装包都在发布用的 Mac 上交叉构建：`task release` 依次为 macOS 双架构、Windows amd64 和 Linux 双架构各调用一次 MyGo，共用一个构建号，任一平台失败都不上传、不消耗构建号。Windows 安装器需要 NSIS（`brew install makensis`，确保 `makensis` 在 PATH 中）；deb 与 rpm 由 MyGo 直接生成，无需额外工具。产物位于发布目录的 `windows-amd64/51code-setup-<版本>-amd64.exe`，以及 `linux-<amd64|arm64>/` 下的 `51code_<版本>_<arch>.deb` 和 `51code-<版本>-1.<x86_64|aarch64>.rpm`。Windows 首版未配置 Authenticode 签名，GitHub 提供校验和记录。
 
-```sh
-bun scripts/desktop-release.mjs build --platform windows-amd64
-bun scripts/desktop-release.mjs build --platform linux-amd64
-```
-
-产物分别位于 `build/desktop/windows-amd64/` 和 `build/desktop/linux-amd64/`。Windows 安装包为 `51code-setup-<版本>-amd64.exe`，Ubuntu 包为 `51code_<版本>_amd64.deb`。Windows 安装器构建使用 Windows runner；Ubuntu Debian 包也可在 macOS 交叉构建。Windows 首版未配置 Authenticode 签名，GitHub 提供来源和校验和记录。
-
-公开 GitHub Release 后，流水线检出该 tag，核对 `package.json` 版本及提交身份，重新测试并构建新平台附件，再附加到同一 Release。也可手动运行 Desktop platforms 工作流，指定已经公开的稳定版 tag；目标 tag 必须包含本次新增的脚本和适配代码。发布 job 仅获得所需的 Release 写权限，不创建 tag、不创建或公开 Release、不触碰 macOS 安装包、CDN、Homebrew 或更新清单。
-
-发布附件附带来源及 SHA-256 校验。重跑可复用内容相同的已有附件；同名但内容不同则停止，不覆盖安装包。新平台首版在设置页提供 GitHub Release 下载入口，采用手动安装升级；`mygo.config.ts` 只为 macOS 嵌入原有签名更新源。跨编译脚本显式设置 `MYGO_TARGET_OS`，避免在 Mac 上构建新平台时误用 macOS 更新配置。
+新平台只发布到 GitHub Release，不上传 CDN，也没有更新清单；设置页提供 GitHub Release 下载入口，采用手动安装升级。`mygo.config.ts` 只在 `MYGO_TARGET_OS=darwin` 时嵌入签名更新源，因此各平台必须分开调用 MyGo，不能在一次调用中混合目标系统。
 
 ### 存储与签名
 
@@ -180,7 +171,7 @@ Apple Silicon 和 Intel 分别读取下载根地址下的 `update-darwin-arm64.j
 
 ### 构建与上传
 
-构建双架构正式发布包，完成 Apple 公证和本地校验（不上传对象存储；公证会将安装包提交给 Apple）：
+构建 macOS 双架构及 Windows、Linux 正式发布包，完成 Apple 公证和本地校验（不上传对象存储；公证会将安装包提交给 Apple）：
 
 ```sh
 MYGO_UPDATER_PRIVATE_KEY="$(cat ~/.config/xsourcetree/update-keys/mygo-update.key)" \
@@ -209,7 +200,7 @@ MYGO_UPDATER_PRIVATE_KEY="$(cat ~/.config/xsourcetree/update-keys/mygo-update.ke
 
 通过校验后，上传带版本号的 DMG、归档及 `<version>/update-darwin-*.json` 历史清单。版本对象通过条件 PUT 禁止覆盖；已存在且内容相同可重跑，内容不同必须提升版本，包括从 ad-hoc 改为 Developer ID 重新签名的情况。全部版本对象经 CDN 完整回读并验证 SHA-256 后，才更新两份固定更新清单并回读确认；固定清单设置 `Cache-Control: no-cache,max-age=0,must-revalidate`，CDN 需遵守该响应头，不能强制长缓存。
 
-CDN 与更新清单验证通过后，脚本自动创建或补齐 `githubRepository`（`ysicing/51code`）中对应 `v<version>` 的 GitHub Release，附加同一产物目录中的 `51code-<version>-arm64.dmg` 和 `51code-<version>-amd64.dmg`。新 Release 先创建草稿，使用更新清单内的版本说明，确认两个附件在 GitHub 上的 SHA-256 digest 与本地一致后才公开。已有同名且 SHA-256 相同的附件直接复用，缺失附件补传，内容不同或无法校验时停止，绝不覆盖。tag 本身没有附件，正式发版不能仅有 tag 或 GitHub 自动生成的源码压缩包。
+CDN 与更新清单验证通过后，脚本自动创建或补齐 `githubRepository`（`ysicing/51code`）中对应 `v<version>` 的 GitHub Release，附加同一产物目录中的 `51code-<version>-arm64.dmg`、`51code-<version>-amd64.dmg`、`51code-setup-<version>-amd64.exe`，以及 Linux amd64/arm64 的 deb 和 rpm，共 7 个附件。上传前只核对新平台安装包的文件格式头，防止空文件或误放产物。新 Release 先创建草稿，使用更新清单内的版本说明，确认全部附件在 GitHub 上的 SHA-256 digest 与本地一致后才公开。已有同名且 SHA-256 相同的附件直接复用，缺失附件补传，内容不同或无法校验时停止，绝不覆盖。tag 本身没有附件，正式发版不能仅有 tag 或 GitHub 自动生成的源码压缩包。
 
 同一产品发布须串行执行，新旧目录的双架构清单并非原子更新；中途失败可使用同一产物目录重跑，脚本拒绝覆盖新版本清单为旧版本。CDN 已生效但 GitHub 阶段失败会明确报告部分完成；保留原目录重跑，不重建同版本包、不回退清单。若上传失败留下同名 `starter` 占位附件，脚本会停止并提示：先在对应 Release 中核实并手动删除该占位附件，再用原产物目录重跑；脚本不自动删除附件，不允许删除已有完整附件来绕过内容冲突。`--dry-run` 仅列出 GitHub 发布计划，不验证远端 tag 或权限，不创建 Release、不上传附件。脚本不会修改存储权限、创建标签或提交推送 Git。
 

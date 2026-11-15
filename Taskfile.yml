@@ -148,7 +148,7 @@ tasks:
       - task: lint
 
   release:
-    desc: 构建并发布双架构更新包，可传入 -- --dry-run 仅构建校验
+    desc: 构建并发布 macOS 双架构、Windows 及 Linux 双架构安装包，可传入 -- --dry-run 仅构建校验
     cmds:
       - GOMAXPROCS=2 GOFLAGS=-p=1 bun run release {{.CLI_ARGS}}
 

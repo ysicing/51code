@@ -64,6 +64,28 @@ test("both architectures receive the same build number, source commit and time",
   });
 });
 
+test("platform variants share one build number and stop counting on any failure", async () => {
+  await fixture(async (root) => {
+    const variants = [
+      { args: ["-platform", "darwin/arm64"], env: { MYGO_TARGET_OS: "darwin" } },
+      { args: ["-platform", "windows/amd64"], env: { MYGO_TARGET_OS: "windows" } },
+    ];
+    const calls = [];
+    const info = await build(root, ["-o", "out"], (_program, parameters, { env }) => {
+      calls.push([parameters, env.MYGO_TARGET_OS, env.XSOURCETREE_BUILD_NUMBER]);
+      return { status: 0 };
+    }, variants);
+    expect(info.number).toBe(1);
+    expect(calls).toEqual([
+      [["build", "-o", "out", "-platform", "darwin/arm64"], "darwin", "1"],
+      [["build", "-o", "out", "-platform", "windows/amd64"], "windows", "1"],
+    ]);
+    let count = 0;
+    await expect(build(root, [], () => ({ status: ++count === 2 ? 1 : 0 }), variants)).rejects.toThrow("未递增构建号");
+    expect(JSON.parse(await readFile(join(root, ".mygo/build-info.json"), "utf8")).number).toBe(1);
+  });
+});
+
 test("failed builds keep the previous counter and release the build lock", async () => {
   await fixture(async (root) => {
     const first = await build(root, [], () => ({ status: 0 }));

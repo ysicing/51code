@@ -7,31 +7,23 @@ on:
   push:
     branches: [master]
   pull_request:
-  # macOS 仍由本地签名、公证、上传 CDN 并公开 Release；这里只补充新平台附件。
-  release:
-    types: [published]
   workflow_dispatch:
-    inputs:
-      tag:
-        description: '已公开发布的稳定版本 tag，例如 v0.1.0'
-        required: true
-        type: string
+# 只做三平台回归；所有平台的安装包都在维护者的 Mac 上统一构建并发布（scripts/publish-release.mjs）。
 
 permissions:
   contents: read
 
 concurrency:
-  group: desktop-${{ github.event.release.tag_name || inputs.tag || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'push' || github.event_name == 'pull_request' }}
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   GOMAXPROCS: '2'
   GOFLAGS: '-p=1'
   CGO_ENABLED: '0'
-  RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag || '' }}
 
 jobs:
-  test-build:
+  test:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
@@ -40,7 +32,7 @@ jobs:
       max-parallel: 2
       matrix:
         include:
-          - name: Windows x64 (unsigned)
+          - name: Windows x64
             runner: windows-2022
             platform: windows-amd64
           - name: Ubuntu x64
@@ -55,7 +47,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.release.tag_name || inputs.tag || github.sha }}
           fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-go@v6
@@ -80,11 +71,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends git libgtk-3-0t64 libsecret-1-0 fonts-noto-cjk gnome-keyring xvfb xauth dbus-x11 libgl1-mesa-dri libglx-mesa0 libegl-mesa0
       - run: bun install --frozen-lockfile
-      - name: Verify published release and tag before building
-        if: env.RELEASE_TAG != ''
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: bun scripts/desktop-release.mjs check --tag "$RELEASE_TAG"
       - name: Go regression tests (Linux)
         if: runner.os == 'Linux'
         env:
@@ -111,73 +97,3 @@ jobs:
           retention-days: 14
       - name: Release script tests
         run: bun test ./scripts
-      - name: Build installer or Debian package
-        if: runner.os != 'macOS'
-        run: bun scripts/desktop-release.mjs build --platform '${{ matrix.platform }}'
-      - name: Verify Windows Authenticode status
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $version = (Get-Content package.json | ConvertFrom-Json).version
-          $signature = Get-AuthenticodeSignature "build/desktop/windows-amd64/51code-setup-$version-amd64.exe"
-          if ($signature.Status -ne 'NotSigned') { throw "Expected unsigned first release, got $($signature.Status)" }
-          'Windows x64 首版未提供 Authenticode 签名；请从本仓库 GitHub Release 下载并手动升级。' >> $env:GITHUB_STEP_SUMMARY
-      - name: Inspect Ubuntu package metadata
-        if: runner.os == 'Linux'
-        run: |
-          version=$(bun -p 'require("./package.json").version')
-          package="build/desktop/linux-amd64/51code_${version}_amd64.deb"
-          test "$(dpkg-deb -f "$package" Package)" = 51code
-          test "$(dpkg-deb -f "$package" Version)" = "$version"
-          test "$(dpkg-deb -f "$package" Architecture)" = amd64
-          dpkg-deb --info "$package"
-      - name: Record installer source and checksum
-        if: runner.os != 'macOS'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          args=()
-          if [ -n "$RELEASE_TAG" ]; then args=(--tag "$RELEASE_TAG"); fi
-          bun scripts/desktop-release.mjs collect --platform '${{ matrix.platform }}' "${args[@]}"
-      - name: Keep only installer and provenance for publishing
-        if: runner.os != 'macOS'
-        uses: actions/upload-artifact@v4
-        with:
-          name: desktop-${{ matrix.platform }}
-          path: |
-            build/desktop/${{ matrix.platform }}/51code-setup-*-amd64.exe
-            build/desktop/${{ matrix.platform }}/51code_*_amd64.deb
-            build/desktop/${{ matrix.platform }}/desktop-artifact.json
-          if-no-files-found: error
-          retention-days: 14
-
-  publish:
-    name: Add installers to existing release
-    needs: test-build
-    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.release.tag_name || inputs.tag }}
-          fetch-depth: 0
-          persist-credentials: false
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: '1.4.2'
-      - uses: actions/download-artifact@v4
-        with:
-          name: desktop-windows-amd64
-          path: build/desktop/windows-amd64
-      - uses: actions/download-artifact@v4
-        with:
-          name: desktop-linux-amd64
-          path: build/desktop/linux-amd64
-      # 不运行 mygo publish/-upload，不创建或公开 Release，也不上传 macOS 或更新清单。
-      - name: Verify provenance and upload without overwriting
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: bun scripts/desktop-release.mjs publish --tag "$RELEASE_TAG"

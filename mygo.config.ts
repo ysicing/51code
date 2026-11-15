@@ -35,12 +35,17 @@ export default defineConfig({
     } : {}),
   },
   // 原生界面无需 WebKitGTK；Git 和 Secret Service 是 Linux 运行时依赖。
+  // 按格式显式声明依赖：mygo 0.9.0 的 Debian→RPM 映射不认识 fonts-noto-cjk，会从 RPM 依赖中丢弃。
+  // RPM 用 SONAME 与 font() 能力而非包名，兼容 Fedora、RHEL 系和 openSUSE 的不同包名。
   linux: {
-    formats: ["deb"],
+    formats: ["deb", "rpm"],
     webview: false,
     command: "51code",
     categories: ["Development"],
-    depends: ["git", "libsecret-1-0", "fonts-noto-cjk"],
+    depends: {
+      deb: ["git", "libsecret-1-0", "fonts-noto-cjk"],
+      rpm: ["git", "libsecret-1.so.0()(64bit)", "font(notosanscjksc)"],
+    },
   },
   // 新平台首版通过手动下载安装包升级，避免嵌入尚未发布的更新源。
   // Windows 未配置证书或 signCommand，首版安装包不提供 Authenticode 签名。
