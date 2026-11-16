@@ -60,7 +60,7 @@ func (app *nativeApp) versionButton(c *ui.Context) bool {
 }
 
 func (app *nativeApp) manualUpdatePreferences(c *ui.Context) {
-	if ui.Button(c, locales.DownloadRelease()).Clicked() {
+	if ui.Button(c, locales.DownloadRelease()).AlignSelf(ui.Start).Clicked() {
 		app.settingsError = ""
 		c.OpenURLThen(desktopReleasesURL, func(err error) {
 			if err != nil {

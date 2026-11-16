@@ -1,5 +1,9 @@
 {
   "@@locale": "en",
+  "gitEnvironment": "Git environment",
+  "operationsAndDisplay": "Behavior and display",
+  "doubleClickFile": "Double-click file",
+  "stageOrUnstage": "Stage or unstage",
   "gitSource": "Git source",
   "bundledGit": "Embedded Git",
   "systemGit": "System Git",

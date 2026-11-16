@@ -216,7 +216,7 @@ func (app *nativeApp) settingsDialogAt(initialTab int) {
 	app.settingsAutoDownloads = updater.AutomaticDownloads()
 	app.shortcutDraft = app.prefs.Shortcuts
 	app.settingsError = ""
-	dialog := &nativeDialog{title: locales.ApplicationSettings(), titleText: locales.ApplicationSettings, width: 620, height: 520, dismiss: locales.Cancel()}
+	dialog := &nativeDialog{title: locales.ApplicationSettings(), titleText: locales.ApplicationSettings, width: 620, height: 620, dismiss: locales.Cancel()}
 	tab := initialTab
 	identity := &nativeIdentityEditor{}
 	app.identityEditor = identity
@@ -270,9 +270,10 @@ func (app *nativeApp) settingsDialogAt(initialTab int) {
 							app.gitPreferences(c)
 							if identity.gitError == "" {
 								ui.Divider(c)
-								ui.Text(c, locales.CommitIdentity()).FontSize(13).Bold()
-								ui.Text(c, locales.GlobalGitScope()).FontSize(12).TextColor(c.Theme().TextMuted)
-								identity.view(app, dialog, c)
+								settingsSection(c, locales.CommitIdentity(), func() {
+									ui.Text(c, locales.GlobalGitScope()).FontSize(12).TextColor(c.Theme().TextMuted)
+									identity.view(app, dialog, c)
+								})
 							}
 						case 2:
 							shortcutPreference(app, c, locales.LocalRepositories(), &app.shortcutDraft.Library)
@@ -280,7 +281,8 @@ func (app *nativeApp) settingsDialogAt(initialTab int) {
 							shortcutPreference(app, c, locales.ScanFolders(), &app.shortcutDraft.Scan)
 							shortcutPreference(app, c, locales.Refresh(), &app.shortcutDraft.Refresh)
 							shortcutPreference(app, c, locales.Commit(), &app.shortcutDraft.Commit)
-							ui.Row(c).FillWidth().Children(func() {
+							ui.Divider(c)
+							ui.Row(c).FillWidth().Justify(ui.End).Children(func() {
 								if ui.Button(c, locales.RestoreShortcuts()).Clicked() {
 									app.shortcutDraft = defaultNativeShortcuts()
 									app.applyShortcutDraft()
@@ -291,32 +293,33 @@ func (app *nativeApp) settingsDialogAt(initialTab int) {
 								app.manualUpdatePreferences(c)
 								break
 							}
-							if ui.Checkbox(c, &app.settingsAutoChecks, locales.AutomaticUpdates()).Changed() {
-								updater.SetAutomaticChecks(app.settingsAutoChecks)
-							}
-							ui.Row(c).FillWidth().Gap(12).AlignItems(ui.Center).Children(func() {
-								ui.Text(c, locales.UpdateFrequency()).FontSize(13).Grow(1)
-								frequencies := []string{locales.Hourly(), locales.SixHourly(), locales.Daily(), locales.Weekly()}
-								selected := frequencies[slices.Index(nativeUpdateCheckFrequencies, app.prefs.UpdateCheckFrequency)]
-								choice := ui.Select(c, &selected, frequencies).
-									Label(locales.UpdateFrequency()).Width(180).Disabled(!app.settingsAutoChecks)
-								if choice.Changed() {
-									app.prefs.UpdateCheckFrequency = nativeUpdateCheckFrequencies[slices.Index(frequencies, selected)]
-									app.settingsError = ""
-									app.saveSettings()
+							ui.Column(c).FillWidth().Gap(12).Children(func() {
+								if ui.Checkbox(c, &app.settingsAutoChecks, locales.AutomaticUpdates()).Changed() {
+									updater.SetAutomaticChecks(app.settingsAutoChecks)
+								}
+								settingsRow(c, locales.UpdateFrequency(), func() {
+									frequencies := []string{locales.Hourly(), locales.SixHourly(), locales.Daily(), locales.Weekly()}
+									selected := frequencies[slices.Index(nativeUpdateCheckFrequencies, app.prefs.UpdateCheckFrequency)]
+									choice := ui.Select(c, &selected, frequencies).
+										Label(locales.UpdateFrequency()).Width(210).Disabled(!app.settingsAutoChecks)
+									if choice.Changed() {
+										app.prefs.UpdateCheckFrequency = nativeUpdateCheckFrequencies[slices.Index(frequencies, selected)]
+										app.settingsError = ""
+										app.saveSettings()
+									}
+									ui.Text(c, locales.FrequencyNextLaunch()).FontSize(12).TextColor(c.Theme().TextMuted).FillWidth()
+								})
+								if ui.Checkbox(c, &app.settingsAutoDownloads, locales.AutomaticDownloads()).Changed() {
+									updater.SetAutomaticDownloads(app.settingsAutoDownloads)
 								}
 							})
-							ui.Text(c, locales.FrequencyNextLaunch()).FontSize(12).TextColor(c.Theme().TextMuted)
-							if ui.Checkbox(c, &app.settingsAutoDownloads, locales.AutomaticDownloads()).Changed() {
-								updater.SetAutomaticDownloads(app.settingsAutoDownloads)
-							}
+							ui.Divider(c)
 							lastCheck := updater.LastCheck()
 							lastCheckLabel := locales.NeverChecked()
 							if !lastCheck.IsZero() {
 								lastCheckLabel = lastCheck.Local().Format("2006-01-02 15:04")
 							}
-							ui.Row(c).FillWidth().AlignItems(ui.Center).Children(func() {
-								ui.Text(c, locales.LastCheck()).FontSize(12).TextColor(c.Theme().TextMuted).Grow(1)
+							settingsRow(c, locales.LastCheck(), func() {
 								ui.Text(c, lastCheckLabel).FontSize(12).TextColor(c.Theme().TextMuted)
 							})
 							if app.availableVersion != "" {
@@ -429,49 +432,48 @@ func drawAppearancePreview(p *ui.Painter, bounds ui.Rect, appearance string, sel
 var nativeLanguageTags = []string{"", "zh-Hans", "zh-Hant", "en"}
 
 func (app *nativeApp) generalPreferences(c *ui.Context) {
-	ui.Text(c, locales.InterfaceSettings()).FontSize(12).TextColor(c.Theme().TextMuted)
-	ui.Row(c).FillWidth().Gap(20).AlignItems(ui.Start).Children(func() {
-		ui.Text(c, locales.Appearance()).FontSize(13).Width(92).Shrink(0).Margin(10, 0, 0)
-		app.appearancePreferences(c)
-	})
-	ui.Divider(c)
-	ui.Row(c).FillWidth().Gap(20).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, locales.Language()).FontSize(13).Width(92).Shrink(0)
-		labels := []string{locales.AutomaticLanguage(), "简体中文", "繁體中文", "English"}
-		tag := app.chosenLanguage
-		if tag != "" {
-			tag = i18n.Match([]string{tag}, nativeLanguageTags[1:])
-		}
-		index := max(0, slices.Index(nativeLanguageTags, tag))
-		selected := labels[index]
-		c.Key("application-language")
-		if ui.Select(c, &selected, labels).Label(locales.Language()).Width(210).Changed() {
-			app.chosenLanguage = nativeLanguageTags[slices.Index(labels, selected)]
-			app.chooseLanguage(app.chosenLanguage)
-		}
+	settingsSection(c, locales.InterfaceSettings(), func() {
+		settingsRow(c, locales.Appearance(), func() {
+			app.appearancePreferences(c)
+		})
+		settingsRow(c, locales.Language(), func() {
+			labels := []string{locales.AutomaticLanguage(), "简体中文", "繁體中文", "English"}
+			tag := app.chosenLanguage
+			if tag != "" {
+				tag = i18n.Match([]string{tag}, nativeLanguageTags[1:])
+			}
+			index := max(0, slices.Index(nativeLanguageTags, tag))
+			selected := labels[index]
+			c.Key("application-language")
+			if ui.Select(c, &selected, labels).Label(locales.Language()).Width(210).Changed() {
+				app.chosenLanguage = nativeLanguageTags[slices.Index(labels, selected)]
+				app.chooseLanguage(app.chosenLanguage)
+			}
+		})
 	})
 	app.repositoryBehaviorPreferences(c)
 	ui.Divider(c)
-	ui.Text(c, locales.Sidebar()).FontSize(12).TextColor(c.Theme().TextMuted)
-	ui.Row(c).FillWidth().Gap(24).AlignItems(ui.Start).Children(func() {
-		ui.Column(c).Grow(1).MinWidth(0).Gap(8).Children(func() {
-			items := &app.prefs.SidebarItems
-			app.sidebarPreference(c, "insights", locales.Insights(), &items.Insights)
-			app.sidebarPreference(c, "compare", locales.CompareVersions(), &items.Compare)
-			app.sidebarPreference(c, "worktrees", locales.Worktrees(), &items.Worktrees)
-		})
-		ui.Column(c).Grow(1).MinWidth(0).Gap(8).Children(func() {
-			items := &app.prefs.SidebarItems
-			app.sidebarPreference(c, "search", locales.Search(), &items.Search)
-			app.sidebarPreference(c, "stash", locales.Stash(), &items.Stash)
+	settingsSection(c, locales.Sidebar(), func() {
+		ui.Row(c).FillWidth().Gap(24).AlignItems(ui.Start).Children(func() {
+			ui.Column(c).Grow(1).MinWidth(0).Gap(12).Children(func() {
+				items := &app.prefs.SidebarItems
+				app.sidebarPreference(c, "insights", locales.Insights(), &items.Insights)
+				app.sidebarPreference(c, "compare", locales.CompareVersions(), &items.Compare)
+				app.sidebarPreference(c, "worktrees", locales.Worktrees(), &items.Worktrees)
+			})
+			ui.Column(c).Grow(1).MinWidth(0).Gap(12).Children(func() {
+				items := &app.prefs.SidebarItems
+				app.sidebarPreference(c, "search", locales.Search(), &items.Search)
+				app.sidebarPreference(c, "stash", locales.Stash(), &items.Stash)
+			})
 		})
 	})
 	ui.Divider(c)
-	ui.Text(c, locales.ExternalTools()).FontSize(12).TextColor(c.Theme().TextMuted)
-	ui.Row(c).FillWidth().Gap(20).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, locales.Terminal()).FontSize(13).Width(92).Shrink(0)
-		ui.MenuButton(c, app.terminalApplicationLabel(), app.terminalMenu).Label(locales.Terminal()).
-			Width(210).Justify(ui.SpaceBetween).Tooltip(app.prefs.TerminalApplication)
+	settingsSection(c, locales.ExternalTools(), func() {
+		settingsRow(c, locales.Terminal(), func() {
+			ui.MenuButton(c, app.terminalApplicationLabel(), app.terminalMenu).Label(locales.Terminal()).
+				Width(210).Justify(ui.SpaceBetween).Tooltip(app.prefs.TerminalApplication)
+		})
 	})
 	ui.Divider(c)
 	app.memoryDiagnosticsPreferences(c)
@@ -510,9 +512,8 @@ func (app *nativeApp) saveSettings() {
 }
 
 func shortcutPreference(app *nativeApp, c *ui.Context, label string, value *string) {
-	ui.Row(c).FillWidth().Gap(12).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, label).FontSize(13).Grow(1)
-		choice := ui.Select(c, value, nativeShortcutChoices).Label(locales.ShortcutLabel(label)).Width(180)
+	settingsRow(c, label, func() {
+		choice := ui.Select(c, value, nativeShortcutChoices).Label(locales.ShortcutLabel(label)).Width(210)
 		if choice.Changed() {
 			app.shortcutDraftChanged()
 		}

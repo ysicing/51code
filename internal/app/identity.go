@@ -135,17 +135,24 @@ func (editor *nativeIdentityEditor) view(app *nativeApp, dialog *nativeDialog, c
 				label string
 				value *string
 			}{{locales.Name(), &editor.name}, {locales.Email(), &editor.email}} {
-				ui.Column(c).FillWidth().Gap(4).Children(func() {
-					ui.Text(c, field.label).FontSize(12)
+				input := func() {
 					if ui.TextInput(c, field.value).Label(field.label).FillWidth().Changed() {
 						editor.saved = false
 					}
-				})
+				}
+				if editor.path == "" {
+					settingsRow(c, field.label, input)
+				} else {
+					ui.Column(c).FillWidth().Gap(4).Children(func() {
+						ui.Text(c, field.label).FontSize(12)
+						input()
+					})
+				}
 			}
 		})
 	}
 	ui.Divider(c)
-	ui.Text(c, locales.EffectiveIdentity()).FontSize(12).Bold()
+	ui.Text(c, locales.EffectiveIdentity()).FontSize(12).Bold().TextColor(c.Theme().TextMuted)
 	for _, field := range []struct {
 		label string
 		value gitrepo.IdentityValue
@@ -154,8 +161,7 @@ func (editor *nativeIdentityEditor) view(app *nativeApp, dialog *nativeDialog, c
 		if value == "" {
 			value = locales.Unconfigured()
 		}
-		ui.Row(c).FillWidth().Gap(12).Children(func() {
-			ui.Text(c, field.label).FontSize(12).TextColor(c.Theme().TextMuted).Width(50)
+		content := func() {
 			ui.Column(c).FillWidth().MinWidth(0).Gap(3).Children(func() {
 				ui.Text(c, value).FontSize(13).MaxLines(1).Selectable().Tooltip(value)
 				if field.value.Origin != "" {
@@ -163,7 +169,15 @@ func (editor *nativeIdentityEditor) view(app *nativeApp, dialog *nativeDialog, c
 					ui.Text(c, source).FontSize(11).TextColor(c.Theme().TextMuted).MaxLines(1).Tooltip(field.value.Origin)
 				}
 			})
-		})
+		}
+		if editor.path == "" {
+			settingsRow(c, field.label, content)
+		} else {
+			ui.Row(c).FillWidth().Gap(12).Children(func() {
+				ui.Text(c, field.label).FontSize(12).TextColor(c.Theme().TextMuted).Width(50)
+				ui.Column(c).Grow(1).MinWidth(0).Children(content)
+			})
+		}
 	}
 	if editor.saved {
 		ui.Text(c, locales.Saved()).FontSize(12).TextColor(c.Theme().TextMuted)

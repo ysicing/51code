@@ -18,7 +18,7 @@ func (editor *nativeAISettings) connectionFields(app *nativeApp, dialog *nativeD
 		values := []string{"", commitai.Responses, commitai.Chat, commitai.Claude}
 		labels := []string{locales.LocalMagpie(), "OpenAI Responses", "OpenAI Chat Completions", "Claude Messages"}
 		selected := labels[max(0, slices.Index(values, app.prefs.AI.Protocol))]
-		if ui.Select(c, &selected, labels).Label(locales.ApiProtocol()).FillWidth().Disabled(editor.checking || editor.key != "").Changed() {
+		if ui.Select(c, &selected, labels).Label(locales.ApiProtocol()).Width(210).Disabled(editor.checking || editor.key != "").Changed() {
 			app.prefs.AI.Protocol = values[slices.Index(labels, selected)]
 			app.prefs.AIConsent = false
 			app.stopCommitAI()

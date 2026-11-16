@@ -89,37 +89,38 @@ func (app *nativeApp) chooseGitExecutable(editor *nativeIdentityEditor, dialog *
 }
 
 func (app *nativeApp) gitExecutablePreferences(c *ui.Context, editor *nativeIdentityEditor, dialog *nativeDialog) {
-	ui.Column(c).FillWidth().Gap(8).Children(func() {
-		ui.Row(c).FillWidth().Gap(12).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, locales.GitSource()).FontSize(13).Width(92).Shrink(0)
-			ui.MenuButton(c, gitSourceLabel(app.prefs.Git.Source), func(menu *ui.Menu) {
-				if runtime.GOOS == "windows" && menu.Item(locales.BundledGit()).Chosen() {
-					app.selectGitExecutable("bundled", "", editor, dialog)
+	settingsSection(c, locales.GitEnvironment(), func() {
+		settingsRow(c, locales.GitSource(), func() {
+			ui.Row(c).FillWidth().Gap(12).AlignItems(ui.Center).Children(func() {
+				ui.MenuButton(c, gitSourceLabel(app.prefs.Git.Source), func(menu *ui.Menu) {
+					if runtime.GOOS == "windows" && menu.Item(locales.BundledGit()).Chosen() {
+						app.selectGitExecutable("bundled", "", editor, dialog)
+					}
+					if menu.Item(locales.SystemGit()).Chosen() {
+						app.selectGitExecutable("system", "", editor, dialog)
+					}
+					if menu.Item(locales.ChooseGit()).Chosen() {
+						app.chooseGitExecutable(editor, dialog)
+					}
+				}).Label(locales.GitSource()).Width(210).Justify(ui.SpaceBetween).Disabled(app.busy || editor.dirty())
+				if ui.Button(c, locales.DetectGit()).Disabled(app.busy || editor.dirty()).Clicked() {
+					editor.load(app, dialog)
 				}
-				if menu.Item(locales.SystemGit()).Chosen() {
-					app.selectGitExecutable("system", "", editor, dialog)
-				}
-				if menu.Item(locales.ChooseGit()).Chosen() {
-					app.chooseGitExecutable(editor, dialog)
-				}
-			}).Label(locales.GitSource()).Width(210).Justify(ui.SpaceBetween).Disabled(app.busy || editor.dirty())
-			if ui.Button(c, locales.DetectGit()).Disabled(app.busy || editor.dirty()).Clicked() {
-				editor.load(app, dialog)
+			})
+			if editor.gitInfo.Version != "" {
+				ui.Text(c, editor.gitInfo.Version).FontSize(12).FillWidth()
+			}
+			path := editor.gitInfo.Path
+			if path == "" && app.prefs.Git.Source == "custom" {
+				path = app.prefs.Git.Path
+			}
+			if path != "" {
+				ui.Text(c, path).FontSize(11).TextColor(c.Theme().TextMuted).FillWidth().MaxLines(1).Tooltip(path).Selectable()
+			}
+			if editor.gitError != "" {
+				ui.Text(c, locales.GitUnavailable()).FontSize(12).TextColor(c.Theme().Danger).FillWidth().Tooltip(editor.gitError)
 			}
 		})
-		if editor.gitInfo.Version != "" {
-			ui.Text(c, editor.gitInfo.Version).FontSize(12)
-		}
-		path := editor.gitInfo.Path
-		if path == "" && app.prefs.Git.Source == "custom" {
-			path = app.prefs.Git.Path
-		}
-		if path != "" {
-			ui.Text(c, path).FontSize(11).TextColor(c.Theme().TextMuted).MaxLines(1).Tooltip(path).Selectable()
-		}
-		if editor.gitError != "" {
-			ui.Text(c, locales.GitUnavailable()).FontSize(12).TextColor(c.Theme().Danger).Tooltip(editor.gitError)
-		}
 	})
 	ui.Divider(c)
 }

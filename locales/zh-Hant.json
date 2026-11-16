@@ -1,5 +1,9 @@
 {
   "@@locale": "zh-Hant",
+  "gitEnvironment": "Git 環境",
+  "operationsAndDisplay": "操作與顯示",
+  "doubleClickFile": "連按兩下檔案",
+  "stageOrUnstage": "暫存或取消暫存",
   "gitSource": "Git 來源",
   "bundledGit": "內建 Git",
   "systemGit": "系統 Git",

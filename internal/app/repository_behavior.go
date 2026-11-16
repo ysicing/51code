@@ -48,9 +48,7 @@ func fetchIntervalLabel(minutes int) string {
 }
 
 func (app *nativeApp) repositoryBehaviorPreferences(c *ui.Context) {
-	ui.Divider(c)
-	ui.Row(c).FillWidth().Gap(20).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, locales.StartupAction()).FontSize(13).Width(92).Shrink(0)
+	settingsRow(c, locales.StartupAction(), func() {
 		label := locales.StartupLibrary()
 		if app.prefs.StartupPage == "last" {
 			label = locales.StartupLastRepository()
@@ -68,23 +66,24 @@ func (app *nativeApp) repositoryBehaviorPreferences(c *ui.Context) {
 		}).Label(locales.StartupAction()).Width(210).Justify(ui.SpaceBetween)
 	})
 	ui.Divider(c)
-	ui.Text(c, locales.RepositoryBehavior()).FontSize(12).TextColor(c.Theme().TextMuted)
-	previous := app.prefs
-	ui.Checkbox(c, &app.prefs.AutoRefreshFiles, locales.AutoRefreshFiles()).OnClick(func() {
-		app.saveBehaviorPreferences(previous)
-	})
-	ui.Row(c).FillWidth().Gap(16).AlignItems(ui.Center).Children(func() {
-		ui.Checkbox(c, &app.prefs.AutoFetchRemotes, locales.AutoFetchRemotes()).Grow(1).OnClick(func() {
+	settingsSection(c, locales.RepositoryBehavior(), func() {
+		previous := app.prefs
+		ui.Checkbox(c, &app.prefs.AutoRefreshFiles, locales.AutoRefreshFiles()).OnClick(func() {
 			app.saveBehaviorPreferences(previous)
 		})
-		ui.MenuButton(c, fetchIntervalLabel(app.prefs.AutoFetchMinutes), func(menu *ui.Menu) {
-			for _, minutes := range []int{5, 15, 30} {
-				if menu.Item(fetchIntervalLabel(minutes)).Checked(app.prefs.AutoFetchMinutes == minutes).Chosen() {
-					previous := app.prefs
-					app.prefs.AutoFetchMinutes = minutes
-					app.saveBehaviorPreferences(previous)
+		ui.Row(c).FillWidth().Gap(16).AlignItems(ui.Center).Children(func() {
+			ui.Checkbox(c, &app.prefs.AutoFetchRemotes, locales.AutoFetchRemotes()).Grow(1).OnClick(func() {
+				app.saveBehaviorPreferences(previous)
+			})
+			ui.MenuButton(c, fetchIntervalLabel(app.prefs.AutoFetchMinutes), func(menu *ui.Menu) {
+				for _, minutes := range []int{5, 15, 30} {
+					if menu.Item(fetchIntervalLabel(minutes)).Checked(app.prefs.AutoFetchMinutes == minutes).Chosen() {
+						previous := app.prefs
+						app.prefs.AutoFetchMinutes = minutes
+						app.saveBehaviorPreferences(previous)
+					}
 				}
-			}
-		}).Label(locales.AutoFetchInterval()).Width(140).Justify(ui.SpaceBetween).Disabled(!app.prefs.AutoFetchRemotes)
+			}).Label(locales.AutoFetchInterval()).Width(140).Justify(ui.SpaceBetween).Disabled(!app.prefs.AutoFetchRemotes)
+		})
 	})
 }

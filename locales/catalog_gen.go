@@ -36,6 +36,46 @@ type Messages struct{ locale string }
 // source language.
 func In(locale string) Messages { return Messages{locale} }
 
+// GitEnvironment says "Git 环境"
+// in the language the app shows.
+func GitEnvironment() string { return In(i18n.Locale()).GitEnvironment() }
+
+// GitEnvironment says "Git 环境"
+// in the language of msgs.
+func (msgs Messages) GitEnvironment() string {
+	return Catalog.Format(msgs.locale, "gitEnvironment", nil)
+}
+
+// OperationsAndDisplay says "操作与显示"
+// in the language the app shows.
+func OperationsAndDisplay() string { return In(i18n.Locale()).OperationsAndDisplay() }
+
+// OperationsAndDisplay says "操作与显示"
+// in the language of msgs.
+func (msgs Messages) OperationsAndDisplay() string {
+	return Catalog.Format(msgs.locale, "operationsAndDisplay", nil)
+}
+
+// DoubleClickFile says "双击文件"
+// in the language the app shows.
+func DoubleClickFile() string { return In(i18n.Locale()).DoubleClickFile() }
+
+// DoubleClickFile says "双击文件"
+// in the language of msgs.
+func (msgs Messages) DoubleClickFile() string {
+	return Catalog.Format(msgs.locale, "doubleClickFile", nil)
+}
+
+// StageOrUnstage says "暂存或取消暂存"
+// in the language the app shows.
+func StageOrUnstage() string { return In(i18n.Locale()).StageOrUnstage() }
+
+// StageOrUnstage says "暂存或取消暂存"
+// in the language of msgs.
+func (msgs Messages) StageOrUnstage() string {
+	return Catalog.Format(msgs.locale, "stageOrUnstage", nil)
+}
+
 // GitSource says "Git 来源"
 // in the language the app shows.
 func GitSource() string { return In(i18n.Locale()).GitSource() }

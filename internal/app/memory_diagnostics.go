@@ -29,33 +29,33 @@ type nativeMemoryDiagnostics struct {
 
 func (app *nativeApp) memoryDiagnosticsPreferences(c *ui.Context) {
 	state := &app.memoryDiagnostics
-	ui.Text(c, locales.Diagnostics()).FontSize(12).TextColor(c.Theme().TextMuted)
-	ui.Row(c).FillWidth().Gap(20).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, locales.MemoryDiagnostics()).FontSize(13).Grow(1).MinWidth(0)
-		label := locales.ExportDiagnostics()
-		if state.busy {
-			label = locales.ExportingDiagnostics()
-		}
-		ui.Button(c, label).Label(locales.ExportMemoryDiagnostics()).Disabled(state.busy || app.busy).
-			OnClick(app.exportMemoryDiagnostics)
-	})
-	ui.Text(c, locales.MemoryDiagnosticsHint()).FontSize(12).TextColor(c.Theme().TextMuted)
-	if state.problem != "" {
-		ui.Text(c, state.problem).FontSize(12).TextColor(c.Theme().Danger).FillWidth()
-	}
-	if state.path != "" && !state.busy {
-		ui.Text(c, locales.DiagnosticsSaved(state.path)).FontSize(12).TextColor(c.Theme().TextMuted).
-			FillWidth().Tooltip(state.path)
-		label := locales.OpenDiagnosticsFolder()
-		if runtime.GOOS == "darwin" {
-			label = locales.RevealFinder()
-		}
-		ui.Button(c, label).AlignSelf(ui.Start).OnClick(func() {
-			if err := mygo.Shell.OpenPath(state.path); err != nil {
-				state.problem = locales.OpenDiagnosticsFailed(err.Error())
+	settingsSection(c, locales.Diagnostics(), func() {
+		settingsRow(c, locales.MemoryDiagnostics(), func() {
+			label := locales.ExportDiagnostics()
+			if state.busy {
+				label = locales.ExportingDiagnostics()
+			}
+			ui.Button(c, label).Label(locales.ExportMemoryDiagnostics()).AlignSelf(ui.Start).Disabled(state.busy || app.busy).
+				OnClick(app.exportMemoryDiagnostics)
+			ui.Text(c, locales.MemoryDiagnosticsHint()).FontSize(12).TextColor(c.Theme().TextMuted).FillWidth()
+			if state.problem != "" {
+				ui.Text(c, state.problem).FontSize(12).TextColor(c.Theme().Danger).FillWidth()
+			}
+			if state.path != "" && !state.busy {
+				ui.Text(c, locales.DiagnosticsSaved(state.path)).FontSize(12).TextColor(c.Theme().TextMuted).
+					FillWidth().Tooltip(state.path)
+				label := locales.OpenDiagnosticsFolder()
+				if runtime.GOOS == "darwin" {
+					label = locales.RevealFinder()
+				}
+				ui.Button(c, label).AlignSelf(ui.Start).OnClick(func() {
+					if err := mygo.Shell.OpenPath(state.path); err != nil {
+						state.problem = locales.OpenDiagnosticsFailed(err.Error())
+					}
+				})
 			}
 		})
-	}
+	})
 }
 
 func (app *nativeApp) exportMemoryDiagnostics() {

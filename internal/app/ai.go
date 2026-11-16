@@ -479,16 +479,13 @@ func (editor *nativeAISettings) reset() {
 }
 
 func aiSettingsRow(c *ui.Context, label string, content func()) {
-	ui.Row(c).FillWidth().Gap(16).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, label).FontSize(13).Width(112).Shrink(0)
-		ui.Column(c).Grow(1).MinWidth(0).Children(content)
-	})
+	settingsRow(c, label, content)
 }
 
 func (editor *nativeAISettings) view(app *nativeApp, dialog *nativeDialog, c *ui.Context) {
-	ui.Column(c).FillWidth().Gap(20).Children(func() {
+	ui.Column(c).FillWidth().Gap(16).Children(func() {
 		ui.Row(c).FillWidth().AlignItems(ui.Center).Children(func() {
-			ui.Text(c, locales.ConnectionAndModel()).FontSize(13).Bold()
+			ui.Text(c, locales.ConnectionAndModel()).FontSize(12).Bold().TextColor(c.Theme().TextMuted)
 			ui.Spacer(c)
 			ui.Text(c, locales.AllRepositories()).FontSize(12).TextColor(c.Theme().TextMuted)
 		})
@@ -499,7 +496,7 @@ func (editor *nativeAISettings) view(app *nativeApp, dialog *nativeDialog, c *ui
 					mode = locales.ManualAddress()
 				}
 				if ui.Select(c, &mode, []string{locales.DiscoverMagpie(), locales.ManualAddress()}).
-					Label(locales.ConnectionMethod()).FillWidth().Disabled(editor.checking || editor.key != "").Changed() {
+					Label(locales.ConnectionMethod()).Width(210).Disabled(editor.checking || editor.key != "").Changed() {
 					editor.manual = mode == locales.ManualAddress()
 					editor.reset()
 					editor.key, editor.keyProblem, editor.keySaved = "", "", false
@@ -584,8 +581,7 @@ func (editor *nativeAISettings) view(app *nativeApp, dialog *nativeDialog, c *ui
 			})
 		})
 		ui.Divider(c)
-		ui.Column(c).FillWidth().Gap(12).Children(func() {
-			ui.Text(c, locales.GenerationPreferences()).FontSize(13).Bold()
+		settingsSection(c, locales.GenerationPreferences(), func() {
 			if aiOutputPreferences(c, &app.prefs.AI.Language, &app.prefs.AI.Format, false) {
 				app.settingsError = ""
 				app.saveSettings()
@@ -612,14 +608,14 @@ func aiOutputPreferences(c *ui.Context, language, format *string, inherit bool) 
 	changed := false
 	aiSettingsRow(c, locales.Language(), func() {
 		selected := languageLabels[max(0, slices.Index(languages, *language))]
-		if ui.Select(c, &selected, languageLabels).Label(locales.CommitLanguage()).FillWidth().Changed() {
+		if ui.Select(c, &selected, languageLabels).Label(locales.CommitLanguage()).Width(210).Changed() {
 			*language = languages[slices.Index(languageLabels, selected)]
 			changed = true
 		}
 	})
 	aiSettingsRow(c, locales.Format(), func() {
 		selected := formatLabels[max(0, slices.Index(formats, *format))]
-		if ui.Select(c, &selected, formatLabels).Label(locales.CommitFormat()).FillWidth().Changed() {
+		if ui.Select(c, &selected, formatLabels).Label(locales.CommitFormat()).Width(210).Changed() {
 			*format = formats[slices.Index(formatLabels, selected)]
 			changed = true
 		}

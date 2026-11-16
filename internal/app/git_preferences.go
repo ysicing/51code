@@ -26,22 +26,25 @@ func (app *nativeApp) commitDate(commit gitrepo.Commit) string {
 
 func (app *nativeApp) gitPreferences(c *ui.Context) {
 	previous := app.prefs
-	ui.Checkbox(c, &app.prefs.DoubleClickStage, locales.DoubleClickStage()).OnClick(func() {
-		app.saveBehaviorPreferences(previous)
-	})
-	ui.Row(c).FillWidth().Gap(20).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, locales.HistoryDate()).FontSize(13).Width(92).Shrink(0)
-		ui.MenuButton(c, app.historyDateLabel(), func(menu *ui.Menu) {
-			for _, choice := range []struct{ value, label string }{
-				{"author", locales.AuthorDate()}, {"committer", locales.CommitterDate()},
-			} {
-				if menu.Item(choice.label).Checked(app.prefs.HistoryDate == choice.value).Chosen() {
-					previous := app.prefs
-					app.prefs.HistoryDate = choice.value
-					app.saveBehaviorPreferences(previous)
+	settingsSection(c, locales.OperationsAndDisplay(), func() {
+		settingsRow(c, locales.DoubleClickFile(), func() {
+			ui.Checkbox(c, &app.prefs.DoubleClickStage, locales.StageOrUnstage()).Label(locales.DoubleClickStage()).OnClick(func() {
+				app.saveBehaviorPreferences(previous)
+			})
+		})
+		settingsRow(c, locales.HistoryDate(), func() {
+			ui.MenuButton(c, app.historyDateLabel(), func(menu *ui.Menu) {
+				for _, choice := range []struct{ value, label string }{
+					{"author", locales.AuthorDate()}, {"committer", locales.CommitterDate()},
+				} {
+					if menu.Item(choice.label).Checked(app.prefs.HistoryDate == choice.value).Chosen() {
+						previous := app.prefs
+						app.prefs.HistoryDate = choice.value
+						app.saveBehaviorPreferences(previous)
+					}
 				}
-			}
-		}).Label(locales.HistoryDate()).Width(210).Justify(ui.SpaceBetween)
+			}).Label(locales.HistoryDate()).Width(210).Justify(ui.SpaceBetween)
+		})
 	})
 	if app.settingsError != "" {
 		ui.Text(c, app.settingsError).FontSize(12).TextColor(c.Theme().Danger)

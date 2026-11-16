@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/ysicing/51code/internal/gitrepo"
+	"github.com/ysicing/51code/locales"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/plugins/updater"
@@ -33,7 +34,7 @@ func TestNativeSettingsKeepsBoundsAcrossCategories(t *testing.T) {
 	})
 	app.settingsDialog()
 	tester := ui.NewTester(app.view, 1024, 680)
-	for _, size := range [][2]int{{1024, 680}, {780, 480}} {
+	for _, size := range [][2]int{{1024, 860}, {1024, 680}, {780, 480}} {
 		tester.SetSize(size[0], size[1])
 		if err := tester.Click("通用"); err != nil {
 			t.Fatal(err)
@@ -47,10 +48,13 @@ func TestNativeSettingsKeepsBoundsAcrossCategories(t *testing.T) {
 			if err := tester.Click(category); err != nil {
 				t.Fatal(err)
 			}
-			if category == "Git" && size[1] == 680 {
+			if category == "Git" && app.busy {
 				finish()
 			}
 			tester.Frame()
+			if selected, found := tester.AccessByRole(ui.RoleTab, category); !found || !selected.Selected {
+				t.Fatalf("未切换到设置分类: %s", category)
+			}
 			current, found := tester.AccessByRole(ui.RoleDialog, "")
 			if !found || current.Bounds != panel.Bounds {
 				t.Fatalf("切换到 %s 时弹窗位置或尺寸改变: 原来 %+v，当前 %+v", category, panel.Bounds, current.Bounds)
@@ -58,9 +62,28 @@ func TestNativeSettingsKeepsBoundsAcrossCategories(t *testing.T) {
 			if current.Bounds.Y < 0 || current.Bounds.Y+current.Bounds.H > float32(size[1]) {
 				t.Fatalf("设置弹窗超出窗口: %+v", current.Bounds)
 			}
-			if directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); directory != "" {
-				saveNativeScreenshot(t, tester, directory, fmt.Sprintf("settings-fixed-%s-%d.png", category, size[1]))
+			for _, dark := range []bool{false, true} {
+				tester.SetDark(dark)
+				tester.Frame()
+				for _, control := range tester.AccessAll() {
+					if control.Offscreen {
+						continue
+					}
+					switch control.Role {
+					case ui.RoleTextField, ui.RolePopUpButton, ui.RoleMenuButton, ui.RoleCheckBox:
+						if control.Bounds.X < panel.Bounds.X || control.Bounds.X+control.Bounds.W > panel.Bounds.X+panel.Bounds.W {
+							t.Fatalf("%s 控件超出设置面板: %+v", category, control)
+						}
+					}
+				}
+				if close, found := tester.AccessByRole(ui.RoleButton, locales.CloseSettings()); !found || close.Offscreen {
+					t.Fatal("紧凑窗口必须保留关闭入口")
+				}
+				if directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); directory != "" {
+					saveNativeScreenshot(t, tester, directory, fmt.Sprintf("settings-fixed-%s-%d-dark-%t.png", category, size[1], dark))
+				}
 			}
+			tester.SetDark(false)
 		}
 	}
 }
