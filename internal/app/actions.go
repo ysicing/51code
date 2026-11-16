@@ -97,7 +97,7 @@ func (app *nativeApp) renameBranchDialog(old string) {
 
 func (app *nativeApp) deleteBranch(name string, force bool) {
 	title := locales.DeleteLocalBranch()
-	detail := name + "\n" + locales.DeleteBranchDetail()
+	detail := locales.DeleteBranchDetail()
 	if force {
 		title = locales.ForceDeleteLocalBranch()
 		detail += "\n" + locales.ForceDeleteBranchDetail()
@@ -107,6 +107,7 @@ func (app *nativeApp) deleteBranch(name string, force bool) {
 			return app.service.DeleteBranch(ctx, path, name, force)
 		})
 	})
+	app.dialog.subject = name
 }
 
 func (app *nativeApp) tagDialog() {

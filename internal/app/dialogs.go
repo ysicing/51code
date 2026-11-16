@@ -30,6 +30,7 @@ type nativeDialog struct {
 	titleText       func() string
 	width           float32
 	height          float32
+	subject         string
 	detail          string
 	action          string
 	dismiss         string
@@ -42,6 +43,7 @@ type nativeDialog struct {
 	body            func(*ui.Context)
 	submit          func(*nativeDialog)
 	danger          bool
+	confirmation    bool
 	problem         string
 	canSubmit       func() bool
 	blocked         bool
@@ -98,7 +100,7 @@ func (app *nativeApp) dialogView(c *ui.Context) {
 		panel.Children(func() {
 			header := func() {
 				fontSize := float32(20)
-				if dialog.onClose != nil {
+				if dialog.onClose != nil || dialog.confirmation {
 					fontSize = 16
 				}
 				title := dialog.title
@@ -135,8 +137,14 @@ func (app *nativeApp) dialogView(c *ui.Context) {
 			} else {
 				ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(12).Children(header)
 			}
+			if dialog.subject != "" {
+				ui.Text(c, dialog.subject).FontSize(13).Bold().FillWidth().MaxLines(3).Selectable().Tooltip(dialog.subject)
+			}
 			if dialog.detail != "" {
-				ui.Text(c, dialog.detail).MaxLines(5).Selectable().Tooltip(dialog.detail)
+				detail := ui.Text(c, dialog.detail).MaxLines(5).Selectable().Tooltip(dialog.detail)
+				if dialog.confirmation {
+					detail.FontSize(13).TextColor(c.Theme().TextMuted).FillWidth()
+				}
 			}
 			submitted := false
 			focused := false
@@ -174,17 +182,28 @@ func (app *nativeApp) dialogView(c *ui.Context) {
 			if dialog.onClose != nil && dialog.action == "" {
 				return
 			}
-			ui.Row(c).FillWidth().Gap(8).Justify(ui.End).Children(func() {
+			footer := ui.Row(c).FillWidth().Gap(8).Justify(ui.End)
+			if dialog.confirmation {
+				footer.Padding(8, 0, 0, 0)
+			}
+			footer.Children(func() {
 				dismiss := dialog.dismiss
 				if dismiss == "" {
 					dismiss = locales.Cancel()
 				}
-				if ui.Button(c, dismiss).Disabled(app.busy).Clicked() {
+				cancel := ui.Button(c, dismiss).Disabled(app.busy)
+				if dialog.confirmation {
+					cancel.MinWidth(72).AutoFocus()
+				}
+				if cancel.Clicked() {
 					// 与标题栏关闭、Esc 走同一路径，未保存草稿需经 onClose 确认。
 					app.closeDialog(dialog)
 				}
 				if dialog.action != "" {
 					button := ui.PrimaryButton(c, dialog.action).Disabled(app.busy || !dialog.valid())
+					if dialog.confirmation {
+						button.MinWidth(72)
+					}
 					if dialog.danger {
 						button.Background(c.Theme().Danger)
 					}
@@ -203,7 +222,7 @@ func (app *nativeApp) dialogView(c *ui.Context) {
 
 func (app *nativeApp) confirm(title, detail, action string, fn func()) {
 	app.dialog = &nativeDialog{
-		title: title, detail: detail, action: action, danger: true,
+		title: title, detail: detail, action: action, danger: true, confirmation: true, width: 380,
 		submit: func(_ *nativeDialog) {
 			app.dialog = nil
 			fn()
