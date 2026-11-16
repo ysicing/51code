@@ -132,6 +132,14 @@ func gitCommand(ctx context.Context, args ...string) (*exec.Cmd, error) {
 		command = exec.CommandContext(ctx, path, args...)
 	}
 	command.Env = executableEnvironment(path)
+	if options := lfsExecutableOptions.Load(); options != nil {
+		// LFS 是可选工具；配置失效只由显式 LFS 操作报错，普通 Git 操作仍可运行。
+		if lfsPath, err := ResolveLFSExecutable(*options); err == nil {
+			if environment, err := lfsEnvironment(ctx, path, lfsPath); err == nil {
+				command.Env = environment
+			}
+		}
+	}
 	return command, nil
 }
 

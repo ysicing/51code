@@ -12,6 +12,14 @@ import (
 )
 
 func openFileContentPath(root *os.Root, path string) (*os.File, error) {
+	return openFileContentWindows(root, path, windows.FILE_GENERIC_READ)
+}
+
+func openLFSAttributesAppend(root *os.Root) (*os.File, error) {
+	return openFileContentWindows(root, ".gitattributes", windows.FILE_APPEND_DATA|windows.FILE_READ_ATTRIBUTES|windows.SYNCHRONIZE)
+}
+
+func openFileContentWindows(root *os.Root, path string, access uint32) (*os.File, error) {
 	directory, err := root.Open(".")
 	if err != nil {
 		return nil, err
@@ -29,7 +37,7 @@ func openFileContentPath(root *os.Root, path string) (*os.File, error) {
 	}
 	attributes.Length = uint32(unsafe.Sizeof(attributes))
 	var handle windows.Handle
-	err = windows.NtCreateFile(&handle, windows.FILE_GENERIC_READ, &attributes, &windows.IO_STATUS_BLOCK{}, nil,
+	err = windows.NtCreateFile(&handle, access, &attributes, &windows.IO_STATUS_BLOCK{}, nil,
 		windows.FILE_ATTRIBUTE_NORMAL, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE,
 		windows.FILE_OPEN, windows.FILE_NON_DIRECTORY_FILE|windows.FILE_SYNCHRONOUS_IO_NONALERT|windows.FILE_OPEN_REPARSE_POINT, 0, 0)
 	if err != nil {

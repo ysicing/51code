@@ -538,7 +538,7 @@ func (repo *Repository) SwitchBranch(ctx context.Context, name string) error {
 	if err := repo.validateBranch(ctx, name); err != nil {
 		return err
 	}
-	_, err := repo.git(ctx, "switch", "--no-guess", "--no-overwrite-ignore", "--", name)
+	_, err := run(ctx, repo.Path, "", checkoutTimeout, "switch", "--no-guess", "--no-overwrite-ignore", "--", name)
 	return err
 }
 
@@ -612,7 +612,7 @@ func (repo *Repository) pull(ctx context.Context) error {
 	if err := repo.checkMergeIgnoredPaths(ctx, upstream); err != nil {
 		return err
 	}
-	_, err = run(ctx, repo.Path, "", 2*time.Minute, "-c", "branch."+strings.TrimPrefix(branch, "refs/heads/")+".mergeOptions=",
+	_, err = run(ctx, repo.Path, "", checkoutTimeout, "-c", "branch."+strings.TrimPrefix(branch, "refs/heads/")+".mergeOptions=",
 		"merge", "--no-edit", "--no-autostash", "--no-overwrite-ignore", "--no-squash", "--ff-only", "--strategy=ort", "--", upstream)
 	return err
 }
@@ -620,6 +620,9 @@ func (repo *Repository) pull(ctx context.Context) error {
 // remoteTimeout 只作兜底上限；卡住的连接由 remoteOptions 的无进度检测提前中断，
 // 避免大仓库正常传输被固定时长杀掉。
 const remoteTimeout = 2 * time.Hour
+
+// 检出及快进合并可能通过 LFS smudge 下载对象，不能沿用只读 Git 命令的 30 秒限制。
+const checkoutTimeout = 10 * time.Minute
 
 func (repo *Repository) runRemote(ctx context.Context, args ...string) error {
 	options, err := remoteOptions(ctx, repo.Path)

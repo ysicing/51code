@@ -176,7 +176,7 @@ func (repo *Repository) RemoveRemote(ctx context.Context, name, token string) er
 }
 
 func (repo *Repository) CheckoutRemote(ctx context.Context, remoteBranch, name string) error {
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, checkoutTimeout)
 	defer cancel()
 	if err := repo.lockHistory(ctx); err != nil {
 		return err
@@ -206,7 +206,7 @@ func (repo *Repository) CheckoutRemote(ctx context.Context, remoteBranch, name s
 	} else if !exitCode(err, 1) {
 		return err
 	}
-	_, err = repo.git(ctx, "switch", "--create", name, "--track=direct", "--no-overwrite-ignore", "--", ref)
+	_, err = run(ctx, repo.Path, "", checkoutTimeout, "switch", "--create", name, "--track=direct", "--no-overwrite-ignore", "--", ref)
 	return err
 }
 

@@ -94,3 +94,43 @@ func TestFileContentOpenReplacement(t *testing.T) {
 		})
 	}
 }
+
+func TestLFSAttributesAppendRejectsReplacement(t *testing.T) {
+	if replacement := os.Getenv("XSOURCE_LFS_ATTRIBUTE_REPLACEMENT"); replacement != "" {
+		directory := t.TempDir()
+		write(t, directory, "original", "# original\n")
+		path := filepath.Join(directory, ".gitattributes")
+		if replacement == "fifo" {
+			if err := unix.Mkfifo(path, 0600); err != nil {
+				t.Fatal(err)
+			}
+		} else if err := os.Symlink("original", path); err != nil {
+			t.Fatal(err)
+		}
+		root, err := os.OpenRoot(directory)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer root.Close()
+		file, err := openLFSAttributesAppend(root)
+		if file != nil {
+			file.Close()
+		}
+		if err == nil || file != nil {
+			t.Fatal("追加属性时打开了 FIFO 或链接")
+		}
+		return
+	}
+	for _, replacement := range []string{"fifo", "symlink"} {
+		t.Run(replacement, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			command := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestLFSAttributesAppendRejectsReplacement$", "-test.count=1")
+			command.Env = append(os.Environ(), "XSOURCE_LFS_ATTRIBUTE_REPLACEMENT="+replacement)
+			output, err := command.CombinedOutput()
+			if ctx.Err() != nil || err != nil {
+				t.Fatalf("属性文件替换未安全返回：%v %v\n%s", ctx.Err(), err, output)
+			}
+		})
+	}
+}

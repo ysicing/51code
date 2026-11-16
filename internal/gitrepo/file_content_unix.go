@@ -39,3 +39,23 @@ func openFileContentPath(root *os.Root, path string) (*os.File, error) {
 	}
 	return directory, nil
 }
+
+func openLFSAttributesAppend(root *os.Root) (*os.File, error) {
+	directory, err := root.Open(".")
+	if err != nil {
+		return nil, err
+	}
+	defer directory.Close()
+	var descriptor int
+	for {
+		descriptor, err = unix.Openat(int(directory.Fd()), ".gitattributes",
+			unix.O_WRONLY|unix.O_APPEND|unix.O_NONBLOCK|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+		if err != unix.EINTR {
+			break
+		}
+	}
+	if err != nil {
+		return nil, &os.PathError{Op: "openat", Path: ".gitattributes", Err: err}
+	}
+	return os.NewFile(uintptr(descriptor), ".gitattributes"), nil
+}
