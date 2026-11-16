@@ -33,6 +33,8 @@ type nativeDialog struct {
 	subject         string
 	detail          string
 	action          string
+	secondaryAction string
+	secondarySubmit func()
 	dismiss         string
 	fields          []nativeField
 	check           bool
@@ -179,6 +181,14 @@ func (app *nativeApp) dialogView(c *ui.Context) {
 			if dialog.problem != "" {
 				ui.Text(c, dialog.problem).TextColor(c.Theme().Danger).MaxLines(4).Selectable().Tooltip(dialog.problem)
 			}
+			if app.busy && app.operationCancel != nil {
+				ui.Row(c).FillWidth().Gap(12).AlignItems(ui.Center).Children(func() {
+					ui.Text(c, app.status).FontSize(12).TextColor(c.Theme().TextMuted).Grow(1)
+					if ui.Button(c, locales.CancelOperation()).Clicked() {
+						app.operationCancel()
+					}
+				})
+			}
 			if dialog.onClose != nil && dialog.action == "" {
 				return
 			}
@@ -198,6 +208,11 @@ func (app *nativeApp) dialogView(c *ui.Context) {
 				if cancel.Clicked() {
 					// 与标题栏关闭、Esc 走同一路径，未保存草稿需经 onClose 确认。
 					app.closeDialog(dialog)
+				}
+				if dialog.secondaryAction != "" {
+					if ui.Button(c, dialog.secondaryAction).Disabled(app.busy).Clicked() && app.dialog == dialog {
+						dialog.secondarySubmit()
+					}
 				}
 				if dialog.action != "" {
 					button := ui.PrimaryButton(c, dialog.action).Disabled(app.busy || !dialog.valid())

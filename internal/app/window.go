@@ -26,35 +26,40 @@ import (
 )
 
 type nativePreferences struct {
-	Git                  gitrepo.ExecutableOptions   `json:"git,omitempty"`
-	Sidebar              float32                     `json:"sidebar"`
-	Files                float32                     `json:"files"`
-	History              float32                     `json:"history"`
-	HistoryFiles         float32                     `json:"historyFiles"`
-	ChangesSplit         float32                     `json:"changesSplit,omitempty"`
-	Split                bool                        `json:"split"`
-	DiffLayout           string                      `json:"diffLayout,omitempty"`
-	Wrap                 bool                        `json:"wrap"`
-	FileSort             string                      `json:"fileSort"`
-	FileDescending       bool                        `json:"fileDescending"`
-	FileTree             bool                        `json:"fileTree"`
-	DoubleClickStage     bool                        `json:"doubleClickStage"`
-	HistoryDate          string                      `json:"historyDate,omitempty"`
-	Drafts               map[string]string           `json:"drafts"`
-	Appearance           string                      `json:"appearance"`
-	TerminalApplication  string                      `json:"terminalApplication,omitempty"`
-	LastDirectory        string                      `json:"lastDirectory,omitempty"`
-	StartupPage          string                      `json:"startupPage,omitempty"`
-	LastRepository       string                      `json:"lastRepository,omitempty"`
-	AutoRefreshFiles     bool                        `json:"autoRefreshFiles"`
-	AutoFetchRemotes     bool                        `json:"autoFetchRemotes"`
-	AutoFetchMinutes     int                         `json:"autoFetchMinutes,omitempty"`
-	SidebarItems         nativeSidebarItems          `json:"sidebarItems"`
-	Shortcuts            nativeShortcuts             `json:"shortcuts"`
-	UpdateCheckFrequency string                      `json:"updateCheckFrequency"`
-	AI                   commitai.Options            `json:"ai"`
-	AIConsent            bool                        `json:"aiConsent"`
-	RepositoryAI         map[string]nativeAIOverride `json:"repositoryAI,omitempty"`
+	Git                  gitrepo.ExecutableOptions    `json:"git,omitempty"`
+	LFS                  gitrepo.ExecutableOptions    `json:"lfs,omitempty"`
+	LFSIntegration       bool                         `json:"lfsIntegration"`
+	LargeFileChecks      bool                         `json:"largeFileChecks"`
+	LargeFileMiB         int                          `json:"largeFileMiB"`
+	RepositoryGit        map[string]nativeGitOverride `json:"repositoryGit,omitempty"`
+	Sidebar              float32                      `json:"sidebar"`
+	Files                float32                      `json:"files"`
+	History              float32                      `json:"history"`
+	HistoryFiles         float32                      `json:"historyFiles"`
+	ChangesSplit         float32                      `json:"changesSplit,omitempty"`
+	Split                bool                         `json:"split"`
+	DiffLayout           string                       `json:"diffLayout,omitempty"`
+	Wrap                 bool                         `json:"wrap"`
+	FileSort             string                       `json:"fileSort"`
+	FileDescending       bool                         `json:"fileDescending"`
+	FileTree             bool                         `json:"fileTree"`
+	DoubleClickStage     bool                         `json:"doubleClickStage"`
+	HistoryDate          string                       `json:"historyDate,omitempty"`
+	Drafts               map[string]string            `json:"drafts"`
+	Appearance           string                       `json:"appearance"`
+	TerminalApplication  string                       `json:"terminalApplication,omitempty"`
+	LastDirectory        string                       `json:"lastDirectory,omitempty"`
+	StartupPage          string                       `json:"startupPage,omitempty"`
+	LastRepository       string                       `json:"lastRepository,omitempty"`
+	AutoRefreshFiles     bool                         `json:"autoRefreshFiles"`
+	AutoFetchRemotes     bool                         `json:"autoFetchRemotes"`
+	AutoFetchMinutes     int                          `json:"autoFetchMinutes,omitempty"`
+	SidebarItems         nativeSidebarItems           `json:"sidebarItems"`
+	Shortcuts            nativeShortcuts              `json:"shortcuts"`
+	UpdateCheckFrequency string                       `json:"updateCheckFrequency"`
+	AI                   commitai.Options             `json:"ai"`
+	AIConsent            bool                         `json:"aiConsent"`
+	RepositoryAI         map[string]nativeAIOverride  `json:"repositoryAI,omitempty"`
 }
 
 type repositoryView struct {
@@ -80,6 +85,9 @@ type nativeApp struct {
 	post                  func(func())
 	closed                bool
 	busy                  bool
+	operationCancel       context.CancelFunc
+	largeFileAcknowledged map[string]map[string]string
+	lfsState              *nativeLFSState
 	readOnlyBusy          bool
 	scanning              bool
 	readTask              *nativeRead
@@ -173,6 +181,7 @@ func newNativeApp(service *RepositoryService, stateFile string) *nativeApp {
 			Sidebar: 226, Files: 360, History: 56, HistoryFiles: 280, Wrap: true, DiffLayout: "auto", Drafts: map[string]string{},
 			Appearance: appearanceSystem, Shortcuts: defaultNativeShortcuts(),
 			StartupPage: "library", AutoRefreshFiles: true, AutoFetchMinutes: 15, DoubleClickStage: true,
+			LFSIntegration: true, LargeFileChecks: true, LargeFileMiB: 50,
 			SidebarItems: nativeSidebarItems{Insights: true, Search: true, Compare: true, Stash: true, Worktrees: true},
 		},
 		nativeHistoryState: newNativeHistoryState(),
@@ -237,6 +246,7 @@ func newNativeApp(service *RepositoryService, stateFile string) *nativeApp {
 		app.prefs.Drafts = map[string]string{}
 	}
 	normalizeNativePreferences(&app.prefs)
+	normalizeGitFeatures(&app.prefs)
 	commitai.Normalize(&app.prefs.AI)
 	if app.prefs.RepositoryAI == nil {
 		app.prefs.RepositoryAI = map[string]nativeAIOverride{}
@@ -253,6 +263,7 @@ func clampSize(value, fallback, minimum, maximum float32) float32 {
 
 func (app *nativeApp) open() {
 	gitrepo.ConfigureExecutable(app.gitExecutableOptions())
+	gitrepo.ConfigureLFSExecutable(app.lfsExecutableOptions())
 	app.chosenLanguage = mygo.App.ChosenLocale()
 	app.win = mygo.NewWindow(mygo.WindowOptions{
 		Title: "51Code", Width: 1320, Height: 860, MinWidth: 1024, MinHeight: 680,
@@ -506,6 +517,10 @@ func (app *nativeApp) mutate(label string, operation func(context.Context, strin
 }
 
 func (app *nativeApp) mutateForm(dialog *nativeDialog, label string, operation func(context.Context, string) error) {
+	app.mutateFormResult(dialog, label, operation, nil)
+}
+
+func (app *nativeApp) mutateFormResult(dialog *nativeDialog, label string, operation func(context.Context, string) error, completed func(error)) {
 	if app.repository == nil || app.busy || (operation != nil && !app.writable) {
 		return
 	}
@@ -678,6 +693,9 @@ func (app *nativeApp) mutateForm(dialog *nativeDialog, label string, operation f
 					}
 				}
 			}
+			if completed != nil {
+				completed(operationErr)
+			}
 		}, errors.Join(operationErr, refreshErr, detailErr)
 	})
 }
@@ -708,7 +726,7 @@ func (app *nativeApp) showLibrary() {
 
 func (app *nativeApp) commit() {
 	// 与提交按钮一致，只在文件变更页可用；其他页面看不到要提交的仓库与暂存内容。
-	if app.repository == nil || app.screen != "changes" || app.busy || !app.writable {
+	if app.repository == nil || app.screen != "changes" || app.busy || !app.writable || app.dialog != nil {
 		return
 	}
 	path := app.repository.snapshot.Path
@@ -734,22 +752,40 @@ func (app *nativeApp) commit() {
 		return
 	}
 	app.stopCommitAI()
+	if app.gitFeatures(path).checks {
+		app.inspectCommit(path, message)
+		return
+	}
+	app.commitMessage(path, message, "")
+}
+
+func (app *nativeApp) commitMessage(path, message, token string) {
 	app.run(locales.Committing(), func(ctx context.Context) (func(), error) {
-		commitErr := app.service.Commit(ctx, path, message)
-		result, refreshErr := app.readRepository(ctx, path, false)
-		return func() {
-			if result != nil {
-				app.adopt(result)
-			}
-			app.writable = refreshErr == nil
-			if commitErr == nil {
-				delete(app.prefs.Drafts, path)
-				if err := app.savePreferences(); err != nil {
-					app.problem = locales.CommitSavedDraftFailed(err.Error())
-				}
-			}
-		}, errors.Join(commitErr, refreshErr)
+		return app.commitResult(ctx, path, message, token)
 	})
+}
+
+func (app *nativeApp) commitResult(ctx context.Context, path, message, token string) (func(), error) {
+	var commitErr error
+	if token == "" {
+		commitErr = app.service.Commit(ctx, path, message)
+	} else {
+		commitErr = app.service.CommitInspected(ctx, path, message, token)
+	}
+	result, refreshErr := app.readRepository(ctx, path, false)
+	return func() {
+		if result != nil {
+			app.adopt(result)
+		}
+		app.writable = refreshErr == nil
+		if commitErr == nil {
+			delete(app.largeFileAcknowledged, path)
+			delete(app.prefs.Drafts, path)
+			if err := app.savePreferences(); err != nil {
+				app.problem = locales.CommitSavedDraftFailed(err.Error())
+			}
+		}
+	}, errors.Join(commitErr, refreshErr)
 }
 
 func (app *nativeApp) conflictDirty() bool {

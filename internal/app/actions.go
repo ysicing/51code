@@ -66,7 +66,11 @@ func (app *nativeApp) stageSelectedFile() {
 }
 
 func (app *nativeApp) stagePaths(staged bool, files []string) {
-	if len(files) == 0 {
+	if len(files) == 0 || app.repository == nil || app.busy || !app.writable || app.dialog != nil {
+		return
+	}
+	if !staged && app.gitFeatures(app.repository.snapshot.Path).checks {
+		app.inspectStage(files)
 		return
 	}
 	app.mutate(locales.UpdatingIndex(), func(ctx context.Context, path string) error {

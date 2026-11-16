@@ -18,6 +18,8 @@ import (
 type nativeIdentityEditor struct {
 	gitInfo  gitrepo.ExecutableInfo
 	gitError string
+	lfsInfo  gitrepo.ExecutableInfo
+	lfsError string
 	path     string
 	settings gitrepo.IdentitySettings
 	name     string
@@ -57,8 +59,10 @@ func (editor *nativeIdentityEditor) dirty() bool {
 func (editor *nativeIdentityEditor) load(app *nativeApp, dialog *nativeDialog) {
 	dialog.problem = ""
 	options := app.gitExecutableOptions()
+	lfsOptions := app.lfsExecutableOptions()
 	app.run(locales.ReadingIdentity(), func(ctx context.Context) (func(), error) {
 		var gitInfo gitrepo.ExecutableInfo
+		lfsInfo, lfsErr := gitrepo.InspectLFSExecutable(ctx, lfsOptions)
 		if editor.path == "" {
 			var err error
 			gitInfo, err = gitrepo.InspectExecutable(ctx, options)
@@ -76,6 +80,11 @@ func (editor *nativeIdentityEditor) load(app *nativeApp, dialog *nativeDialog) {
 		return func() {
 			if app.dialog == dialog {
 				editor.gitInfo, editor.gitError = gitInfo, ""
+				editor.lfsInfo = lfsInfo
+				editor.lfsError = ""
+				if lfsErr != nil {
+					editor.lfsError = lfsErr.Error()
+				}
 			}
 			if err == nil && app.dialog == dialog {
 				editor.adopt(settings)
@@ -236,7 +245,7 @@ func (app *nativeApp) repositorySettingsDialog() {
 	dialog.canSubmit = func() bool { return tab == 0 && app.writable && identity.dirty() }
 	dialog.body = func(c *ui.Context) {
 		ui.Column(c).FillWidth().Gap(12).Children(func() {
-			ui.Segmented(c, &tab, locales.CommitIdentity(), locales.Remotes(), "AI").Label(locales.RepositorySettingsCategories())
+			ui.Segmented(c, &tab, locales.CommitIdentity(), locales.Remotes(), "AI", "Git / LFS").Label(locales.RepositorySettingsCategories())
 			dialog.action = ""
 			if tab == 0 {
 				dialog.action = locales.Save()
@@ -253,8 +262,10 @@ func (app *nativeApp) repositorySettingsDialog() {
 						identity.view(app, dialog, c)
 					} else if tab == 1 {
 						app.remoteSettingsView(c)
-					} else {
+					} else if tab == 2 {
 						app.repositoryAISettings(c, identity.path)
+					} else {
+						app.repositoryGitPreferences(c, identity.path, dialog)
 					}
 				})
 			})

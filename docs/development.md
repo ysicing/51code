@@ -90,6 +90,8 @@ task check
 
 `task govulncheck` 单独扫描当前平台及 Go 工具链下可调用代码的已知漏洞，需要访问 Go 漏洞数据库，不包含在默认 `task check` 中。
 
+LFS 用例默认使用隔离的工具替身，不安装工具或修改用户 Git 配置。设置 `XSOURCETREE_TEST_LFS=/绝对路径/git-lfs` 后，`GOMAXPROCS=2 go test -p=1 -parallel=2 ./internal/gitrepo -run TestRealLFS -count=1` 额外验证真实指针转换、属性草稿与部分暂存保护，以及本地 bare 远程的 LFS 上传和缺失内容下载；不访问外部远程。所有新跟踪规则按具体文件名匹配，转换在持有真实索引锁时从最新索引合入指定条目，再原子发布，保留无关暂存内容；取消时只清理本次持有的锁。属性回滚不截断原文件，原 inode 保留在 Git 索引目录下的 `.51code-lfs-attributes-*` 恢复目录，避免丢失编辑器并发写入。全局／仓库开关保存在客户端偏好中，不能靠关闭客户端集成来卸载仓库已有过滤器或 hooks。
+
 加载基准覆盖 100／5000 个变更文件的原生列表重绘、单文件历史／比较读取，以及 1 万提交的首屏、后页和搜索。使用 `GOMAXPROCS=2 go test -p=1 -parallel=2 ./internal/app ./internal/gitrepo -run '^$' -bench 'Benchmark(NativeChangedFilesFrame|RevisionFileLoading|HistoryLoading)$' -benchtime=3x -count=1` 串行复测；基准仓库由测试临时生成，不访问真实远程。比较相同场景的耗时与分配，避免把冷启动、后台负载或不同数据规模混为优化收益。
 
 原生界面测试使用 MyGo `ui.Tester`，覆盖侧栏切换与键盘导航、文件排序菜单、中文文本输入、统一/并排 Diff、提交草稿、失败 hook 后刷新、逐行暂存、冲突版本保护及刷新失败后的写入保护。设置 `XSOURCETREE_TEST_SCREENSHOTS=/tmp/xsourcetree-native-preview` 可导出浅色、深色和窄窗口截图；该测试不验证系统输入法候选窗。

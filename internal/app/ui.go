@@ -169,6 +169,11 @@ func (app *nativeApp) view(c *ui.Context) {
 						app.service.CancelHistory()
 					}
 				}
+				if app.operationCancel != nil {
+					if ui.Button(c, locales.Cancel()).Clicked() {
+						app.operationCancel()
+					}
+				}
 			} else if app.problem != "" {
 				summary := strings.SplitN(app.problem, "\n", 2)[0]
 				if strings.HasPrefix(summary, "git ") || strings.HasPrefix(summary, "fatal:") || strings.HasPrefix(summary, "error:") || strings.HasPrefix(summary, "ssh:") {
@@ -714,6 +719,7 @@ func (app *nativeApp) patchToolbar(c *ui.Context) {
 		if ui.Button(c, locales.FileHistory()).Clicked() {
 			app.fileHistoryAction()
 		}
+		app.lfsFileMenu(c)
 		if !app.staged {
 			if ui.Button(c, locales.DiscardChangesMenu()).Disabled(!app.writable).Clicked() {
 				app.discardFile()

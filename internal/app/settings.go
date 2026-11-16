@@ -275,6 +275,10 @@ func (app *nativeApp) settingsDialogAt(initialTab int) {
 									identity.view(app, dialog, c)
 								})
 							}
+							ui.Divider(c)
+							app.gitFeaturePreferences(c, dialog)
+							ui.Divider(c)
+							app.lfsExecutablePreferences(c, identity, dialog)
 						case 2:
 							shortcutPreference(app, c, locales.LocalRepositories(), &app.shortcutDraft.Library)
 							shortcutPreference(app, c, locales.AddLocalRepository(), &app.shortcutDraft.AddRepository)

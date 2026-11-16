@@ -36,6 +36,546 @@ type Messages struct{ locale string }
 // source language.
 func In(locale string) Messages { return Messages{locale} }
 
+// CancelOperation says "取消操作"
+// in the language the app shows.
+func CancelOperation() string { return In(i18n.Locale()).CancelOperation() }
+
+// CancelOperation says "取消操作"
+// in the language of msgs.
+func (msgs Messages) CancelOperation() string {
+	return Catalog.Format(msgs.locale, "cancelOperation", nil)
+}
+
+// LargeFileFeatures says "大文件"
+// in the language the app shows.
+func LargeFileFeatures() string { return In(i18n.Locale()).LargeFileFeatures() }
+
+// LargeFileFeatures says "大文件"
+// in the language of msgs.
+func (msgs Messages) LargeFileFeatures() string {
+	return Catalog.Format(msgs.locale, "largeFileFeatures", nil)
+}
+
+// EnableLFSIntegration says "启用 LFS 集成"
+// in the language the app shows.
+func EnableLFSIntegration() string { return In(i18n.Locale()).EnableLFSIntegration() }
+
+// EnableLFSIntegration says "启用 LFS 集成"
+// in the language of msgs.
+func (msgs Messages) EnableLFSIntegration() string {
+	return Catalog.Format(msgs.locale, "enableLFSIntegration", nil)
+}
+
+// LargeFileChecks says "大文件检查"
+// in the language the app shows.
+func LargeFileChecks() string { return In(i18n.Locale()).LargeFileChecks() }
+
+// LargeFileChecks says "大文件检查"
+// in the language of msgs.
+func (msgs Messages) LargeFileChecks() string {
+	return Catalog.Format(msgs.locale, "largeFileChecks", nil)
+}
+
+// CheckBeforeStaging says "暂存和提交前检查大文件"
+// in the language the app shows.
+func CheckBeforeStaging() string { return In(i18n.Locale()).CheckBeforeStaging() }
+
+// CheckBeforeStaging says "暂存和提交前检查大文件"
+// in the language of msgs.
+func (msgs Messages) CheckBeforeStaging() string {
+	return Catalog.Format(msgs.locale, "checkBeforeStaging", nil)
+}
+
+// LargeFileThreshold says "大文件阈值"
+// in the language the app shows.
+func LargeFileThreshold() string { return In(i18n.Locale()).LargeFileThreshold() }
+
+// LargeFileThreshold says "大文件阈值"
+// in the language of msgs.
+func (msgs Messages) LargeFileThreshold() string {
+	return Catalog.Format(msgs.locale, "largeFileThreshold", nil)
+}
+
+// InheritEnabled says "跟随全局（当前开启）"
+// in the language the app shows.
+func InheritEnabled() string { return In(i18n.Locale()).InheritEnabled() }
+
+// InheritEnabled says "跟随全局（当前开启）"
+// in the language of msgs.
+func (msgs Messages) InheritEnabled() string {
+	return Catalog.Format(msgs.locale, "inheritEnabled", nil)
+}
+
+// InheritDisabled says "跟随全局（当前关闭）"
+// in the language the app shows.
+func InheritDisabled() string { return In(i18n.Locale()).InheritDisabled() }
+
+// InheritDisabled says "跟随全局（当前关闭）"
+// in the language of msgs.
+func (msgs Messages) InheritDisabled() string {
+	return Catalog.Format(msgs.locale, "inheritDisabled", nil)
+}
+
+// FeatureEnabled says "开启"
+// in the language the app shows.
+func FeatureEnabled() string { return In(i18n.Locale()).FeatureEnabled() }
+
+// FeatureEnabled says "开启"
+// in the language of msgs.
+func (msgs Messages) FeatureEnabled() string {
+	return Catalog.Format(msgs.locale, "featureEnabled", nil)
+}
+
+// FeatureDisabled says "关闭"
+// in the language the app shows.
+func FeatureDisabled() string { return In(i18n.Locale()).FeatureDisabled() }
+
+// FeatureDisabled says "关闭"
+// in the language of msgs.
+func (msgs Messages) FeatureDisabled() string {
+	return Catalog.Format(msgs.locale, "featureDisabled", nil)
+}
+
+// InheritThreshold says "跟随全局（{value} MiB）"
+// in the language the app shows.
+func InheritThreshold(value string) string { return In(i18n.Locale()).InheritThreshold(value) }
+
+// InheritThreshold says "跟随全局（{value} MiB）"
+// in the language of msgs.
+func (msgs Messages) InheritThreshold(value string) string {
+	return Catalog.Format(msgs.locale, "inheritThreshold", map[string]any{"value": value})
+}
+
+// CustomThreshold says "自定义…"
+// in the language the app shows.
+func CustomThreshold() string { return In(i18n.Locale()).CustomThreshold() }
+
+// CustomThreshold says "自定义…"
+// in the language of msgs.
+func (msgs Messages) CustomThreshold() string {
+	return Catalog.Format(msgs.locale, "customThreshold", nil)
+}
+
+// PositiveThresholdRequired says "请输入大于 0 的整数 MiB"
+// in the language the app shows.
+func PositiveThresholdRequired() string { return In(i18n.Locale()).PositiveThresholdRequired() }
+
+// PositiveThresholdRequired says "请输入大于 0 的整数 MiB"
+// in the language of msgs.
+func (msgs Messages) PositiveThresholdRequired() string {
+	return Catalog.Format(msgs.locale, "positiveThresholdRequired", nil)
+}
+
+// RepositoryFeatureScope says "仅此仓库"
+// in the language the app shows.
+func RepositoryFeatureScope() string { return In(i18n.Locale()).RepositoryFeatureScope() }
+
+// RepositoryFeatureScope says "仅此仓库"
+// in the language of msgs.
+func (msgs Messages) RepositoryFeatureScope() string {
+	return Catalog.Format(msgs.locale, "repositoryFeatureScope", nil)
+}
+
+// LfsSource says "LFS 来源"
+// in the language the app shows.
+func LfsSource() string { return In(i18n.Locale()).LfsSource() }
+
+// LfsSource says "LFS 来源"
+// in the language of msgs.
+func (msgs Messages) LfsSource() string {
+	return Catalog.Format(msgs.locale, "lfsSource", nil)
+}
+
+// SystemLFS says "系统 Git LFS"
+// in the language the app shows.
+func SystemLFS() string { return In(i18n.Locale()).SystemLFS() }
+
+// SystemLFS says "系统 Git LFS"
+// in the language of msgs.
+func (msgs Messages) SystemLFS() string {
+	return Catalog.Format(msgs.locale, "systemLFS", nil)
+}
+
+// BundledLFS says "内置 Git LFS"
+// in the language the app shows.
+func BundledLFS() string { return In(i18n.Locale()).BundledLFS() }
+
+// BundledLFS says "内置 Git LFS"
+// in the language of msgs.
+func (msgs Messages) BundledLFS() string {
+	return Catalog.Format(msgs.locale, "bundledLFS", nil)
+}
+
+// CustomLFS says "自定义 Git LFS"
+// in the language the app shows.
+func CustomLFS() string { return In(i18n.Locale()).CustomLFS() }
+
+// CustomLFS says "自定义 Git LFS"
+// in the language of msgs.
+func (msgs Messages) CustomLFS() string {
+	return Catalog.Format(msgs.locale, "customLFS", nil)
+}
+
+// ChooseLFS says "选择 git-lfs…"
+// in the language the app shows.
+func ChooseLFS() string { return In(i18n.Locale()).ChooseLFS() }
+
+// ChooseLFS says "选择 git-lfs…"
+// in the language of msgs.
+func (msgs Messages) ChooseLFS() string {
+	return Catalog.Format(msgs.locale, "chooseLFS", nil)
+}
+
+// DetectingLFS says "正在检测 Git LFS…"
+// in the language the app shows.
+func DetectingLFS() string { return In(i18n.Locale()).DetectingLFS() }
+
+// DetectingLFS says "正在检测 Git LFS…"
+// in the language of msgs.
+func (msgs Messages) DetectingLFS() string {
+	return Catalog.Format(msgs.locale, "detectingLFS", nil)
+}
+
+// LfsUnavailable says "未找到可用的 Git LFS"
+// in the language the app shows.
+func LfsUnavailable() string { return In(i18n.Locale()).LfsUnavailable() }
+
+// LfsUnavailable says "未找到可用的 Git LFS"
+// in the language of msgs.
+func (msgs Messages) LfsUnavailable() string {
+	return Catalog.Format(msgs.locale, "lfsUnavailable", nil)
+}
+
+// LfsNotInitialized says "尚未在此仓库初始化"
+// in the language the app shows.
+func LfsNotInitialized() string { return In(i18n.Locale()).LfsNotInitialized() }
+
+// LfsNotInitialized says "尚未在此仓库初始化"
+// in the language of msgs.
+func (msgs Messages) LfsNotInitialized() string {
+	return Catalog.Format(msgs.locale, "lfsNotInitialized", nil)
+}
+
+// LfsInitialized says "已在此仓库初始化"
+// in the language the app shows.
+func LfsInitialized() string { return In(i18n.Locale()).LfsInitialized() }
+
+// LfsInitialized says "已在此仓库初始化"
+// in the language of msgs.
+func (msgs Messages) LfsInitialized() string {
+	return Catalog.Format(msgs.locale, "lfsInitialized", nil)
+}
+
+// InitializeLFS says "在此仓库初始化…"
+// in the language the app shows.
+func InitializeLFS() string { return In(i18n.Locale()).InitializeLFS() }
+
+// InitializeLFS says "在此仓库初始化…"
+// in the language of msgs.
+func (msgs Messages) InitializeLFS() string {
+	return Catalog.Format(msgs.locale, "initializeLFS", nil)
+}
+
+// InitializeLFSDetail says "配置此仓库的 LFS 过滤器和上传 hook。已有自定义 hook 不会被覆盖。"
+// in the language the app shows.
+func InitializeLFSDetail() string { return In(i18n.Locale()).InitializeLFSDetail() }
+
+// InitializeLFSDetail says "配置此仓库的 LFS 过滤器和上传 hook。已有自定义 hook 不会被覆盖。"
+// in the language of msgs.
+func (msgs Messages) InitializeLFSDetail() string {
+	return Catalog.Format(msgs.locale, "initializeLFSDetail", nil)
+}
+
+// InitializingLFS says "正在初始化 Git LFS…"
+// in the language the app shows.
+func InitializingLFS() string { return In(i18n.Locale()).InitializingLFS() }
+
+// InitializingLFS says "正在初始化 Git LFS…"
+// in the language of msgs.
+func (msgs Messages) InitializingLFS() string {
+	return Catalog.Format(msgs.locale, "initializingLFS", nil)
+}
+
+// CheckLFSStatus says "检查 LFS 状态"
+// in the language the app shows.
+func CheckLFSStatus() string { return In(i18n.Locale()).CheckLFSStatus() }
+
+// CheckLFSStatus says "检查 LFS 状态"
+// in the language of msgs.
+func (msgs Messages) CheckLFSStatus() string {
+	return Catalog.Format(msgs.locale, "checkLFSStatus", nil)
+}
+
+// ReadingLFSStatus says "正在读取 LFS 状态…"
+// in the language the app shows.
+func ReadingLFSStatus() string { return In(i18n.Locale()).ReadingLFSStatus() }
+
+// ReadingLFSStatus says "正在读取 LFS 状态…"
+// in the language of msgs.
+func (msgs Messages) ReadingLFSStatus() string {
+	return Catalog.Format(msgs.locale, "readingLFSStatus", nil)
+}
+
+// DownloadLFS says "下载缺失内容"
+// in the language the app shows.
+func DownloadLFS() string { return In(i18n.Locale()).DownloadLFS() }
+
+// DownloadLFS says "下载缺失内容"
+// in the language of msgs.
+func (msgs Messages) DownloadLFS() string {
+	return Catalog.Format(msgs.locale, "downloadLFS", nil)
+}
+
+// DownloadingLFS says "正在下载 LFS 内容…"
+// in the language the app shows.
+func DownloadingLFS() string { return In(i18n.Locale()).DownloadingLFS() }
+
+// DownloadingLFS says "正在下载 LFS 内容…"
+// in the language of msgs.
+func (msgs Messages) DownloadingLFS() string {
+	return Catalog.Format(msgs.locale, "downloadingLFS", nil)
+}
+
+// LfsTrackedFiles says "LFS 文件（{count}）"
+// in the language the app shows.
+func LfsTrackedFiles(count string) string { return In(i18n.Locale()).LfsTrackedFiles(count) }
+
+// LfsTrackedFiles says "LFS 文件（{count}）"
+// in the language of msgs.
+func (msgs Messages) LfsTrackedFiles(count string) string {
+	return Catalog.Format(msgs.locale, "lfsTrackedFiles", map[string]any{"count": count})
+}
+
+// LfsDownloaded says "已下载"
+// in the language the app shows.
+func LfsDownloaded() string { return In(i18n.Locale()).LfsDownloaded() }
+
+// LfsDownloaded says "已下载"
+// in the language of msgs.
+func (msgs Messages) LfsDownloaded() string {
+	return Catalog.Format(msgs.locale, "lfsDownloaded", nil)
+}
+
+// LfsMissing says "内容缺失"
+// in the language the app shows.
+func LfsMissing() string { return In(i18n.Locale()).LfsMissing() }
+
+// LfsMissing says "内容缺失"
+// in the language of msgs.
+func (msgs Messages) LfsMissing() string {
+	return Catalog.Format(msgs.locale, "lfsMissing", nil)
+}
+
+// LfsFileActions says "LFS 文件操作"
+// in the language the app shows.
+func LfsFileActions() string { return In(i18n.Locale()).LfsFileActions() }
+
+// LfsFileActions says "LFS 文件操作"
+// in the language of msgs.
+func (msgs Messages) LfsFileActions() string {
+	return Catalog.Format(msgs.locale, "lfsFileActions", nil)
+}
+
+// TrackLFSFile says "使用 LFS 跟踪…"
+// in the language the app shows.
+func TrackLFSFile() string { return In(i18n.Locale()).TrackLFSFile() }
+
+// TrackLFSFile says "使用 LFS 跟踪…"
+// in the language of msgs.
+func (msgs Messages) TrackLFSFile() string {
+	return Catalog.Format(msgs.locale, "trackLFSFile", nil)
+}
+
+// UntrackLFSFile says "取消 LFS 跟踪…"
+// in the language the app shows.
+func UntrackLFSFile() string { return In(i18n.Locale()).UntrackLFSFile() }
+
+// UntrackLFSFile says "取消 LFS 跟踪…"
+// in the language of msgs.
+func (msgs Messages) UntrackLFSFile() string {
+	return Catalog.Format(msgs.locale, "untrackLFSFile", nil)
+}
+
+// TrackLFSDetail says "…"
+// in the language the app shows.
+func TrackLFSDetail() string { return In(i18n.Locale()).TrackLFSDetail() }
+
+// TrackLFSDetail says "…"
+// in the language of msgs.
+func (msgs Messages) TrackLFSDetail() string {
+	return Catalog.Format(msgs.locale, "trackLFSDetail", nil)
+}
+
+// UntrackLFSDetail says "为此文件添加精确的取消跟踪规则，保留其他文件和已有历史。"
+// in the language the app shows.
+func UntrackLFSDetail() string { return In(i18n.Locale()).UntrackLFSDetail() }
+
+// UntrackLFSDetail says "为此文件添加精确的取消跟踪规则，保留其他文件和已有历史。"
+// in the language of msgs.
+func (msgs Messages) UntrackLFSDetail() string {
+	return Catalog.Format(msgs.locale, "untrackLFSDetail", nil)
+}
+
+// UpdatingLFS says "正在更新 LFS 跟踪规则…"
+// in the language the app shows.
+func UpdatingLFS() string { return In(i18n.Locale()).UpdatingLFS() }
+
+// UpdatingLFS says "正在更新 LFS 跟踪规则…"
+// in the language of msgs.
+func (msgs Messages) UpdatingLFS() string {
+	return Catalog.Format(msgs.locale, "updatingLFS", nil)
+}
+
+// CheckingLargeFiles says "正在检查大文件…"
+// in the language the app shows.
+func CheckingLargeFiles() string { return In(i18n.Locale()).CheckingLargeFiles() }
+
+// CheckingLargeFiles says "正在检查大文件…"
+// in the language of msgs.
+func (msgs Messages) CheckingLargeFiles() string {
+	return Catalog.Format(msgs.locale, "checkingLargeFiles", nil)
+}
+
+// StageReviewTitle says "暂存前检查"
+// in the language the app shows.
+func StageReviewTitle() string { return In(i18n.Locale()).StageReviewTitle() }
+
+// StageReviewTitle says "暂存前检查"
+// in the language of msgs.
+func (msgs Messages) StageReviewTitle() string {
+	return Catalog.Format(msgs.locale, "stageReviewTitle", nil)
+}
+
+// CommitReviewTitle says "提交前检查"
+// in the language the app shows.
+func CommitReviewTitle() string { return In(i18n.Locale()).CommitReviewTitle() }
+
+// CommitReviewTitle says "提交前检查"
+// in the language of msgs.
+func (msgs Messages) CommitReviewTitle() string {
+	return Catalog.Format(msgs.locale, "commitReviewTitle", nil)
+}
+
+// StageNormally says "普通暂存"
+// in the language the app shows.
+func StageNormally() string { return In(i18n.Locale()).StageNormally() }
+
+// StageNormally says "普通暂存"
+// in the language of msgs.
+func (msgs Messages) StageNormally() string {
+	return Catalog.Format(msgs.locale, "stageNormally", nil)
+}
+
+// ContinueCommit says "继续提交"
+// in the language the app shows.
+func ContinueCommit() string { return In(i18n.Locale()).ContinueCommit() }
+
+// ContinueCommit says "继续提交"
+// in the language of msgs.
+func (msgs Messages) ContinueCommit() string {
+	return Catalog.Format(msgs.locale, "continueCommit", nil)
+}
+
+// StageWithLFS says "使用 LFS 并暂存…"
+// in the language the app shows.
+func StageWithLFS() string { return In(i18n.Locale()).StageWithLFS() }
+
+// StageWithLFS says "使用 LFS 并暂存…"
+// in the language of msgs.
+func (msgs Messages) StageWithLFS() string {
+	return Catalog.Format(msgs.locale, "stageWithLFS", nil)
+}
+
+// StagingWithLFS says "正在使用 LFS 暂存…"
+// in the language the app shows.
+func StagingWithLFS() string { return In(i18n.Locale()).StagingWithLFS() }
+
+// StagingWithLFS says "正在使用 LFS 暂存…"
+// in the language of msgs.
+func (msgs Messages) StagingWithLFS() string {
+	return Catalog.Format(msgs.locale, "stagingWithLFS", nil)
+}
+
+// LargeBinaryFile says "二进制 · 建议使用 LFS"
+// in the language the app shows.
+func LargeBinaryFile() string { return In(i18n.Locale()).LargeBinaryFile() }
+
+// LargeBinaryFile says "二进制 · 建议使用 LFS"
+// in the language of msgs.
+func (msgs Messages) LargeBinaryFile() string {
+	return Catalog.Format(msgs.locale, "largeBinaryFile", nil)
+}
+
+// LargeTextFile says "文本"
+// in the language the app shows.
+func LargeTextFile() string { return In(i18n.Locale()).LargeTextFile() }
+
+// LargeTextFile says "文本"
+// in the language of msgs.
+func (msgs Messages) LargeTextFile() string {
+	return Catalog.Format(msgs.locale, "largeTextFile", nil)
+}
+
+// NormalFilesSummary says "另有 {count} 个文件将正常暂存"
+// in the language the app shows.
+func NormalFilesSummary(count string) string { return In(i18n.Locale()).NormalFilesSummary(count) }
+
+// NormalFilesSummary says "另有 {count} 个文件将正常暂存"
+// in the language of msgs.
+func (msgs Messages) NormalFilesSummary(count string) string {
+	return Catalog.Format(msgs.locale, "normalFilesSummary", map[string]any{"count": count})
+}
+
+// LargeFileReviewHint says "以下文件达到 {size} MiB 阈值。普通暂存会将内容存入 Git。"
+// in the language the app shows.
+func LargeFileReviewHint(size string) string { return In(i18n.Locale()).LargeFileReviewHint(size) }
+
+// LargeFileReviewHint says "以下文件达到 {size} MiB 阈值。普通暂存会将内容存入 Git。"
+// in the language of msgs.
+func (msgs Messages) LargeFileReviewHint(size string) string {
+	return Catalog.Format(msgs.locale, "largeFileReviewHint", map[string]any{"size": size})
+}
+
+// CommitLFSHint says "检查的是暂存区内容。如需转换为 LFS，请取消并在文件变更中处理。"
+// in the language the app shows.
+func CommitLFSHint() string { return In(i18n.Locale()).CommitLFSHint() }
+
+// CommitLFSHint says "检查的是暂存区内容。如需转换为 LFS，请取消并在文件变更中处理。"
+// in the language of msgs.
+func (msgs Messages) CommitLFSHint() string {
+	return Catalog.Format(msgs.locale, "commitLFSHint", nil)
+}
+
+// SelectLFSFile says "使用 LFS：{path}"
+// in the language the app shows.
+func SelectLFSFile(path string) string { return In(i18n.Locale()).SelectLFSFile(path) }
+
+// SelectLFSFile says "使用 LFS：{path}"
+// in the language of msgs.
+func (msgs Messages) SelectLFSFile(path string) string {
+	return Catalog.Format(msgs.locale, "selectLFSFile", map[string]any{"path": path})
+}
+
+// LfsReviewDetail says "仅转换勾选文件并暂存新增规则；首次使用时初始化此仓库，其余文件普通暂存。"
+// in the language the app shows.
+func LfsReviewDetail() string { return In(i18n.Locale()).LfsReviewDetail() }
+
+// LfsReviewDetail says "仅转换勾选文件并暂存新增规则；首次使用时初始化此仓库，其余文件普通暂存。"
+// in the language of msgs.
+func (msgs Messages) LfsReviewDetail() string {
+	return Catalog.Format(msgs.locale, "lfsReviewDetail", nil)
+}
+
+// FileChangedRecheck says "文件已变化，请重新检查后暂存"
+// in the language the app shows.
+func FileChangedRecheck() string { return In(i18n.Locale()).FileChangedRecheck() }
+
+// FileChangedRecheck says "文件已变化，请重新检查后暂存"
+// in the language of msgs.
+func (msgs Messages) FileChangedRecheck() string {
+	return Catalog.Format(msgs.locale, "fileChangedRecheck", nil)
+}
+
 // GitEnvironment says "Git 环境"
 // in the language the app shows.
 func GitEnvironment() string { return In(i18n.Locale()).GitEnvironment() }
