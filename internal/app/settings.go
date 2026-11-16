@@ -473,6 +473,8 @@ func (app *nativeApp) generalPreferences(c *ui.Context) {
 		ui.MenuButton(c, app.terminalApplicationLabel(), app.terminalMenu).Label(locales.Terminal()).
 			Width(210).Justify(ui.SpaceBetween).Tooltip(app.prefs.TerminalApplication)
 	})
+	ui.Divider(c)
+	app.memoryDiagnosticsPreferences(c)
 }
 
 func (app *nativeApp) applyAppearance() {

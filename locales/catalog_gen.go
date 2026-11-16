@@ -298,6 +298,120 @@ func (msgs Messages) ExternalTools() string {
 	return Catalog.Format(msgs.locale, "externalTools", nil)
 }
 
+// Diagnostics says "诊断"
+// in the language the app shows.
+func Diagnostics() string { return In(i18n.Locale()).Diagnostics() }
+
+// Diagnostics says "诊断"
+// in the language of msgs.
+func (msgs Messages) Diagnostics() string {
+	return Catalog.Format(msgs.locale, "diagnostics", nil)
+}
+
+// MemoryDiagnostics says "内存诊断"
+// in the language the app shows.
+func MemoryDiagnostics() string { return In(i18n.Locale()).MemoryDiagnostics() }
+
+// MemoryDiagnostics says "内存诊断"
+// in the language of msgs.
+func (msgs Messages) MemoryDiagnostics() string {
+	return Catalog.Format(msgs.locale, "memoryDiagnostics", nil)
+}
+
+// ExportDiagnostics says "导出…"
+// in the language the app shows.
+func ExportDiagnostics() string { return In(i18n.Locale()).ExportDiagnostics() }
+
+// ExportDiagnostics says "导出…"
+// in the language of msgs.
+func (msgs Messages) ExportDiagnostics() string {
+	return Catalog.Format(msgs.locale, "exportDiagnostics", nil)
+}
+
+// ExportDiagnosticsConfirm says "导出"
+// in the language the app shows.
+func ExportDiagnosticsConfirm() string { return In(i18n.Locale()).ExportDiagnosticsConfirm() }
+
+// ExportDiagnosticsConfirm says "导出"
+// in the language of msgs.
+func (msgs Messages) ExportDiagnosticsConfirm() string {
+	return Catalog.Format(msgs.locale, "exportDiagnosticsConfirm", nil)
+}
+
+// ExportMemoryDiagnostics says "导出内存诊断"
+// in the language the app shows.
+func ExportMemoryDiagnostics() string { return In(i18n.Locale()).ExportMemoryDiagnostics() }
+
+// ExportMemoryDiagnostics says "导出内存诊断"
+// in the language of msgs.
+func (msgs Messages) ExportMemoryDiagnostics() string {
+	return Catalog.Format(msgs.locale, "exportMemoryDiagnostics", nil)
+}
+
+// ExportingDiagnostics says "正在导出…"
+// in the language the app shows.
+func ExportingDiagnostics() string { return In(i18n.Locale()).ExportingDiagnostics() }
+
+// ExportingDiagnostics says "正在导出…"
+// in the language of msgs.
+func (msgs Messages) ExportingDiagnostics() string {
+	return Catalog.Format(msgs.locale, "exportingDiagnostics", nil)
+}
+
+// MemoryDiagnosticsHint says "导出用于排查内存占用的诊断文件。"
+// in the language the app shows.
+func MemoryDiagnosticsHint() string { return In(i18n.Locale()).MemoryDiagnosticsHint() }
+
+// MemoryDiagnosticsHint says "导出用于排查内存占用的诊断文件。"
+// in the language of msgs.
+func (msgs Messages) MemoryDiagnosticsHint() string {
+	return Catalog.Format(msgs.locale, "memoryDiagnosticsHint", nil)
+}
+
+// DiagnosticsSaved says "已导出至 {path}"
+// in the language the app shows.
+func DiagnosticsSaved(path string) string { return In(i18n.Locale()).DiagnosticsSaved(path) }
+
+// DiagnosticsSaved says "已导出至 {path}"
+// in the language of msgs.
+func (msgs Messages) DiagnosticsSaved(path string) string {
+	return Catalog.Format(msgs.locale, "diagnosticsSaved", map[string]any{"path": path})
+}
+
+// ExportDiagnosticsFailed says "无法导出内存诊断：{error}"
+// in the language the app shows.
+func ExportDiagnosticsFailed(error string) string {
+	return In(i18n.Locale()).ExportDiagnosticsFailed(error)
+}
+
+// ExportDiagnosticsFailed says "无法导出内存诊断：{error}"
+// in the language of msgs.
+func (msgs Messages) ExportDiagnosticsFailed(error string) string {
+	return Catalog.Format(msgs.locale, "exportDiagnosticsFailed", map[string]any{"error": error})
+}
+
+// OpenDiagnosticsFolder says "打开文件夹"
+// in the language the app shows.
+func OpenDiagnosticsFolder() string { return In(i18n.Locale()).OpenDiagnosticsFolder() }
+
+// OpenDiagnosticsFolder says "打开文件夹"
+// in the language of msgs.
+func (msgs Messages) OpenDiagnosticsFolder() string {
+	return Catalog.Format(msgs.locale, "openDiagnosticsFolder", nil)
+}
+
+// OpenDiagnosticsFailed says "无法打开诊断文件夹：{error}"
+// in the language the app shows.
+func OpenDiagnosticsFailed(error string) string {
+	return In(i18n.Locale()).OpenDiagnosticsFailed(error)
+}
+
+// OpenDiagnosticsFailed says "无法打开诊断文件夹：{error}"
+// in the language of msgs.
+func (msgs Messages) OpenDiagnosticsFailed(error string) string {
+	return Catalog.Format(msgs.locale, "openDiagnosticsFailed", map[string]any{"error": error})
+}
+
 // Terminal says "终端"
 // in the language the app shows.
 func Terminal() string { return In(i18n.Locale()).Terminal() }

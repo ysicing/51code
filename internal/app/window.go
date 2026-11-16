@@ -133,6 +133,7 @@ type nativeApp struct {
 	prefs                 nativePreferences
 	stateFile             string
 	settingsError         string
+	memoryDiagnostics     nativeMemoryDiagnostics
 	shortcutDraft         nativeShortcuts
 	settingsAutoChecks    bool
 	settingsAutoDownloads bool
