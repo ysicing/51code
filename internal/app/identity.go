@@ -229,7 +229,11 @@ func (app *nativeApp) repositorySettingsDialog() {
 			}
 			_, height := c.Size()
 			contentHeight := min(390, max(120, height-280))
-			ui.Scroll(c).Key(tab).MinHeight(min(240, contentHeight)).MaxHeight(contentHeight).FillWidth().Children(func() {
+			minimumHeight := min(240, contentHeight)
+			if tab == 1 {
+				minimumHeight = 0
+			}
+			ui.Scroll(c).Key(tab).MinHeight(minimumHeight).MaxHeight(contentHeight).FillWidth().Children(func() {
 				ui.Column(c).FillWidth().Gap(12).Children(func() {
 					if tab == 0 {
 						identity.view(app, dialog, c)

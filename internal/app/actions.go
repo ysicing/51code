@@ -6,6 +6,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/ysicing/51code/internal/gitrepo"
@@ -286,39 +287,70 @@ func (app *nativeApp) remoteDialog() {
 
 func (app *nativeApp) remoteSettingsView(c *ui.Context) {
 	parent := app.dialog
+	services := c.Services()
 	if len(app.repository.remotes) == 0 {
 		ui.Text(c, locales.NoRemotes()).TextColor(c.Theme().TextMuted)
 	}
-	for _, remote := range app.repository.remotes {
-		remote := remote
-		ui.Column(c).Key(remote.Name).Gap(6).FillWidth().Children(func() {
-			ui.Text(c, remote.Name).Bold()
-			ui.Text(c, strings.Join(remote.URLs, "\n")).FontSize(12).MaxLines(2).Selectable()
-			ui.Row(c).Gap(8).Disabled(!app.writable).Children(func() {
-				if ui.Button(c, locales.Edit()).Label(locales.EditRemote(remote.Name)).Clicked() {
-					app.editRemoteDialog(&remote)
-					app.dialog.parent = parent
-				}
-				if ui.Button(c, locales.RemoveMenu()).Label(locales.RemoveRemote(remote.Name)).Clicked() {
-					app.dialog = &nativeDialog{
-						parent: parent, title: locales.RemoveRemoteTitle(),
-						detail: remote.Name + "\n" + locales.RemoveRemoteDetail(),
-						action: locales.Remove(), danger: true,
-						submit: func(dialog *nativeDialog) {
-							app.mutateForm(dialog, locales.RemovingRemote(), func(ctx context.Context, path string) error {
-								return app.service.RemoveRemote(ctx, path, remote.Name, remote.Token)
-							})
-						},
-					}
-				}
+	ui.Column(c).FillWidth().Gap(0).Children(func() {
+		if len(app.repository.remotes) > 0 {
+			ui.Row(c).FillWidth().Gap(12).Padding(0, 0, 6).Children(func() {
+				ui.Text(c, locales.RemoteName()).Width(96).Shrink(0).FontSize(11).TextColor(c.Theme().TextMuted)
+				ui.Text(c, locales.RemoteAddress()).Grow(1).FontSize(11).TextColor(c.Theme().TextMuted)
 			})
-		})
-		ui.Divider(c)
-	}
-	if ui.Button(c, locales.AddRemote()).Disabled(!app.writable).FillWidth().Clicked() {
-		app.editRemoteDialog(nil)
-		app.dialog.parent = parent
-	}
+			ui.Divider(c)
+		}
+		for _, remote := range app.repository.remotes {
+			remote := remote
+			separatePush := len(remote.PushURLs) > 0 && !slices.Equal(remote.URLs, remote.PushURLs)
+			ui.Row(c).Key(remote.Name).FillWidth().Gap(12).Padding(4, 0).AlignItems(ui.Center).Children(func() {
+				ui.Text(c, remote.Name).Width(96).Shrink(0).FontSize(13).Bold().MaxLines(1).Tooltip(remote.Name)
+				ui.Column(c).Grow(1).MinWidth(0).Gap(4).Children(func() {
+					for _, address := range remote.URLs {
+						ui.Text(c, address).FontSize(12).MaxLines(1).Tooltip(address).Selectable()
+					}
+					if separatePush {
+						for _, address := range remote.PushURLs {
+							ui.Text(c, locales.Push()+": "+address).FontSize(12).MaxLines(1).Tooltip(address).Selectable()
+						}
+					}
+				})
+				iconButton(c, locales.Manage()+" "+remote.Name, nativeIcons["more"]).Shrink(0).
+					Disabled(app.busy || app.closed).Menu(func(menu *ui.Menu) {
+					unavailable := app.busy || app.closed || !app.writable
+					if menu.Item(locales.EditRemoteMenu()).Disabled(unavailable).Chosen() {
+						app.editRemoteDialog(&remote)
+						app.dialog.parent = parent
+					}
+					if menu.Item(locales.CopyRemoteAddresses()).Disabled(len(remote.URLs) == 0).Chosen() {
+						services.WriteClipboard(strings.Join(remote.URLs, "\n"))
+					}
+					if separatePush && menu.Item(locales.CopyRemotePushAddresses()).Chosen() {
+						services.WriteClipboard(strings.Join(remote.PushURLs, "\n"))
+					}
+					menu.Separator()
+					if menu.Item(locales.RemoveMenu()).Danger().Disabled(unavailable).Chosen() {
+						app.dialog = &nativeDialog{
+							parent: parent, title: locales.RemoveRemoteTitle(),
+							detail: remote.Name + "\n" + locales.RemoveRemoteDetail(),
+							action: locales.Remove(), danger: true,
+							submit: func(dialog *nativeDialog) {
+								app.mutateForm(dialog, locales.RemovingRemote(), func(ctx context.Context, path string) error {
+									return app.service.RemoveRemote(ctx, path, remote.Name, remote.Token)
+								})
+							},
+						}
+					}
+				})
+			})
+			ui.Divider(c)
+		}
+	})
+	ui.Row(c).FillWidth().Children(func() {
+		if ui.Button(c, locales.AddRemote()).Disabled(!app.writable || app.busy || app.closed).Clicked() {
+			app.editRemoteDialog(nil)
+			app.dialog.parent = parent
+		}
+	})
 }
 
 func (app *nativeApp) editRemoteDialog(remote *gitrepo.RemoteConfig) {

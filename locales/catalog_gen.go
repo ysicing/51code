@@ -2984,6 +2984,36 @@ func (msgs Messages) EditRemote(name string) string {
 	return Catalog.Format(msgs.locale, "editRemote", map[string]any{"name": name})
 }
 
+// EditRemoteMenu says "编辑…"
+// in the language the app shows.
+func EditRemoteMenu() string { return In(i18n.Locale()).EditRemoteMenu() }
+
+// EditRemoteMenu says "编辑…"
+// in the language of msgs.
+func (msgs Messages) EditRemoteMenu() string {
+	return Catalog.Format(msgs.locale, "editRemoteMenu", nil)
+}
+
+// CopyRemoteAddresses says "复制获取地址"
+// in the language the app shows.
+func CopyRemoteAddresses() string { return In(i18n.Locale()).CopyRemoteAddresses() }
+
+// CopyRemoteAddresses says "复制获取地址"
+// in the language of msgs.
+func (msgs Messages) CopyRemoteAddresses() string {
+	return Catalog.Format(msgs.locale, "copyRemoteAddresses", nil)
+}
+
+// CopyRemotePushAddresses says "复制推送地址"
+// in the language the app shows.
+func CopyRemotePushAddresses() string { return In(i18n.Locale()).CopyRemotePushAddresses() }
+
+// CopyRemotePushAddresses says "复制推送地址"
+// in the language of msgs.
+func (msgs Messages) CopyRemotePushAddresses() string {
+	return Catalog.Format(msgs.locale, "copyRemotePushAddresses", nil)
+}
+
 // RemoveRemote says "移除远程 {name}"
 // in the language the app shows.
 func RemoveRemote(name string) string { return In(i18n.Locale()).RemoveRemote(name) }

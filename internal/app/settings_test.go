@@ -534,7 +534,34 @@ func TestNativeRepositoryRemoteReturnsToSettings(t *testing.T) {
 	if app.dialog != parent || len(app.repository.remotes) != 1 {
 		t.Fatalf("保存远程没有返回仓库设置: %s", app.problem)
 	}
-	if err := tester.Click("移除远程 origin"); err != nil {
+	if err := tester.Click("管理 origin"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tester.ChooseMenuItem("编辑…"); err != nil {
+		t.Fatal(err)
+	}
+	if app.dialog.parent != parent || app.dialog.fields[0].value != "origin" {
+		t.Fatal("菜单编辑没有保留目标远程和设置上下文")
+	}
+	if err := tester.Click("取消"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tester.Click("管理 origin"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tester.ChooseMenuItem("移除…"); err != nil {
+		t.Fatal(err)
+	}
+	if app.dialog.parent != parent || !app.dialog.danger || nativeGit(t, path, "remote") != "origin" {
+		t.Fatal("菜单移除未先确认")
+	}
+	if err := tester.Click("取消"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tester.Click("管理 origin"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tester.ChooseMenuItem("移除…"); err != nil {
 		t.Fatal(err)
 	}
 	app.dialog.submit(app.dialog)
