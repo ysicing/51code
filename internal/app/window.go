@@ -26,6 +26,7 @@ import (
 )
 
 type nativePreferences struct {
+	Git                  gitrepo.ExecutableOptions   `json:"git,omitempty"`
 	Sidebar              float32                     `json:"sidebar"`
 	Files                float32                     `json:"files"`
 	History              float32                     `json:"history"`
@@ -250,6 +251,7 @@ func clampSize(value, fallback, minimum, maximum float32) float32 {
 }
 
 func (app *nativeApp) open() {
+	gitrepo.ConfigureExecutable(app.gitExecutableOptions())
 	app.chosenLanguage = mygo.App.ChosenLocale()
 	app.win = mygo.NewWindow(mygo.WindowOptions{
 		Title: "51Code", Width: 1320, Height: 860, MinWidth: 1024, MinHeight: 680,

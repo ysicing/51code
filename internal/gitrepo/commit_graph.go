@@ -99,8 +99,10 @@ func removeStaleCommitGraphLocks(info string, failure error) bool {
 // 因此不接受取消，也不放进随应用退出被终止的进程组或 Job，调用方须在启动前完成取消与负载判断。
 func runDetached(root string, args ...string) error {
 	options := []string{"--no-pager", "--literal-pathspecs", "-C", root, "-c", "color.ui=false"}
-	cmd := exec.Command("git", append(options, args...)...)
-	cmd.Env = gitEnvironment()
+	cmd, err := gitCommand(nil, append(options, args...)...)
+	if err != nil {
+		return err
+	}
 	cmd.SysProcAttr = detachedProcessAttributes()
 	var stderr limitedBuffer
 	cmd.Stderr = &stderr

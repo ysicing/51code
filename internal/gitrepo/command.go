@@ -54,6 +54,7 @@ func exitCode(err error, code int) bool {
 
 func gitEnvironment() []string {
 	local := map[string]bool{
+		"GIT_EXEC_PATH":                    true,
 		"GIT_ALTERNATE_OBJECT_DIRECTORIES": true, "GIT_CONFIG": true,
 		"GIT_CONFIG_PARAMETERS": true, "GIT_CONFIG_COUNT": true,
 		"GIT_OBJECT_DIRECTORY": true, "GIT_DIR": true, "GIT_WORK_TREE": true,
@@ -101,13 +102,15 @@ func runTo(ctx context.Context, root, input string, timeout time.Duration, stdou
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	options := []string{"--no-pager", "--literal-pathspecs", "-C", root, "-c", "color.ui=false"}
-	cmd := exec.CommandContext(ctx, "git", append(options, args...)...)
-	cmd.Env = gitEnvironment()
+	cmd, err := gitCommand(ctx, append(options, args...)...)
+	if err != nil {
+		return err
+	}
 	cmd.Stdin = strings.NewReader(input)
 	cmd.WaitDelay = 2 * time.Second
 	var stderr limitedBuffer
 	cmd.Stdout, cmd.Stderr = stdout, &stderr
-	err := runProcess(ctx, cmd)
+	err = runProcess(ctx, cmd)
 	if ctx.Err() != nil {
 		return fmt.Errorf("Git 操作已取消或超时：%w", ctx.Err())
 	}

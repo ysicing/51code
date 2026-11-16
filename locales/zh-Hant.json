@@ -1,5 +1,13 @@
 {
   "@@locale": "zh-Hant",
+  "gitSource": "Git 來源",
+  "bundledGit": "內建 Git",
+  "systemGit": "系統 Git",
+  "customGit": "自訂 Git",
+  "chooseGit": "選擇 Git…",
+  "detectGit": "重新偵測",
+  "detectingGit": "正在偵測 Git…",
+  "gitUnavailable": "Git 無法使用，請選擇可用的 Git",
   "doubleClickStage": "按兩下檔案暫存或取消暫存",
   "historyDate": "歷史日期",
   "authorDate": "作者日期",

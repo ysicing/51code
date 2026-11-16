@@ -256,7 +256,7 @@ func (app *nativeApp) settingsDialogAt(initialTab int) {
 				}
 			}
 			dialog.action = ""
-			if tab == 1 {
+			if tab == 1 && identity.ready {
 				dialog.action = locales.Save()
 			}
 			ui.Column(c).Grow(1).MinHeight(0).MinWidth(0).Gap(20).Padding(4, 0).Children(func() {
@@ -266,11 +266,14 @@ func (app *nativeApp) settingsDialogAt(initialTab int) {
 						case 0:
 							app.generalPreferences(c)
 						case 1:
+							app.gitExecutablePreferences(c, identity, dialog)
 							app.gitPreferences(c)
-							ui.Divider(c)
-							ui.Text(c, locales.CommitIdentity()).FontSize(13).Bold()
-							ui.Text(c, locales.GlobalGitScope()).FontSize(12).TextColor(c.Theme().TextMuted)
-							identity.view(app, dialog, c)
+							if identity.gitError == "" {
+								ui.Divider(c)
+								ui.Text(c, locales.CommitIdentity()).FontSize(13).Bold()
+								ui.Text(c, locales.GlobalGitScope()).FontSize(12).TextColor(c.Theme().TextMuted)
+								identity.view(app, dialog, c)
+							}
 						case 2:
 							shortcutPreference(app, c, locales.LocalRepositories(), &app.shortcutDraft.Library)
 							shortcutPreference(app, c, locales.AddLocalRepository(), &app.shortcutDraft.AddRepository)

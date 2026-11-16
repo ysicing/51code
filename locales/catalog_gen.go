@@ -36,6 +36,86 @@ type Messages struct{ locale string }
 // source language.
 func In(locale string) Messages { return Messages{locale} }
 
+// GitSource says "Git 来源"
+// in the language the app shows.
+func GitSource() string { return In(i18n.Locale()).GitSource() }
+
+// GitSource says "Git 来源"
+// in the language of msgs.
+func (msgs Messages) GitSource() string {
+	return Catalog.Format(msgs.locale, "gitSource", nil)
+}
+
+// BundledGit says "内置 Git"
+// in the language the app shows.
+func BundledGit() string { return In(i18n.Locale()).BundledGit() }
+
+// BundledGit says "内置 Git"
+// in the language of msgs.
+func (msgs Messages) BundledGit() string {
+	return Catalog.Format(msgs.locale, "bundledGit", nil)
+}
+
+// SystemGit says "系统 Git"
+// in the language the app shows.
+func SystemGit() string { return In(i18n.Locale()).SystemGit() }
+
+// SystemGit says "系统 Git"
+// in the language of msgs.
+func (msgs Messages) SystemGit() string {
+	return Catalog.Format(msgs.locale, "systemGit", nil)
+}
+
+// CustomGit says "自定义 Git"
+// in the language the app shows.
+func CustomGit() string { return In(i18n.Locale()).CustomGit() }
+
+// CustomGit says "自定义 Git"
+// in the language of msgs.
+func (msgs Messages) CustomGit() string {
+	return Catalog.Format(msgs.locale, "customGit", nil)
+}
+
+// ChooseGit says "选择 Git…"
+// in the language the app shows.
+func ChooseGit() string { return In(i18n.Locale()).ChooseGit() }
+
+// ChooseGit says "选择 Git…"
+// in the language of msgs.
+func (msgs Messages) ChooseGit() string {
+	return Catalog.Format(msgs.locale, "chooseGit", nil)
+}
+
+// DetectGit says "重新检测"
+// in the language the app shows.
+func DetectGit() string { return In(i18n.Locale()).DetectGit() }
+
+// DetectGit says "重新检测"
+// in the language of msgs.
+func (msgs Messages) DetectGit() string {
+	return Catalog.Format(msgs.locale, "detectGit", nil)
+}
+
+// DetectingGit says "正在检测 Git…"
+// in the language the app shows.
+func DetectingGit() string { return In(i18n.Locale()).DetectingGit() }
+
+// DetectingGit says "正在检测 Git…"
+// in the language of msgs.
+func (msgs Messages) DetectingGit() string {
+	return Catalog.Format(msgs.locale, "detectingGit", nil)
+}
+
+// GitUnavailable says "Git 不可用，请选择可用的 Git"
+// in the language the app shows.
+func GitUnavailable() string { return In(i18n.Locale()).GitUnavailable() }
+
+// GitUnavailable says "Git 不可用，请选择可用的 Git"
+// in the language of msgs.
+func (msgs Messages) GitUnavailable() string {
+	return Catalog.Format(msgs.locale, "gitUnavailable", nil)
+}
+
 // DoubleClickStage says "双击文件暂存或取消暂存"
 // in the language the app shows.
 func DoubleClickStage() string { return In(i18n.Locale()).DoubleClickStage() }

@@ -2,5 +2,6 @@ node_modules/
 dist/
 build/
 .mygo/
+resources/windows-amd64/git/
 .DS_Store
 graft/.cache/

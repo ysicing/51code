@@ -149,7 +149,9 @@ Git 命令使用参数数组执行，路径按字面值处理。写操作限定�
 
 ### Windows x64 与 Linux x64/arm64
 
-首批目标为 Windows 11 x64 和 Linux x64/arm64，回归测试在 Ubuntu 24.04 LTS x64 上运行；arm64 和 RPM 发行版只做交叉构建与包元数据检查，未在真机回归。MyGo 原生界面不需要 WebView2 或 WebKitGTK；Windows 使用系统 Git。Linux 的 deb 与 rpm 都声明 Git、GTK 3、libsecret 和 Noto CJK 字体依赖：deb 用 Debian 包名，rpm 用 `libsecret-1.so.0()(64bit)` 和 `font(notosanscjksc)` 能力，以兼容不同 RPM 发行版的包名差异（见 `mygo.config.ts`）。Secret Service 由桌面会话提供。CJK 字体用于中文界面及仓库路径，最小系统缺少字体会造成文字缺失和控件测量异常。首次远程操作前应在终端配置好 Git/SSH 凭证和签名；应用继续禁止终端交互提示，没有新增账户登录或凭证配置界面。
+首批目标为 Windows 11 x64 和 Linux x64/arm64，回归测试在 Ubuntu 24.04 LTS x64 上运行；arm64 和 RPM 发行版只做交叉构建与包元数据检查，未在真机回归。MyGo 原生界面不需要 WebView2 或 WebKitGTK；Windows 默认使用内置 Git，也可选择系统 Git 或自定义路径。Linux 的 deb 与 rpm 都声明 Git、GTK 3、libsecret 和 Noto CJK 字体依赖：deb 用 Debian 包名，rpm 用 `libsecret-1.so.0()(64bit)` 和 `font(notosanscjksc)` 能力，以兼容不同 RPM 发行版的包名差异（见 `mygo.config.ts`）。Secret Service 由桌面会话提供。CJK 字体用于中文界面及仓库路径，最小系统缺少字体会造成文字缺失和控件测量异常。首次远程操作前应在终端配置好 Git/SSH 凭证和签名；应用继续禁止终端交互提示，没有新增账户登录或凭证配置界面。
+
+`scripts/windows-git.mjs` 固定 MinGit 2.56.1 与 Git LFS 3.8.1 的上游下载地址及 SHA-256。`bun run build` 构建 Windows amd64 时先校验下载缓存，再将完整 MinGit（含 SSH、凭证助手、证书及许可证）和 LFS 暂存到 `resources/windows-amd64/git`；MyGo 将其纳入安装器和更新包，其他平台不包含这些资源，构建结束自动清理。下载缓存位于 `.mygo/git-downloads`。首次构建需要网络；更新版本时同时更新哈希并重新检查布局，不能只复制 `git.exe`。不要绕过包装脚本直接运行 `mygo build` 发布 Windows 包。已存在的暂存目录会阻止构建，须先检查来源。运行时不执行下载或修改系统 PATH，Git 子进程优先使用所选发行包的辅助程序。
 
 `.github/workflows/desktop.yml` 只对 PR 和主分支运行 Windows、Ubuntu、macOS 回归及发布脚本测试，不构建或发布安装包。最多两个独立 runner 并行，各 runner 内的测试串行执行；这不会占用本机的验证预算。Go 使用 `GOMAXPROCS=2`、`-p=1`、`-parallel=2`；Ubuntu 测试使用独立的虚拟显示和 D-Bus/keyring，会话内只存合成测试密钥。各平台保留 `ui.Tester` 浅深色及紧凑布局截图供审阅，这些截图不替代真实系统窗口、输入法及快捷键验收。
 

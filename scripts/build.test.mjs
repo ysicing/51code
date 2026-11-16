@@ -8,7 +8,24 @@ import { execFileSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { build } from "./build.mjs";
+import { build as buildWithGit } from "./build.mjs";
+
+const build = (root, args, run) => buildWithGit(root, args, run, async () => async () => {});
+
+test("Git resources are prepared before packaging and cleaned on failure", async () => {
+  await fixture(async (root) => {
+    const events = [];
+    await expect(buildWithGit(root, ["-platform", "windows/amd64"], () => {
+      events.push("build");
+      return { status: 1 };
+    }, async () => {
+      events.push("prepare");
+      return async () => { events.push("cleanup"); };
+    })).rejects.toThrow("构建失败");
+    expect(events).toEqual(["prepare", "build", "cleanup"]);
+    await expect(stat(join(root, ".mygo", "build.lock"))).rejects.toThrow();
+  });
+});
 
 async function fixture(run) {
   const root = await mkdtemp(join(tmpdir(), "xsourcetree-build-"));

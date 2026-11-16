@@ -8,8 +8,9 @@ import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { binaryPath } from "mygo-cli";
+import { prepareWindowsGit } from "./windows-git.mjs";
 
-export async function build(root, args = [], run = spawnSync) {
+export async function build(root, args = [], run = spawnSync, prepareGit = prepareWindowsGit) {
   const state = resolve(root, ".mygo");
   const lock = resolve(state, "build.lock");
   await mkdir(state, { recursive: true });
@@ -19,6 +20,7 @@ export async function build(root, args = [], run = spawnSync) {
     if (error.code === "EEXIST") throw new Error("已有构建进行中，请等待其结束；若构建曾被强制终止，请确认没有构建进程后清理 .mygo/build.lock");
     throw error;
   }
+  let cleanupGit = async () => {};
   try {
     const path = resolve(state, "build-info.json");
     let previous = 0;
@@ -50,6 +52,7 @@ export async function build(root, args = [], run = spawnSync) {
       `-X main.buildTime=${info.time}`,
     ].filter(Boolean).join(" ");
     console.log(`构建 v${version} (Build ${info.number}) · ${commit} · ${info.time}`);
+    cleanupGit = await prepareGit(root, args);
     const result = run(binaryPath(), ["build", ...args], {
       cwd: root, stdio: "inherit",
       env: {
@@ -67,7 +70,11 @@ export async function build(root, args = [], run = spawnSync) {
     await rename(`${path}.tmp`, path);
     return info;
   } finally {
-    await rm(lock, { recursive: true, force: true });
+    try {
+      await cleanupGit();
+    } finally {
+      await rm(lock, { recursive: true, force: true });
+    }
   }
 }
 

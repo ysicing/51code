@@ -225,14 +225,16 @@ func (repo *Repository) readHistory(ctx context.Context, path string, filter His
 	if path != "" {
 		args = append(args, path)
 	}
-	cmd := exec.CommandContext(processCtx, "git", args...)
-	cmd.Env = gitEnvironment()
+	cmd, err := gitCommand(processCtx, args...)
+	if err != nil {
+		return err
+	}
 	cmd.Stdin = strings.NewReader("")
 	cmd.WaitDelay = 2 * time.Second
 	var stderr limitedBuffer
 	cmd.Stdout, cmd.Stderr = stdout, &stderr
 	// runProcess 等待进程及输出复制结束，同时沿用平台进程树取消机制。
-	err := runProcess(processCtx, cmd)
+	err = runProcess(processCtx, cmd)
 	if ctx.Err() != nil {
 		return fmt.Errorf("Git 操作已取消或超时：%w", ctx.Err())
 	}

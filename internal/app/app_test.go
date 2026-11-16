@@ -54,6 +54,7 @@ func nativeFixture(t *testing.T) (*nativeApp, string, func()) {
 		t.Fatal(err)
 	}
 	app := newNativeApp(&RepositoryService{manager: manager}, filepath.Join(t.TempDir(), "native-state.json"))
+	app.prefs.Git.Source = "system"
 	updates := make(chan func(), 1)
 	app.post = func(update func()) { updates <- update }
 	finish := func() {

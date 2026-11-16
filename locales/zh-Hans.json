@@ -1,5 +1,13 @@
 {
   "@@locale": "zh-Hans",
+  "gitSource": "Git 来源",
+  "bundledGit": "内置 Git",
+  "systemGit": "系统 Git",
+  "customGit": "自定义 Git",
+  "chooseGit": "选择 Git…",
+  "detectGit": "重新检测",
+  "detectingGit": "正在检测 Git…",
+  "gitUnavailable": "Git 不可用，请选择可用的 Git",
   "doubleClickStage": "双击文件暂存或取消暂存",
   "historyDate": "历史日期",
   "authorDate": "作者日期",

@@ -16,6 +16,8 @@ import (
 )
 
 type nativeIdentityEditor struct {
+	gitInfo  gitrepo.ExecutableInfo
+	gitError string
 	path     string
 	settings gitrepo.IdentitySettings
 	name     string
@@ -54,9 +56,27 @@ func (editor *nativeIdentityEditor) dirty() bool {
 
 func (editor *nativeIdentityEditor) load(app *nativeApp, dialog *nativeDialog) {
 	dialog.problem = ""
+	options := app.gitExecutableOptions()
 	app.run(locales.ReadingIdentity(), func(ctx context.Context) (func(), error) {
+		var gitInfo gitrepo.ExecutableInfo
+		if editor.path == "" {
+			var err error
+			gitInfo, err = gitrepo.InspectExecutable(ctx, options)
+			if err != nil {
+				return func() {
+					if app.dialog == dialog {
+						editor.ready = false
+						editor.gitInfo = gitrepo.ExecutableInfo{}
+						editor.gitError = err.Error()
+					}
+				}, nil
+			}
+		}
 		settings, err := app.service.Identity(ctx, editor.path)
 		return func() {
+			if app.dialog == dialog {
+				editor.gitInfo, editor.gitError = gitInfo, ""
+			}
 			if err == nil && app.dialog == dialog {
 				editor.adopt(settings)
 			}

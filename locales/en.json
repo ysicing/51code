@@ -1,5 +1,13 @@
 {
   "@@locale": "en",
+  "gitSource": "Git source",
+  "bundledGit": "Embedded Git",
+  "systemGit": "System Git",
+  "customGit": "Custom Git",
+  "chooseGit": "Choose Git…",
+  "detectGit": "Check again",
+  "detectingGit": "Checking Git…",
+  "gitUnavailable": "Git is unavailable. Select a working Git installation.",
   "doubleClickStage": "Double-click files to stage or unstage",
   "historyDate": "History date",
   "authorDate": "Author date",
