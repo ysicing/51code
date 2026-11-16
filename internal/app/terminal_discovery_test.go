@@ -71,10 +71,7 @@ func TestNativeTerminalDiscoveryMenu(t *testing.T) {
 	tester := sidebarSettingsTester(t, app)
 	finish()
 	tester.Frame()
-	button, found := tester.AccessByRole(ui.RoleMenuButton, "终端")
-	if !found {
-		t.Fatal("missing terminal selector")
-	}
+	button := nativeSettingsControl(t, tester, ui.RoleMenuButton, "终端")
 	tester.Press(button.Bounds.X+button.Bounds.W/2, button.Bounds.Y+button.Bounds.H/2)
 	tester.Release(button.Bounds.X+button.Bounds.W/2, button.Bounds.Y+button.Bounds.H/2)
 	if err := tester.ChooseMenuItem("Installed Terminal"); err != nil {

@@ -22,7 +22,7 @@ type historyLogWriter struct {
 	skip        int
 	limit       int
 	commits     []Commit
-	fields      [8]string
+	fields      [9]string
 	field       []byte
 	fieldIndex  int
 	recordBytes int
@@ -75,7 +75,7 @@ func (writer *historyLogWriter) Write(data []byte) (int, error) {
 		data = data[end+1:]
 		if writer.fieldIndex == len(writer.fields) {
 			writer.accept()
-			writer.fields = [8]string{}
+			writer.fields = [9]string{}
 			writer.fieldIndex = 0
 			writer.recordBytes = 0
 			if writer.stopped {
@@ -131,6 +131,7 @@ func (writer *historyLogWriter) accept() {
 	writer.commits = append(writer.commits, Commit{
 		Hash: writer.fields[0], Parents: strings.Fields(writer.fields[1]), Subject: writer.fields[2],
 		Author: writer.fields[3], Date: writer.fields[4], Refs: writer.fields[5],
+		CommitterDate: writer.fields[8],
 	})
 	writer.found = writer.found || writer.fields[0] == writer.target
 	if len(writer.commits) == writer.limit && (writer.target == "" || writer.found) {
@@ -168,7 +169,7 @@ func (repo *Repository) streamHistory(ctx context.Context, query, path string, s
 	return writer.commits, nil
 }
 
-const historyFormat = "--format=%H%x00%P%x00%s%x00%an%x00%aI%x00%D%x00%B%x00%ae"
+const historyFormat = "--format=%H%x00%P%x00%s%x00%an%x00%aI%x00%D%x00%B%x00%ae%x00%cI"
 
 func (repo *Repository) readHistory(ctx context.Context, path string, filter HistoryFilter, stdout *historyLogWriter) error {
 	stdout.filter = filter

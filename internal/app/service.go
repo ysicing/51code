@@ -301,3 +301,19 @@ func (service *RepositoryService) Remote(ctx context.Context, path, action strin
 	}
 	return repo.Remote(ctx, action)
 }
+
+func (service *RepositoryService) WatchDirectories(ctx context.Context, path string) ([]string, error) {
+	repo, err := service.manager.Get(path)
+	if err != nil {
+		return nil, err
+	}
+	return repo.WatchDirectories(ctx)
+}
+
+func (service *RepositoryService) FetchInBackground(ctx context.Context, path string) error {
+	repo, err := service.manager.Get(path)
+	if err != nil {
+		return err
+	}
+	return repo.FetchInBackground(ctx)
+}

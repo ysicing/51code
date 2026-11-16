@@ -24,7 +24,41 @@ func sidebarSettingsTester(t *testing.T, app *nativeApp) *ui.Tester {
 		mygo.Use(native.New(updater.Options{DisableAutomaticChecks: true, Language: "zh-Hans"}))
 	})
 	app.settingsDialog()
-	return ui.NewTester(app.view, 1024, 680)
+	tester := ui.NewTester(app.view, 1024, 680)
+	nativeSettingsControl(t, tester, ui.RoleCheckBox, "工作树")
+	return tester
+}
+
+func nativeSettingsControl(t *testing.T, tester *ui.Tester, role ui.Role, name string) ui.AccessInfo {
+	t.Helper()
+	for range 12 {
+		viewport, found := tester.AccessByRole(ui.RoleScroll, "应用设置")
+		if !found {
+			t.Fatal("missing settings scroll area")
+		}
+		control, found := tester.AccessByRole(role, name)
+		if !found {
+			t.Fatalf("missing settings control %q", name)
+		}
+		if !control.Offscreen && control.Bounds.H > 0 && control.Bounds.Y >= viewport.Bounds.Y &&
+			control.Bounds.Y+control.Bounds.H <= viewport.Bounds.Y+viewport.Bounds.H {
+			return control
+		}
+		direction := float32(80)
+		if control.Bounds.Y < viewport.Bounds.Y {
+			direction = -80
+		}
+		tester.Scroll(viewport.Bounds.X+viewport.Bounds.W/2, viewport.Bounds.Y+viewport.Bounds.H/2, 0, direction)
+	}
+	t.Fatalf("settings control %q did not scroll into view", name)
+	return ui.AccessInfo{}
+}
+
+func clickNativeSettingsControl(t *testing.T, tester *ui.Tester, role ui.Role, name string) {
+	t.Helper()
+	control := nativeSettingsControl(t, tester, role, name)
+	tester.Press(control.Bounds.X+control.Bounds.W/2, control.Bounds.Y+control.Bounds.H/2)
+	tester.Release(control.Bounds.X+control.Bounds.W/2, control.Bounds.Y+control.Bounds.H/2)
 }
 
 func TestNativeSidebarVisibilityIndependentAndPersistent(t *testing.T) {

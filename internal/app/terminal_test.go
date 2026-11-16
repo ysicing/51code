@@ -90,10 +90,7 @@ func TestNativeTerminalPreferences(t *testing.T) {
 	}
 	clickTerminal := func() {
 		t.Helper()
-		button, found := tester.AccessByRole(ui.RoleMenuButton, "终端")
-		if !found {
-			t.Fatal("missing accessible terminal selector")
-		}
+		button := nativeSettingsControl(t, tester, ui.RoleMenuButton, "终端")
 		tester.Press(button.Bounds.X+button.Bounds.W/2, button.Bounds.Y+button.Bounds.H/2)
 		tester.Release(button.Bounds.X+button.Bounds.W/2, button.Bounds.Y+button.Bounds.H/2)
 		if tester.Menu() == nil {

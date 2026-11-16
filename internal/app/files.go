@@ -321,11 +321,14 @@ func (app *nativeApp) changeFileRow(c *ui.Context, file gitrepo.File, staged boo
 		case "D", "!":
 			color = c.Theme().Danger
 		}
-		if row.Grow(1).Height(28).Padding(4, 6).Gap(6).AlignItems(ui.Center).Tooltip(file.Path).Children(func() {
+		row.Grow(1).Height(28).Padding(4, 6).Gap(6).AlignItems(ui.Center).Tooltip(file.Path).Children(func() {
 			ui.Text(c, status).Width(12).Font("monospace").FontSize(11).TextColor(color)
 			nativeFileIcon(c, file.Path)
 			ui.Text(c, name).FontSize(12).Grow(1).MinWidth(0).SingleLine()
-		}).Clicked() && (!selected || app.readTask != nil || app.problem != "") {
+		})
+		if row.DoubleClicked() && app.prefs.DoubleClickStage {
+			app.stageDoubleClickedFile(file, staged)
+		} else if row.Clicked() && (!selected || app.readTask != nil || app.problem != "") {
 			if app.screen == "history" && app.historyWorking {
 				app.selectHistoryWorkingFile(file.Path, staged)
 			} else {

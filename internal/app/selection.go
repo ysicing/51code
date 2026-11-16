@@ -48,6 +48,10 @@ type nativeRead struct {
 }
 
 func (app *nativeApp) cancelRead() {
+	if app.autoFetch != nil {
+		app.autoFetch.cancel()
+		app.autoFetch = nil
+	}
 	if app.focusRefresh != nil {
 		app.focusRefresh.cancel()
 		app.focusRefresh = nil

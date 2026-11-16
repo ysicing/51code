@@ -94,6 +94,15 @@ func appearanceThemeSource(appearance string) mygo.ThemeSource {
 }
 
 func normalizeNativePreferences(prefs *nativePreferences) {
+	if prefs.HistoryDate != "committer" {
+		prefs.HistoryDate = "author"
+	}
+	if prefs.StartupPage != "library" && prefs.StartupPage != "last" {
+		prefs.StartupPage = "library"
+	}
+	if prefs.AutoFetchMinutes != 5 && prefs.AutoFetchMinutes != 15 && prefs.AutoFetchMinutes != 30 {
+		prefs.AutoFetchMinutes = 15
+	}
 	if !slices.Contains(nativeUpdateCheckFrequencies, prefs.UpdateCheckFrequency) {
 		prefs.UpdateCheckFrequency = "每天"
 	}
@@ -251,12 +260,15 @@ func (app *nativeApp) settingsDialogAt(initialTab int) {
 				dialog.action = locales.Save()
 			}
 			ui.Column(c).Grow(1).MinHeight(0).MinWidth(0).Gap(20).Padding(4, 0).Children(func() {
-				ui.Scroll(c).Key(tab).Grow(1).MinHeight(0).FillWidth().Children(func() {
+				ui.Scroll(c).Key(tab).Label(locales.ApplicationSettings()).Grow(1).MinHeight(0).FillWidth().Children(func() {
 					ui.Column(c).FillWidth().Gap(16).Padding(2, 4, 6).Children(func() {
 						switch tab {
 						case 0:
 							app.generalPreferences(c)
 						case 1:
+							app.gitPreferences(c)
+							ui.Divider(c)
+							ui.Text(c, locales.CommitIdentity()).FontSize(13).Bold()
 							ui.Text(c, locales.GlobalGitScope()).FontSize(12).TextColor(c.Theme().TextMuted)
 							identity.view(app, dialog, c)
 						case 2:
@@ -435,6 +447,7 @@ func (app *nativeApp) generalPreferences(c *ui.Context) {
 			app.chooseLanguage(app.chosenLanguage)
 		}
 	})
+	app.repositoryBehaviorPreferences(c)
 	ui.Divider(c)
 	ui.Text(c, locales.Sidebar()).FontSize(12).TextColor(c.Theme().TextMuted)
 	ui.Row(c).FillWidth().Gap(24).AlignItems(ui.Start).Children(func() {

@@ -36,6 +36,168 @@ type Messages struct{ locale string }
 // source language.
 func In(locale string) Messages { return Messages{locale} }
 
+// DoubleClickStage says "双击文件暂存或取消暂存"
+// in the language the app shows.
+func DoubleClickStage() string { return In(i18n.Locale()).DoubleClickStage() }
+
+// DoubleClickStage says "双击文件暂存或取消暂存"
+// in the language of msgs.
+func (msgs Messages) DoubleClickStage() string {
+	return Catalog.Format(msgs.locale, "doubleClickStage", nil)
+}
+
+// HistoryDate says "历史日期"
+// in the language the app shows.
+func HistoryDate() string { return In(i18n.Locale()).HistoryDate() }
+
+// HistoryDate says "历史日期"
+// in the language of msgs.
+func (msgs Messages) HistoryDate() string {
+	return Catalog.Format(msgs.locale, "historyDate", nil)
+}
+
+// AuthorDate says "作者日期"
+// in the language the app shows.
+func AuthorDate() string { return In(i18n.Locale()).AuthorDate() }
+
+// AuthorDate says "作者日期"
+// in the language of msgs.
+func (msgs Messages) AuthorDate() string {
+	return Catalog.Format(msgs.locale, "authorDate", nil)
+}
+
+// CommitterDate says "提交日期"
+// in the language the app shows.
+func CommitterDate() string { return In(i18n.Locale()).CommitterDate() }
+
+// CommitterDate says "提交日期"
+// in the language of msgs.
+func (msgs Messages) CommitterDate() string {
+	return Catalog.Format(msgs.locale, "committerDate", nil)
+}
+
+// StartupAction says "启动时"
+// in the language the app shows.
+func StartupAction() string { return In(i18n.Locale()).StartupAction() }
+
+// StartupAction says "启动时"
+// in the language of msgs.
+func (msgs Messages) StartupAction() string {
+	return Catalog.Format(msgs.locale, "startupAction", nil)
+}
+
+// StartupLibrary says "仓库列表"
+// in the language the app shows.
+func StartupLibrary() string { return In(i18n.Locale()).StartupLibrary() }
+
+// StartupLibrary says "仓库列表"
+// in the language of msgs.
+func (msgs Messages) StartupLibrary() string {
+	return Catalog.Format(msgs.locale, "startupLibrary", nil)
+}
+
+// StartupLastRepository says "上次打开的仓库"
+// in the language the app shows.
+func StartupLastRepository() string { return In(i18n.Locale()).StartupLastRepository() }
+
+// StartupLastRepository says "上次打开的仓库"
+// in the language of msgs.
+func (msgs Messages) StartupLastRepository() string {
+	return Catalog.Format(msgs.locale, "startupLastRepository", nil)
+}
+
+// RepositoryBehavior says "仓库行为"
+// in the language the app shows.
+func RepositoryBehavior() string { return In(i18n.Locale()).RepositoryBehavior() }
+
+// RepositoryBehavior says "仓库行为"
+// in the language of msgs.
+func (msgs Messages) RepositoryBehavior() string {
+	return Catalog.Format(msgs.locale, "repositoryBehavior", nil)
+}
+
+// AutoRefreshFiles says "文件变化时自动刷新"
+// in the language the app shows.
+func AutoRefreshFiles() string { return In(i18n.Locale()).AutoRefreshFiles() }
+
+// AutoRefreshFiles says "文件变化时自动刷新"
+// in the language of msgs.
+func (msgs Messages) AutoRefreshFiles() string {
+	return Catalog.Format(msgs.locale, "autoRefreshFiles", nil)
+}
+
+// AutoFetchRemotes says "定时获取远端更新"
+// in the language the app shows.
+func AutoFetchRemotes() string { return In(i18n.Locale()).AutoFetchRemotes() }
+
+// AutoFetchRemotes says "定时获取远端更新"
+// in the language of msgs.
+func (msgs Messages) AutoFetchRemotes() string {
+	return Catalog.Format(msgs.locale, "autoFetchRemotes", nil)
+}
+
+// AutoFetchInterval says "获取间隔"
+// in the language the app shows.
+func AutoFetchInterval() string { return In(i18n.Locale()).AutoFetchInterval() }
+
+// AutoFetchInterval says "获取间隔"
+// in the language of msgs.
+func (msgs Messages) AutoFetchInterval() string {
+	return Catalog.Format(msgs.locale, "autoFetchInterval", nil)
+}
+
+// EveryFiveMinutes says "每 5 分钟"
+// in the language the app shows.
+func EveryFiveMinutes() string { return In(i18n.Locale()).EveryFiveMinutes() }
+
+// EveryFiveMinutes says "每 5 分钟"
+// in the language of msgs.
+func (msgs Messages) EveryFiveMinutes() string {
+	return Catalog.Format(msgs.locale, "everyFiveMinutes", nil)
+}
+
+// EveryFifteenMinutes says "每 15 分钟"
+// in the language the app shows.
+func EveryFifteenMinutes() string { return In(i18n.Locale()).EveryFifteenMinutes() }
+
+// EveryFifteenMinutes says "每 15 分钟"
+// in the language of msgs.
+func (msgs Messages) EveryFifteenMinutes() string {
+	return Catalog.Format(msgs.locale, "everyFifteenMinutes", nil)
+}
+
+// EveryThirtyMinutes says "每 30 分钟"
+// in the language the app shows.
+func EveryThirtyMinutes() string { return In(i18n.Locale()).EveryThirtyMinutes() }
+
+// EveryThirtyMinutes says "每 30 分钟"
+// in the language of msgs.
+func (msgs Messages) EveryThirtyMinutes() string {
+	return Catalog.Format(msgs.locale, "everyThirtyMinutes", nil)
+}
+
+// AutomaticFetchFailed says "自动获取远端更新失败：{error}"
+// in the language the app shows.
+func AutomaticFetchFailed(error string) string { return In(i18n.Locale()).AutomaticFetchFailed(error) }
+
+// AutomaticFetchFailed says "自动获取远端更新失败：{error}"
+// in the language of msgs.
+func (msgs Messages) AutomaticFetchFailed(error string) string {
+	return Catalog.Format(msgs.locale, "automaticFetchFailed", map[string]any{"error": error})
+}
+
+// AutomaticRefreshFailed says "自动刷新不可用：{error}"
+// in the language the app shows.
+func AutomaticRefreshFailed(error string) string {
+	return In(i18n.Locale()).AutomaticRefreshFailed(error)
+}
+
+// AutomaticRefreshFailed says "自动刷新不可用：{error}"
+// in the language of msgs.
+func (msgs Messages) AutomaticRefreshFailed(error string) string {
+	return Catalog.Format(msgs.locale, "automaticRefreshFailed", map[string]any{"error": error})
+}
+
 // InterfaceSettings says "界面"
 // in the language the app shows.
 func InterfaceSettings() string { return In(i18n.Locale()).InterfaceSettings() }

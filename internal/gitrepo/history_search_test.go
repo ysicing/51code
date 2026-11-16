@@ -424,7 +424,7 @@ func historyLogCallCount(t *testing.T, path string) int {
 
 func historyStreamRecord(index int, subject, body string) string {
 	return strings.Join([]string{
-		fmt.Sprintf("%040x", index), "", subject, "Archive User", "2026-11-10T00:00:00Z", "", body, "archive@example.test",
+		fmt.Sprintf("%040x", index), "", subject, "Archive User", "2026-11-10T00:00:00Z", "", body, "archive@example.test", "2026-11-11T00:00:00Z",
 	}, "\x00") + "\x00"
 }
 

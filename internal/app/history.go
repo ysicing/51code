@@ -321,7 +321,7 @@ func (app *nativeApp) historyPanel(c *ui.Context) {
 			{Title: locales.Graph(), Width: graphWidth, Fixed: true},
 			{Title: locales.CommitMessage(), MinWidth: messageWidth},
 			{Title: locales.Author(), Width: 110, MinWidth: 70},
-			{Title: locales.Date(), Width: 138, MinWidth: 138},
+			{Title: app.historyDateLabel(), Width: 138, MinWidth: 138},
 			{Title: locales.CommitID(), Width: 88, MinWidth: 88},
 		}
 		label := locales.HistoryTable()
@@ -359,7 +359,7 @@ func (app *nativeApp) historyPanel(c *ui.Context) {
 			case 2:
 				ui.Text(c, commit.Author).FontSize(12).TextColor(theme.TextMuted).SingleLine()
 			case 3:
-				ui.Text(c, historyDate(commit.Date)).FontSize(12).TextColor(theme.TextMuted).SingleLine()
+				ui.Text(c, historyDate(app.commitDate(commit))).FontSize(12).TextColor(theme.TextMuted).SingleLine()
 			case 4:
 				ui.Text(c, shortHash(commit.Hash)).Font("monospace").FontSize(12).TextColor(theme.TextMuted).SingleLine()
 			}
@@ -419,7 +419,7 @@ func (app *nativeApp) historyDetails(c *ui.Context) {
 		ui.Row(c).FillWidth().Gap(12).AlignItems(ui.Center).Children(func() {
 			if selected != nil {
 				ui.Text(c, selected.Author).FontSize(11).MaxWidth(120).SingleLine().Selectable()
-				ui.Text(c, historyDate(selected.Date)).FontSize(11).TextColor(c.Theme().TextMuted).SingleLine()
+				ui.Text(c, historyDate(app.commitDate(*selected))).FontSize(11).TextColor(c.Theme().TextMuted).SingleLine().Tooltip(app.historyDateLabel())
 			}
 			ui.Text(c, app.commitHash).Font("monospace").FontSize(11).MinWidth(0).Grow(1).SingleLine().Selectable().Label(locales.FullCommitID())
 			if app.screen == "search" {

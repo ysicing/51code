@@ -21,6 +21,10 @@ func (app *nativeApp) refreshOnFocus() {
 		app.dialog != nil || app.conflictDirty() || app.repository == nil || app.screen == "library" {
 		return
 	}
+	if app.autoFetch != nil {
+		app.autoFetch.cancel()
+		app.autoFetch = nil
+	}
 	repository, screen := app.repository, app.screen
 	path, file, staged := repository.snapshot.Path, app.selectedFile, app.staged
 	history := app.nativeHistoryState

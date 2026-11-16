@@ -37,10 +37,17 @@ type nativePreferences struct {
 	FileSort             string                      `json:"fileSort"`
 	FileDescending       bool                        `json:"fileDescending"`
 	FileTree             bool                        `json:"fileTree"`
+	DoubleClickStage     bool                        `json:"doubleClickStage"`
+	HistoryDate          string                      `json:"historyDate,omitempty"`
 	Drafts               map[string]string           `json:"drafts"`
 	Appearance           string                      `json:"appearance"`
 	TerminalApplication  string                      `json:"terminalApplication,omitempty"`
 	LastDirectory        string                      `json:"lastDirectory,omitempty"`
+	StartupPage          string                      `json:"startupPage,omitempty"`
+	LastRepository       string                      `json:"lastRepository,omitempty"`
+	AutoRefreshFiles     bool                        `json:"autoRefreshFiles"`
+	AutoFetchRemotes     bool                        `json:"autoFetchRemotes"`
+	AutoFetchMinutes     int                         `json:"autoFetchMinutes,omitempty"`
 	SidebarItems         nativeSidebarItems          `json:"sidebarItems"`
 	Shortcuts            nativeShortcuts             `json:"shortcuts"`
 	UpdateCheckFrequency string                      `json:"updateCheckFrequency"`
@@ -77,6 +84,12 @@ type nativeApp struct {
 	readTask              *nativeRead
 	focusRefresh          *nativeRead
 	focusError            string
+	autoFetch             *nativeRead
+	autoFetchDone         <-chan struct{}
+	autoFetchError        string
+	background            *nativeRepositoryBackground
+	watchDirectories      []string
+	watchFiles            func(context.Context, string, mygo.FileWatchOptions) (repositoryFileWatcher, error)
 	readDone              <-chan struct{}
 	writable              bool
 	status                string
@@ -157,6 +170,7 @@ func newNativeApp(service *RepositoryService, stateFile string) *nativeApp {
 		prefs: nativePreferences{
 			Sidebar: 226, Files: 360, History: 56, HistoryFiles: 280, Wrap: true, DiffLayout: "auto", Drafts: map[string]string{},
 			Appearance: appearanceSystem, Shortcuts: defaultNativeShortcuts(),
+			StartupPage: "library", AutoRefreshFiles: true, AutoFetchMinutes: 15,
 			SidebarItems: nativeSidebarItems{Insights: true, Search: true, Compare: true, Stash: true, Worktrees: true},
 		},
 		nativeHistoryState: newNativeHistoryState(),
@@ -246,6 +260,9 @@ func (app *nativeApp) open() {
 	app.win.SetWindowButtonsTheme(appearanceThemeSource(app.prefs.Appearance))
 	app.post = app.win.Update
 	app.discoverTerminals = discoverTerminalApplications
+	app.watchFiles = func(ctx context.Context, path string, options mygo.FileWatchOptions) (repositoryFileWatcher, error) {
+		return mygo.WatchFiles(ctx, path, options)
+	}
 	app.stopLocale = mygo.App.OnLocaleChanged(func(_ string) {
 		app.post(func() {
 			if !app.closed {
@@ -264,9 +281,14 @@ func (app *nativeApp) open() {
 	protectWindowClose(app.win, app)
 	app.win.OnClosed(func() {
 		app.closed = true
+		app.stopRepositoryBackground()
 		app.cancelRead()
 		app.stopCommitAI()
 		app.cancel()
+		// fetch 会写引用和对象；进程退出前等取消清理完成，完成信号不依赖界面回调。
+		if app.autoFetchDone != nil {
+			<-app.autoFetchDone
+		}
 		if app.stopUpdater != nil {
 			app.stopUpdater()
 			app.stopUpdater = nil
@@ -283,6 +305,7 @@ func (app *nativeApp) open() {
 	}
 	app.startRepositoryLanguages(cacheDir)
 	app.startCommitGraphs()
+	app.restoreStartupRepository()
 }
 
 func platformTitleBarStyle() mygo.TitleBarStyle {
@@ -410,10 +433,16 @@ func (app *nativeApp) openRepository(path string) {
 		if !app.busy {
 			app.stopCommitAI()
 		}
+		watch := app.watchFiles != nil
 		app.run(locales.OpeningRepository(), func(ctx context.Context) (func(), error) {
 			result, err := app.readRepository(ctx, path, true)
 			if err != nil {
 				return nil, err
+			}
+			var directories []string
+			var watchErr error
+			if watch {
+				directories, watchErr = app.service.WatchDirectories(ctx, result.snapshot.Path)
 			}
 			return func() {
 				if app.repository == nil || app.repository.snapshot.Path != result.snapshot.Path {
@@ -432,6 +461,17 @@ func (app *nativeApp) openRepository(path string) {
 				app.searchDateEnabled = false
 				app.searchSince, app.searchUntil = time.Time{}, time.Time{}
 				app.maintainCommitGraph(result.snapshot.Path)
+				app.watchDirectories = directories
+				app.restartRepositoryBackground()
+				if watchErr != nil && app.prefs.AutoRefreshFiles && app.background != nil {
+					app.reportWatchFailure(app.background, watchErr)
+				}
+				if app.prefs.LastRepository != result.snapshot.Path {
+					app.prefs.LastRepository = result.snapshot.Path
+					if err := app.savePreferences(); err != nil {
+						app.problem = locales.SaveSettingsError(err.Error())
+					}
+				}
 			}, nil
 		})
 	})
@@ -657,6 +697,7 @@ func (app *nativeApp) showLibrary() {
 	app.leaveConflict(func() {
 		app.cancelRead()
 		app.stopCommitAI()
+		app.stopRepositoryBackground()
 		app.screen = "library"
 		app.refreshRepositoryLanguages(false)
 	})
