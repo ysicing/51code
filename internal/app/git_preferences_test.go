@@ -14,6 +14,42 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
+func TestNativeDoubleClickStageDefaultsAndMigration(t *testing.T) {
+	base, _, _ := nativeFixture(t)
+	for _, test := range []struct {
+		name    string
+		data    string
+		enabled bool
+	}{
+		{"new", "", true},
+		{"legacy", `{}`, true},
+		{"enabled", `{"doubleClickStage":true}`, true},
+		{"disabled", `{"doubleClickStage":false}`, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			stateFile := filepath.Join(t.TempDir(), "preferences.json")
+			if test.data != "" {
+				if err := os.WriteFile(stateFile, []byte(test.data), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			app := newNativeApp(base.service, stateFile)
+			t.Cleanup(app.cancel)
+			if app.prefs.DoubleClickStage != test.enabled {
+				t.Fatalf("双击暂存 = %t，预期 %t", app.prefs.DoubleClickStage, test.enabled)
+			}
+			if err := app.savePreferences(); err != nil {
+				t.Fatal(err)
+			}
+			restored := newNativeApp(base.service, stateFile)
+			t.Cleanup(restored.cancel)
+			if restored.prefs.DoubleClickStage != test.enabled {
+				t.Fatal("重启后没有保留双击暂存偏好")
+			}
+		})
+	}
+}
+
 func TestNativeDoubleClickStagesWorkingFile(t *testing.T) {
 	for _, screen := range []string{"changes", "history"} {
 		for _, tree := range []bool{false, true} {
@@ -78,6 +114,9 @@ func TestNativeGitPreferencesPersistAndRollback(t *testing.T) {
 	}
 	finish()
 	tester.Frame()
+	if checkbox, found := tester.AccessByRole(ui.RoleCheckBox, "双击文件暂存或取消暂存"); !found || !checkbox.Checked {
+		t.Fatal("双击暂存默认应勾选")
+	}
 	clickNativeSettingsControl(t, tester, ui.RoleCheckBox, "双击文件暂存或取消暂存")
 	clickNativeSettingsControl(t, tester, ui.RoleMenuButton, "历史日期")
 	if err := tester.ChooseMenuItem("提交日期"); err != nil {
@@ -86,7 +125,7 @@ func TestNativeGitPreferencesPersistAndRollback(t *testing.T) {
 	tester.Frame()
 	restored := newNativeApp(app.service, app.stateFile)
 	t.Cleanup(restored.cancel)
-	if !restored.prefs.DoubleClickStage || restored.prefs.HistoryDate != "committer" || app.identityEditor.dirty() {
+	if restored.prefs.DoubleClickStage || restored.prefs.HistoryDate != "committer" || app.identityEditor.dirty() {
 		t.Fatal("Git 应用偏好未即时保存，或错误修改了身份草稿")
 	}
 	blocker := filepath.Join(t.TempDir(), "file")
@@ -95,7 +134,7 @@ func TestNativeGitPreferencesPersistAndRollback(t *testing.T) {
 	}
 	app.stateFile = filepath.Join(blocker, "state.json")
 	clickNativeSettingsControl(t, tester, ui.RoleCheckBox, "双击文件暂存或取消暂存")
-	if !app.prefs.DoubleClickStage || app.settingsError == "" || !tester.HasText(app.settingsError) {
+	if app.prefs.DoubleClickStage || app.settingsError == "" || !tester.HasText(app.settingsError) {
 		t.Fatal("保存失败时没有恢复双击偏好")
 	}
 	clickNativeSettingsControl(t, tester, ui.RoleMenuButton, "历史日期")

@@ -172,7 +172,7 @@ func newNativeApp(service *RepositoryService, stateFile string) *nativeApp {
 		prefs: nativePreferences{
 			Sidebar: 226, Files: 360, History: 56, HistoryFiles: 280, Wrap: true, DiffLayout: "auto", Drafts: map[string]string{},
 			Appearance: appearanceSystem, Shortcuts: defaultNativeShortcuts(),
-			StartupPage: "library", AutoRefreshFiles: true, AutoFetchMinutes: 15,
+			StartupPage: "library", AutoRefreshFiles: true, AutoFetchMinutes: 15, DoubleClickStage: true,
 			SidebarItems: nativeSidebarItems{Insights: true, Search: true, Compare: true, Stash: true, Worktrees: true},
 		},
 		nativeHistoryState: newNativeHistoryState(),
