@@ -43,6 +43,24 @@ MyGo 根据应用名选择数据目录和单实例锁。启动时先用旧名称
 
 已有 `XSOURCETREE_*` 构建和测试环境变量、`XSourceTreeCommit`／`XSourceTreeBuildTime` 元数据字段及仓库外更新私钥路径继续兼容。图标内容未变，历史图标源文件名保留。
 
+### gops 运行时诊断
+
+应用在取得单实例锁后启动 gops agent，开发版和正式版均支持。只监听 `127.0.0.1` 的随机端口，使用 gops 默认目录中的 PID 文件供命令行发现；可通过 `GOPS_CONFIG_DIR` 指定目录，应用和命令行须使用相同值。设置 `XSOURCETREE_GOPS=0` 可在启动时关闭。初始化失败仅记录日志，不阻止应用启动。
+
+```sh
+go install github.com/google/gops@v0.3.29
+gops
+gops stats <PID>
+gops memstats <PID>
+gops stack <PID>
+gops pprof-heap <PID>
+gops pprof-cpu <PID>
+```
+
+从 `gops` 列表选择 `51Code` 或 `51Code Dev` 的 PID；带 `*` 表示 agent 已启用。这些命令面向 Go 运行时，不包含 Git、SSH、Git LFS 子进程或原生界面分配的全部内存。CPU profile 按 gops 协议采集约 30 秒，堆采样沿用 Go 默认采样率。诊断端口允许本机其他进程访问，采样文件可能包含调用栈及路径，应按需保管。
+
+agent 不接管退出信号，清理由 MyGo 的最终退出钩子同步执行；取消退出时仍可诊断。正常退出和启动失败会关闭监听并移除 PID 文件，强制终止（如 `SIGKILL`）不保证清理。
+
 ### 本地构建
 
 构建 macOS 应用与 DMG：

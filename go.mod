@@ -6,6 +6,7 @@ require (
 	github.com/ebitengine/purego v0.11.3
 	github.com/egoist/mygo v0.9.0
 	github.com/go-enry/go-enry/v2 v2.9.6
+	github.com/google/gops v0.3.29
 	github.com/shirou/gopsutil/v4 v4.26.10
 	golang.org/x/sys v0.50.0
 )

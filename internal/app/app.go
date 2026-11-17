@@ -38,6 +38,8 @@ func Run(info BuildInfo) {
 	}
 	service := &RepositoryService{manager: manager}
 	desktop := newNativeDesktop(service, filepath.Join(dir, "native-state.json"))
+	stopGops := startGopsAgent()
+	app.OnQuit(stopGops)
 	mygo.Use(native.New(updater.Options{
 		// 不能自更新的安装（deb/rpm、开发构建）由插件自行跳过后台检查。
 		Interval: nativeUpdateCheckInterval(desktop.prefs.UpdateCheckFrequency),
@@ -156,7 +158,9 @@ func Run(info BuildInfo) {
 			open()
 		}
 	})
-	if err := app.Run(); err != nil {
+	err = app.Run()
+	stopGops()
+	if err != nil {
 		log.Fatal(err)
 	}
 }
