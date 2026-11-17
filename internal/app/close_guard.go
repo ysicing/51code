@@ -8,6 +8,13 @@ import "github.com/egoist/mygo"
 func protectWindowClose(win *mygo.Window, app *nativeApp) {
 	checking := false
 	win.OnClose(func(event *mygo.CloseEvent) {
+		if app.desktop != nil && app.desktop.quitting {
+			return
+		}
+		if app.desktop != nil && app.desktop.checkingQuit {
+			event.PreventDefault()
+			return
+		}
 		if checking {
 			event.PreventDefault()
 			return

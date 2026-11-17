@@ -13,6 +13,9 @@ import (
 )
 
 func (app *nativeApp) refreshOnFocus() {
+	if app.desktop != nil && !app.closed {
+		app.reconcileSidebar()
+	}
 	if !app.closed && !app.busy && app.dialog == nil && app.screen == "library" {
 		app.refreshRepositoryLanguages(false)
 		return
@@ -151,6 +154,9 @@ func (app *nativeApp) refreshOnFocus() {
 					app.insights.checked = time.Time{}
 				}
 				app.refreshInsights(false)
+			}
+			if app.desktop != nil {
+				app.desktop.refreshLibraries()
 			}
 		})
 	}()

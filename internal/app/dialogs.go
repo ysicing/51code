@@ -25,6 +25,8 @@ type nativeField struct {
 }
 
 type nativeDialog struct {
+	applicationSettings bool
+
 	parent          *nativeDialog
 	title           string
 	titleText       func() string
@@ -80,6 +82,9 @@ func (app *nativeApp) closeDialog(dialog *nativeDialog) {
 		dialog.onClose()
 	} else {
 		app.dialog = dialog.parent
+	}
+	if app.desktop != nil {
+		app.reconcileSidebar()
 	}
 }
 

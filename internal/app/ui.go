@@ -110,7 +110,7 @@ func (app *nativeApp) view(c *ui.Context) {
 	case appearanceDark:
 		c.SetTheme(ui.DarkTheme())
 	}
-	ui.Column(c).Fill().Background(c.Theme().Background).Children(func() {
+	ui.Column(c).Fill().Background(c.Theme().Background).Disabled(app.desktop != nil && app.desktop.checkingQuit).Children(func() {
 		bar := c.TitleBar()
 		ui.Row(c).Height(52).Shrink(0).Padding(0, bar.Right+12, 0, bar.Left+12).AlignItems(ui.Center).Gap(12).DragWindow().Children(func() {
 			title := locales.Repository()

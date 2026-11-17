@@ -38,6 +38,7 @@ await new Promise((resolve, reject) => {
   socket.once("error", reject);
 });
 let serial = 0;
+let targetWindow = 0;
 let buffer = "";
 const pending = new Map();
 socket.on("data", (data) => {
@@ -69,7 +70,8 @@ function request(method, params = {}) {
       reject(new Error(`automation timeout: ${method}`));
     }, 15000);
     pending.set(id, { resolve, reject, timeout });
-    socket.write(JSON.stringify({ id, method, params }) + "\n");
+    const target = method === "windows" ? params : { window: targetWindow, ...params };
+    socket.write(JSON.stringify({ id, method, params: target }) + "\n");
   });
 }
 const tree = async () => {
@@ -117,6 +119,26 @@ async function press(label) {
 }
 const fill = (label, text) => act(label, "setValue", text);
 const shown = (label) => waitFor((nodes) => nodes.some((node) => node.label === label), label);
+async function useRepositoryWindow(name) {
+  for (let attempt = 0; attempt < 100; attempt++) {
+    const windows = (await request("windows")).windows;
+    const window = windows.find((entry) => entry.title === `${name} — 51Code`);
+    if (window) {
+      targetWindow = window.id;
+      return;
+    }
+    await delay();
+  }
+  throw new Error(`找不到仓库窗口 ${name}`);
+}
+async function showLibrary() {
+  await request("menu", { path: ["文件", "本地仓库"] });
+  const windows = (await request("windows")).windows;
+  const window = windows.find((entry) => entry.title === "本地仓库 — 51Code");
+  assert(window, "没有显示仓库列表窗口");
+  targetWindow = window.id;
+  await ready();
+}
 async function capture(name) {
   if (!process.env.XSOURCETREE_TEST_SCREENSHOTS) return;
   const directory = process.env.XSOURCETREE_TEST_SCREENSHOTS;
@@ -127,6 +149,7 @@ async function capture(name) {
 
 try {
   const windows = (await request("windows")).windows;
+  targetWindow = windows[0].id;
   assert.equal(windows[0].kind, "content", "应用仍在使用 WebView");
   const feedbackNodes = await shown("反馈问题或建议");
   const feedback = feedbackNodes.find((node) => node.label === "反馈问题或建议");
@@ -145,8 +168,7 @@ try {
     await press("关闭设置");
     await capture(`native-empty-library-${suffix}.png`);
   }
-  await request("menu", { path: ["文件", "本地仓库"] });
-  await ready();
+  await showLibrary();
   await press("输入路径");
   await fill("仓库完整路径", fixture);
   await press("添加");
@@ -156,7 +178,21 @@ try {
   assert(populated.some((node) => node.placeholder === "搜索仓库名称、路径或分支"), "添加后未恢复搜索框");
   console.log("✓ 空仓库中央添加入口、浅深色外观和添加后恢复列表");
   await press(basename(fixture));
+  await useRepositoryWindow(basename(fixture));
   await shown("文件变更");
+  const repositoryWindows = (await request("windows")).windows;
+  assert.equal(repositoryWindows.length, 2, "打开仓库后应同时保留列表和仓库窗口");
+  const firstRepositoryWindow = repositoryWindows.find((window) => window.title === `${basename(fixture)} — 51Code`);
+  assert(firstRepositoryWindow, "仓库窗口标题没有标明仓库");
+  const libraryWindow = repositoryWindows.find((window) => window.id !== firstRepositoryWindow.id);
+  const librarySnapshot = (await request("tree", { window: libraryWindow.id })).nodes;
+  assert(librarySnapshot.some((node) => node.placeholder === "搜索仓库名称、路径或分支"), "列表窗口被替换成了仓库工作区");
+  await showLibrary();
+  await press(basename(fixture));
+  await useRepositoryWindow(basename(fixture));
+  assert.equal((await request("windows")).windows.length, 2, "重复打开同一仓库不应新建窗口");
+  await shown("文件变更");
+  console.log("✓ 独立列表和仓库窗口、重复打开复用已有窗口");
   await press("搜索");
   await press("设置");
   const optionalSidebarItems = ["搜索", "版本比较", "贮藏", "工作树"];
@@ -436,21 +472,31 @@ try {
     await capture(`native-worktrees-${suffix}.png`);
   }
   await press("打开工作树");
+  await useRepositoryWindow(basename(linked));
   await shown("文件变更");
+  await fill("提交说明", "工作树窗口独立草稿");
   writeFileSync(join(linked, "worktree-feature.txt"), "来自链接工作树\n");
   gitAt(linked, "add", ".");
   gitAt(linked, "commit", "-m", "worktree feature");
   await press("工作树");
   await press(realpathSync(fixture));
   await press("打开工作树");
+  await useRepositoryWindow(basename(fixture));
+  await press("文件变更");
+  const originalDraft = (await tree()).find((node) => node.label === "提交说明" && node.actions?.includes("setValue"));
+  assert(originalDraft, "找不到原仓库提交说明输入框");
+  assert.notEqual(originalDraft?.value, "工作树窗口独立草稿", "工作树草稿串入原仓库窗口");
+  await fill("提交说明", "原仓库窗口独立草稿");
   await press("工作树");
   await press(realpathSync(linked));
   assert(existsSync(linked), "打开另一个工作目录不应移除链接工作树");
   assert.equal(git("rev-parse", "HEAD"), mainHead, "切换工作树不应隐式合并提交");
+  const worktreeWindows = (await request("windows")).windows;
+  assert(worktreeWindows.some((window) => window.title === `${basename(linked)} — 51Code`) &&
+    worktreeWindows.some((window) => window.id === firstRepositoryWindow.id), "工作树没有独立开窗或替换了原仓库窗口");
   console.log("✓ 工作树创建、发现、打开与浅深色界面");
 
-  await request("menu", { path: ["文件", "本地仓库"] });
-  await ready();
+  await showLibrary();
   await shown("输入路径");
   await capture("native-desktop-library.png");
   await press("新建仓库组");
@@ -484,6 +530,7 @@ try {
   await fill("仓库完整路径", paged);
   await press("添加");
   await press(basename(paged));
+  await useRepositoryWindow(basename(paged));
   await press("提交历史");
   await shown("滚动提交 00624");
   await press("滚动提交 00624");
@@ -543,6 +590,40 @@ try {
     await capture(`native-history-pagination-${suffix}.png`);
   }
   console.log("✓ 历史连续滚动到最早提交、无加载更多按钮与浅深色界面");
+  const beforeClose = (await request("windows")).windows;
+  await showLibrary();
+  await shown("输入路径");
+  await request("menu", { path: ["文件", "关闭窗口"] });
+  targetWindow = 0;
+  const afterLibraryClose = (await request("windows")).windows;
+  assert.equal(afterLibraryClose.length, beforeClose.length - 1, "关闭列表不应连带关闭仓库窗口");
+  assert(afterLibraryClose.some((window) => window.id === firstRepositoryWindow.id), "关闭列表影响了仓库窗口");
+  await showLibrary();
+  await shown("输入路径");
+  const reopenedWindows = (await request("windows")).windows;
+  assert.equal(reopenedWindows.length, beforeClose.length, "关闭后的列表未能重新打开");
+  assert(!reopenedWindows.some((window) => window.id === libraryWindow.id), "列表关闭后仍复用了已销毁的窗口");
+  await capture("native-multiwindow-reopened-library.png");
+  await press(basename(fixture));
+  await useRepositoryWindow(basename(fixture));
+  await shown("工作树");
+  await request("menu", { path: ["文件", "关闭窗口"] });
+  targetWindow = 0;
+  const afterRepositoryClose = (await request("windows")).windows;
+  assert.equal(afterRepositoryClose.length, beforeClose.length - 1, "关闭单个仓库影响了其他窗口");
+  assert(!afterRepositoryClose.some((window) => window.id === firstRepositoryWindow.id), "关闭仓库后仍保留了旧窗口");
+  assert(afterRepositoryClose.some((window) => window.title === `${basename(linked)} — 51Code`), "关闭原仓库影响了工作树窗口");
+  await showLibrary();
+  await press(basename(fixture));
+  await useRepositoryWindow(basename(fixture));
+  await shown("文件变更");
+  const restoredDraft = (await tree()).find((node) => node.label === "提交说明" && node.actions?.includes("setValue"));
+  assert.equal(restoredDraft?.value, "原仓库窗口独立草稿", "仓库关闭重开后没有恢复自己的提交草稿");
+  await useRepositoryWindow(basename(linked));
+  await press("文件变更");
+  const linkedDraft = (await tree()).find((node) => node.label === "提交说明" && node.actions?.includes("setValue"));
+  assert.equal(linkedDraft?.value, "工作树窗口独立草稿", "关闭原仓库影响了工作树草稿");
+  console.log("✓ 列表独立关闭与重开、仓库窗口独立关闭");
   console.log("Native UI 桌面 smoke 通过");
 } finally {
   socket.end();

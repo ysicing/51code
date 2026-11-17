@@ -95,7 +95,7 @@ Inspired by the everyday operations in SourceTree, with a native interface built
 
 | Workflow | Capabilities |
 | --- | --- |
-| Organize repositories | Add and scan local repositories, groups, search and primary language detection |
+| Organize repositories | Separate repository browser, multiple repository windows, add and scan, groups, search and primary language detection |
 | Review and commit | File filters, bulk and hunk / line staging, commit drafts and AI commit messages |
 | Read diffs | Adaptive unified / side-by-side diff, syntax highlighting, read-only full files and in-file search |
 | Explore history | Commit graph, full-text search, path filters, commit diffs and comparison between any two revisions |

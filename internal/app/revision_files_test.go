@@ -17,7 +17,7 @@ import (
 )
 
 func TestNativeRevisionFileViewsKeepSelection(t *testing.T) {
-	app := &nativeApp{prefs: nativePreferences{FileSort: "path"}}
+	app := &nativeApp{prefs: &nativePreferences{FileSort: "path"}}
 	files := []gitrepo.CommitFile{
 		{Path: "b/main.go", Status: "A"},
 		{Path: "a/z.go", Status: "M"},
@@ -85,7 +85,7 @@ func TestNativeRevisionFileViewsKeepSelection(t *testing.T) {
 }
 
 func TestNativeRevisionFilesEmptyLoadingAndLayout(t *testing.T) {
-	app := &nativeApp{prefs: nativePreferences{FileSort: "path"}}
+	app := &nativeApp{prefs: &nativePreferences{FileSort: "path"}}
 	files := []gitrepo.CommitFile{{Path: "src/很长的目录名称/another/long/path/main.go", Status: "M"}}
 	list, selected, reads := &ui.ListState{}, 0, 0
 	tester := ui.NewTester(func(c *ui.Context) {
@@ -138,7 +138,7 @@ func TestNativeRevisionFilesEmptyLoadingAndLayout(t *testing.T) {
 }
 
 func TestNativeRevisionFileSortingPreservesPathIdentity(t *testing.T) {
-	app := &nativeApp{prefs: nativePreferences{FileSort: "path"}}
+	app := &nativeApp{prefs: &nativePreferences{FileSort: "path"}}
 	files := []gitrepo.CommitFile{
 		{Path: "b/main.go", Status: "A"},
 		{Path: "a/z.go", Status: "M"},

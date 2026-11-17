@@ -66,7 +66,7 @@ func (app *nativeApp) gitFeatures(path string) nativeGitFeatures {
 }
 
 func (app *nativeApp) setRepositoryGitOverride(path string, override nativeGitOverride) {
-	previous := app.prefs
+	previous := *app.prefs
 	app.prefs.RepositoryGit = maps.Clone(app.prefs.RepositoryGit)
 	if app.prefs.RepositoryGit == nil {
 		app.prefs.RepositoryGit = map[string]nativeGitOverride{}
@@ -98,7 +98,7 @@ func featureOverrideLabel(value *bool, global bool) string {
 
 func (app *nativeApp) gitFeaturePreferences(c *ui.Context, parent *nativeDialog) {
 	settingsSection(c, locales.LargeFileFeatures(), func() {
-		previous := app.prefs
+		previous := *app.prefs
 		settingsRow(c, "Git LFS", func() {
 			ui.Checkbox(c, &app.prefs.LFSIntegration, locales.EnableLFSIntegration()).OnClick(func() {
 				app.saveBehaviorPreferences(previous)
@@ -213,7 +213,7 @@ func (app *nativeApp) saveThreshold(path string, value int) {
 		app.setRepositoryGitOverride(path, override)
 		return
 	}
-	previous := app.prefs
+	previous := *app.prefs
 	app.prefs.LargeFileMiB = value
 	app.saveBehaviorPreferences(previous)
 }

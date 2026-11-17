@@ -19,9 +19,16 @@ type nativeCommitGraphs struct {
 }
 
 func (app *nativeApp) startCommitGraphs() {
+	if app.desktop != nil && app.desktop.commitGraphs != nil {
+		app.commitGraphs = app.desktop.commitGraphs
+		return
+	}
 	app.commitGraphs = &nativeCommitGraphs{
 		attempted: map[string]bool{}, slot: make(chan struct{}, 1),
 		waitForResources: languageResourceWaiter(), ensure: app.service.EnsureCommitGraph,
+	}
+	if app.desktop != nil {
+		app.desktop.commitGraphs = app.commitGraphs
 	}
 }
 

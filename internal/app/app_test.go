@@ -1011,7 +1011,7 @@ func TestNativePatchNavigationAndMixedMetadata(t *testing.T) {
 	if offsets := patchHunkOffsets(patch); !slices.Equal(offsets, []int{0, 2}) {
 		t.Fatal(offsets)
 	}
-	app := &nativeApp{}
+	app := &nativeApp{prefs: &nativePreferences{}}
 	text := "diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-old\n+new\n" +
 		"diff --git a/icon.png b/icon.png\nBinary files a/icon.png and b/icon.png differ\n"
 	app.setDiff(gitrepo.Diff{Text: text})

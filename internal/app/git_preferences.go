@@ -25,7 +25,7 @@ func (app *nativeApp) commitDate(commit gitrepo.Commit) string {
 }
 
 func (app *nativeApp) gitPreferences(c *ui.Context) {
-	previous := app.prefs
+	previous := *app.prefs
 	settingsSection(c, locales.OperationsAndDisplay(), func() {
 		settingsRow(c, locales.DoubleClickFile(), func() {
 			ui.Checkbox(c, &app.prefs.DoubleClickStage, locales.StageOrUnstage()).Label(locales.DoubleClickStage()).OnClick(func() {
@@ -38,7 +38,7 @@ func (app *nativeApp) gitPreferences(c *ui.Context) {
 					{"author", locales.AuthorDate()}, {"committer", locales.CommitterDate()},
 				} {
 					if menu.Item(choice.label).Checked(app.prefs.HistoryDate == choice.value).Chosen() {
-						previous := app.prefs
+						previous := *app.prefs
 						app.prefs.HistoryDate = choice.value
 						app.saveBehaviorPreferences(previous)
 					}

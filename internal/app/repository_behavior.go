@@ -26,7 +26,7 @@ func (app *nativeApp) restoreStartupRepository() {
 func (app *nativeApp) saveBehaviorPreferences(previous nativePreferences) {
 	app.settingsError = ""
 	if err := app.savePreferences(); err != nil {
-		app.prefs = previous
+		*app.prefs = previous
 		app.settingsError = locales.SaveSettingsError(err.Error())
 		return
 	}
@@ -58,7 +58,7 @@ func (app *nativeApp) repositoryBehaviorPreferences(c *ui.Context) {
 				{"library", locales.StartupLibrary()}, {"last", locales.StartupLastRepository()},
 			} {
 				if menu.Item(choice.label).Checked(app.prefs.StartupPage == choice.value).Chosen() {
-					previous := app.prefs
+					previous := *app.prefs
 					app.prefs.StartupPage = choice.value
 					app.saveBehaviorPreferences(previous)
 				}
@@ -67,7 +67,7 @@ func (app *nativeApp) repositoryBehaviorPreferences(c *ui.Context) {
 	})
 	ui.Divider(c)
 	settingsSection(c, locales.RepositoryBehavior(), func() {
-		previous := app.prefs
+		previous := *app.prefs
 		ui.Checkbox(c, &app.prefs.AutoRefreshFiles, locales.AutoRefreshFiles()).OnClick(func() {
 			app.saveBehaviorPreferences(previous)
 		})
@@ -78,7 +78,7 @@ func (app *nativeApp) repositoryBehaviorPreferences(c *ui.Context) {
 			ui.MenuButton(c, fetchIntervalLabel(app.prefs.AutoFetchMinutes), func(menu *ui.Menu) {
 				for _, minutes := range []int{5, 15, 30} {
 					if menu.Item(fetchIntervalLabel(minutes)).Checked(app.prefs.AutoFetchMinutes == minutes).Chosen() {
-						previous := app.prefs
+						previous := *app.prefs
 						app.prefs.AutoFetchMinutes = minutes
 						app.saveBehaviorPreferences(previous)
 					}

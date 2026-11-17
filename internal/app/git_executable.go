@@ -38,7 +38,7 @@ func gitSourceLabel(source string) string {
 }
 
 func (app *nativeApp) selectGitExecutable(source, path string, editor *nativeIdentityEditor, dialog *nativeDialog) {
-	if app.busy || app.closed || editor.dirty() {
+	if app.busy || app.closed || editor.dirty() || app.gitToolsBusy() {
 		return
 	}
 	options := app.gitExecutableOptions()
@@ -50,6 +50,10 @@ func (app *nativeApp) selectGitExecutable(source, path string, editor *nativeIde
 		}
 		return func() {
 			if app.dialog != dialog {
+				return
+			}
+			if app.gitToolsBusy() {
+				dialog.problem = locales.OperationBusyDetail()
 				return
 			}
 			previous := app.prefs.Git
@@ -71,7 +75,7 @@ func (app *nativeApp) selectGitExecutable(source, path string, editor *nativeIde
 }
 
 func (app *nativeApp) chooseGitExecutable(editor *nativeIdentityEditor, dialog *nativeDialog) {
-	if app.busy || app.closed || editor.dirty() {
+	if app.busy || app.closed || editor.dirty() || app.gitToolsBusy() {
 		return
 	}
 	app.busy = true
@@ -102,7 +106,7 @@ func (app *nativeApp) gitExecutablePreferences(c *ui.Context, editor *nativeIden
 					if menu.Item(locales.ChooseGit()).Chosen() {
 						app.chooseGitExecutable(editor, dialog)
 					}
-				}).Label(locales.GitSource()).Width(210).Justify(ui.SpaceBetween).Disabled(app.busy || editor.dirty())
+				}).Label(locales.GitSource()).Width(210).Justify(ui.SpaceBetween).Disabled(app.busy || editor.dirty() || app.gitToolsBusy())
 				if ui.Button(c, locales.DetectGit()).Disabled(app.busy || editor.dirty()).Clicked() {
 					editor.load(app, dialog)
 				}

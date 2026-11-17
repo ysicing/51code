@@ -37,30 +37,40 @@ func Run(info BuildInfo) {
 		log.Fatal(err)
 	}
 	service := &RepositoryService{manager: manager}
-	desktop := newNativeApp(service, filepath.Join(dir, "native-state.json"))
+	desktop := newNativeDesktop(service, filepath.Join(dir, "native-state.json"))
 	mygo.Use(native.New(updater.Options{
 		// 不能自更新的安装（deb/rpm、开发构建）由插件自行跳过后台检查。
 		Interval: nativeUpdateCheckInterval(desktop.prefs.UpdateCheckFrequency),
 	}))
 	open := func() {
-		if desktop == nil {
-			desktop = newNativeApp(service, filepath.Join(dir, "native-state.json"))
+		if desktop.checkingQuit || desktop.quitting {
+			return
 		}
-		if desktop.win == nil {
-			desktop.open()
-			applyNativeShortcuts(desktop.prefs.Shortcuts)
-			desktop.win.OnClosed(func() { desktop = nil })
-		} else {
-			desktop.win.Show()
-			desktop.win.Focus()
-		}
+		desktop.showLibrary()
+		applyNativeShortcuts(desktop.prefs.Shortcuts)
 	}
 	command := func(action func(*nativeApp)) func(*mygo.MenuItem, *mygo.Window) {
-		return func(_ *mygo.MenuItem, _ *mygo.Window) {
-			if desktop == nil {
-				open()
+		return func(_ *mygo.MenuItem, win *mygo.Window) {
+			if desktop.checkingQuit || desktop.quitting {
+				return
 			}
-			target := desktop
+			target := desktop.target(win)
+			if target == nil {
+				target = desktop.showLibrary()
+			}
+			target.win.Update(func() {
+				if !target.closed && !target.busy && target.dialog == nil {
+					action(target)
+				}
+			})
+		}
+	}
+	libraryCommand := func(action func(*nativeApp)) func(*mygo.MenuItem, *mygo.Window) {
+		return func(_ *mygo.MenuItem, _ *mygo.Window) {
+			if desktop.checkingQuit || desktop.quitting {
+				return
+			}
+			target := desktop.showLibrary()
 			target.win.Update(func() {
 				if !target.closed && !target.busy && target.dialog == nil {
 					action(target)
@@ -69,6 +79,21 @@ func Run(info BuildInfo) {
 		}
 	}
 	app.OnSecondInstance(func(_ []string, _ string) { open() })
+	app.OnBeforeQuit(func(event *mygo.QuitEvent) {
+		if event.SessionEnding {
+			desktop.quitting = true
+			for _, window := range desktop.windows() {
+				if err := window.savePreferences(); err != nil {
+					log.Printf("保存窗口状态：%v", err)
+				}
+			}
+			return
+		}
+		if !desktop.prepareQuit() {
+			event.PreventDefault()
+		}
+	})
+	app.OnQuitCanceled(func() { desktop.quitting = false })
 	setMenu := func() {
 		updates := &mygo.MenuItem{
 			Label: locales.DownloadRelease(),
@@ -98,10 +123,10 @@ func Run(info BuildInfo) {
 				{Role: mygo.RoleQuit},
 			}},
 			{Label: locales.FilesMenu(), Submenu: []*mygo.MenuItem{
-				{ID: shortcutLibrary, Label: locales.LocalRepositories(), Accelerator: shortcutAccelerator(defaultNativeShortcuts().Library), Click: command(func(desktop *nativeApp) { desktop.showLibrary() })},
-				{ID: shortcutAddRepo, Label: locales.AddExistingRepositoryMenu(), Accelerator: shortcutAccelerator(defaultNativeShortcuts().AddRepository), Click: command(func(desktop *nativeApp) { desktop.chooseLocal() })},
-				{ID: shortcutScan, Label: locales.ScanFoldersMenu(), Accelerator: shortcutAccelerator(defaultNativeShortcuts().Scan), Click: command(func(desktop *nativeApp) { desktop.chooseScan() })},
-				{Label: locales.NewGroupMenu(), Click: command(func(desktop *nativeApp) { desktop.groupDialog("") })},
+				{ID: shortcutLibrary, Label: locales.LocalRepositories(), Accelerator: shortcutAccelerator(defaultNativeShortcuts().Library), Click: func(_ *mygo.MenuItem, _ *mygo.Window) { open() }},
+				{ID: shortcutAddRepo, Label: locales.AddExistingRepositoryMenu(), Accelerator: shortcutAccelerator(defaultNativeShortcuts().AddRepository), Click: libraryCommand(func(desktop *nativeApp) { desktop.chooseLocal() })},
+				{ID: shortcutScan, Label: locales.ScanFoldersMenu(), Accelerator: shortcutAccelerator(defaultNativeShortcuts().Scan), Click: libraryCommand(func(desktop *nativeApp) { desktop.chooseScan() })},
+				{Label: locales.NewGroupMenu(), Click: libraryCommand(func(desktop *nativeApp) { desktop.groupDialog("") })},
 				mygo.Separator(),
 				{Role: mygo.RoleClose},
 			}},
@@ -115,14 +140,13 @@ func Run(info BuildInfo) {
 			{Role: mygo.RoleViewMenu},
 			{Role: mygo.RoleWindowMenu},
 		}, runtime.GOOS)))
-		if desktop != nil {
-			applyNativeShortcuts(desktop.prefs.Shortcuts)
-		}
+		applyNativeShortcuts(desktop.prefs.Shortcuts)
 	}
 	app.WhenReady(func() {
 		setMenu()
 		app.OnLocaleChanged(func(_ string) { setMenu() })
 		open()
+		desktop.library.restoreStartupRepository()
 	})
 	if runtime.GOOS == "darwin" {
 		app.OnWindowAllClosed(func() {})

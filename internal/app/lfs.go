@@ -49,7 +49,7 @@ func lfsSourceLabel(source string) string {
 }
 
 func (app *nativeApp) selectLFSExecutable(source, path string, editor *nativeIdentityEditor, dialog *nativeDialog) {
-	if app.busy || app.closed {
+	if app.busy || app.closed || app.gitToolsBusy() {
 		return
 	}
 	options := app.lfsExecutableOptions()
@@ -63,7 +63,11 @@ func (app *nativeApp) selectLFSExecutable(source, path string, editor *nativeIde
 			if app.dialog != dialog {
 				return
 			}
-			previous := app.prefs
+			if app.gitToolsBusy() {
+				dialog.problem = locales.OperationBusyDetail()
+				return
+			}
+			previous := *app.prefs
 			app.prefs.LFS = gitrepo.ExecutableOptions{Source: source, Path: path}
 			app.saveBehaviorPreferences(previous)
 			if app.settingsError != "" {
@@ -96,7 +100,7 @@ func (app *nativeApp) lfsExecutablePreferences(c *ui.Context, editor *nativeIden
 							app.selectLFSExecutable("custom", paths[0], editor, dialog)
 						}
 					}
-				}).Label(locales.LfsSource()).Width(210).Justify(ui.SpaceBetween)
+				}).Label(locales.LfsSource()).Width(210).Justify(ui.SpaceBetween).Disabled(app.busy || app.gitToolsBusy())
 				if ui.Button(c, locales.DetectGit()).Clicked() {
 					options := app.lfsExecutableOptions()
 					app.runTask(locales.DetectingLFS(), true, func(ctx context.Context) (func(), error) {

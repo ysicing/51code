@@ -79,6 +79,7 @@ type nativeApp struct {
 	searchSince           time.Time
 	searchUntil           time.Time
 	service               *RepositoryService
+	desktop               *nativeDesktop
 	win                   *mygo.Window
 	ctx                   context.Context
 	cancel                context.CancelFunc
@@ -138,7 +139,7 @@ type nativeApp struct {
 	dialog                *nativeDialog
 	scanResult            *workspace.ScanResult
 	scanSelected          map[string]bool
-	prefs                 nativePreferences
+	prefs                 *nativePreferences
 	stateFile             string
 	settingsError         string
 	memoryDiagnostics     nativeMemoryDiagnostics
@@ -151,6 +152,7 @@ type nativeApp struct {
 	chosenLanguage        string
 	chooseLanguage        func(string)
 	openDialog            func(mygo.OpenDialogOptions) ([]string, error)
+	closeMessage          func(mygo.MessageOptions) (mygo.MessageResult, error)
 	discoverTerminals     func() ([]nativeTerminalApplication, error)
 	terminalApplications  []nativeTerminalApplication
 	ai                    *nativeCommitAI
@@ -177,7 +179,7 @@ func newNativeApp(service *RepositoryService, stateFile string) *nativeApp {
 		service: service, ctx: ctx, cancel: cancel, stateFile: stateFile,
 		aiKeys: aikeychain.Store{Service: "com.ysicing.xsourcetree.ai"},
 		screen: "library", library: service.Library(), selectedFiles: map[string]bool{},
-		prefs: nativePreferences{
+		prefs: &nativePreferences{
 			Sidebar: 226, Files: 360, History: 56, HistoryFiles: 280, Wrap: true, DiffLayout: "auto", Drafts: map[string]string{},
 			Appearance: appearanceSystem, Shortcuts: defaultNativeShortcuts(),
 			StartupPage: "library", AutoRefreshFiles: true, AutoFetchMinutes: 15, DoubleClickStage: true,
@@ -189,6 +191,7 @@ func newNativeApp(service *RepositoryService, stateFile string) *nativeApp {
 		refCollapsed: make(map[nativeRefKey]bool), fileCollapsed: make(map[string]bool),
 		chooseLanguage: mygo.App.SetLocale,
 		openDialog:     mygo.Dialog.Open,
+		closeMessage:   mygo.Dialog.Message,
 	}
 	if service != nil && service.manager != nil {
 		if err := service.manager.LoadProblem(); err != nil {
@@ -201,7 +204,7 @@ func newNativeApp(service *RepositoryService, stateFile string) *nativeApp {
 			ByName     bool    `json:"byName"`
 			Split      *bool   `json:"split"`
 			DiffLayout *string `json:"diffLayout"`
-		}{nativePreferences: &app.prefs}
+		}{nativePreferences: app.prefs}
 		if err := json.Unmarshal(data, &stored); err != nil {
 			app.problem = locales.LoadPreferencesFailed()
 			// 退出和任何设置变更都会保存偏好；先保留损坏文件的副本，避免草稿与 AI 配置被默认值覆盖。
@@ -245,8 +248,8 @@ func newNativeApp(service *RepositoryService, stateFile string) *nativeApp {
 	if app.prefs.Drafts == nil {
 		app.prefs.Drafts = map[string]string{}
 	}
-	normalizeNativePreferences(&app.prefs)
-	normalizeGitFeatures(&app.prefs)
+	normalizeNativePreferences(app.prefs)
+	normalizeGitFeatures(app.prefs)
 	commitai.Normalize(&app.prefs.AI)
 	if app.prefs.RepositoryAI == nil {
 		app.prefs.RepositoryAI = map[string]nativeAIOverride{}
@@ -265,10 +268,19 @@ func (app *nativeApp) open() {
 	gitrepo.ConfigureExecutable(app.gitExecutableOptions())
 	gitrepo.ConfigureLFSExecutable(app.lfsExecutableOptions())
 	app.chosenLanguage = mygo.App.ChosenLocale()
+	title, stateKey := "51Code", "main"
+	if app.desktop != nil {
+		title = locales.LocalRepositories() + " — 51Code"
+		stateKey = "library"
+		if app.repository != nil {
+			title = app.repository.snapshot.Name + " — 51Code"
+			stateKey = repositoryWindowKey(app.repository.snapshot.Path)
+		}
+	}
 	app.win = mygo.NewWindow(mygo.WindowOptions{
-		Title: "51Code", Width: 1320, Height: 860, MinWidth: 1024, MinHeight: 680,
+		Title: title, Width: 1320, Height: 860, MinWidth: 1024, MinHeight: 680,
 		TitleBarStyle: platformTitleBarStyle(), TitleBarHeight: 52,
-		BackgroundColor: appearanceBackground(app.prefs.Appearance), StateKey: "main",
+		BackgroundColor: appearanceBackground(app.prefs.Appearance), StateKey: stateKey,
 		Content: ui.View(app.view),
 	})
 	app.win.SetWindowButtonsTheme(appearanceThemeSource(app.prefs.Appearance))
@@ -311,15 +323,30 @@ func (app *nativeApp) open() {
 			app.stopLocale()
 			app.stopLocale = nil
 		}
+		if app.desktop != nil {
+			app.desktop.remove(app)
+		}
 	})
-	app.win.OnFocus(app.refreshOnFocus)
+	app.win.OnFocus(func() {
+		if app.desktop != nil {
+			app.desktop.active = app
+		}
+		app.refreshOnFocus()
+	})
 	cacheDir := ""
 	if directory, err := os.UserCacheDir(); err == nil {
 		cacheDir = filepath.Join(directory, "51code", "repository-languages")
 	}
-	app.startRepositoryLanguages(cacheDir)
+	if app.repository == nil {
+		app.startRepositoryLanguages(cacheDir)
+	}
 	app.startCommitGraphs()
-	app.restoreStartupRepository()
+	if app.desktop == nil {
+		app.restoreStartupRepository()
+	} else if app.repository != nil {
+		app.maintainCommitGraph(app.repository.snapshot.Path)
+		app.restartRepositoryBackground()
+	}
 }
 
 func platformTitleBarStyle() mygo.TitleBarStyle {
@@ -357,7 +384,13 @@ func (app *nativeApp) savePreferences() error {
 	if err := file.Close(); err != nil {
 		return err
 	}
-	return os.Rename(file.Name(), app.stateFile)
+	if err := os.Rename(file.Name(), app.stateFile); err != nil {
+		return err
+	}
+	if app.desktop != nil {
+		app.desktop.preferencesChanged(app)
+	}
+	return nil
 }
 
 // 后台任务只返回结果；界面状态统一经 Window.Update 在主线程修改。
@@ -367,7 +400,7 @@ func (app *nativeApp) run(label string, task func(context.Context) (func(), erro
 
 // 只读任务可在窗口关闭后随 app.ctx 取消；写操作必须完成后才能退出。
 func (app *nativeApp) runTask(label string, readOnly bool, task func(context.Context) (func(), error)) {
-	if app.busy || app.closed {
+	if app.busy || app.closed || app.desktop != nil && (app.desktop.checkingQuit || app.desktop.quitting) {
 		return
 	}
 	app.cancelRead()
@@ -395,10 +428,16 @@ func (app *nativeApp) runTask(label string, readOnly bool, task func(context.Con
 					dialog.problem = err.Error()
 				}
 			}
+			if app.desktop != nil {
+				app.reconcileSidebar()
+			}
 			// 忙碌期间洞察读取会被跳过或取消，任务结束后补读；缓存键含提交 SHA，引用未变时直接命中缓存。
 			if app.screen == "insights" && app.insights != nil {
 				app.insights.checked = time.Time{}
 				app.refreshInsights(false)
+			}
+			if app.desktop != nil {
+				app.desktop.refreshLibraries()
 			}
 		})
 	}()
@@ -443,6 +482,10 @@ func (app *nativeApp) adopt(result *repositoryView) {
 }
 
 func (app *nativeApp) openRepository(path string) {
+	if app.desktop != nil {
+		app.desktop.openRepository(app, path)
+		return
+	}
 	app.leaveConflict(func() {
 		if !app.busy {
 			app.stopCommitAI()
@@ -715,6 +758,13 @@ func isStaged(file gitrepo.File) bool {
 func isWorking(file gitrepo.File) bool { return file.Working != " " || file.Conflict }
 
 func (app *nativeApp) showLibrary() {
+	if app.desktop != nil {
+		if app.desktop.checkingQuit || app.desktop.quitting {
+			return
+		}
+		app.desktop.showLibrary()
+		return
+	}
 	app.leaveConflict(func() {
 		app.cancelRead()
 		app.stopCommitAI()
@@ -823,14 +873,14 @@ func (app *nativeApp) closeBlockReason() string {
 
 func (app *nativeApp) prepareClose() bool {
 	if reason := app.closeBlockReason(); reason != "" {
-		_, _ = mygo.Dialog.Message(mygo.MessageOptions{
+		_, _ = app.closeMessage(mygo.MessageOptions{
 			Parent: app.win, Message: locales.OperationBusyTitle(), Detail: reason,
 			Buttons: []string{locales.Ok()},
 		})
 		return false
 	}
 	if app.conflictDirty() {
-		result, err := mygo.Dialog.Message(mygo.MessageOptions{
+		result, err := app.closeMessage(mygo.MessageOptions{
 			Parent: app.win, Type: mygo.MessageWarning, Message: locales.QuitWithConflictTitle(),
 			Detail:  locales.QuitWithConflictDetail(),
 			Buttons: []string{locales.Cancel(), locales.DiscardAndQuit()}, CancelButton: 0, DestructiveButtons: []int{1},
@@ -840,7 +890,7 @@ func (app *nativeApp) prepareClose() bool {
 		}
 	}
 	if app.aiEditor != nil && app.aiEditor.key != "" {
-		result, err := mygo.Dialog.Message(mygo.MessageOptions{
+		result, err := app.closeMessage(mygo.MessageOptions{
 			Parent: app.win, Type: mygo.MessageWarning, Message: locales.DiscardUnsavedTitle(),
 			Detail: locales.DiscardApiKey(), Buttons: []string{locales.Cancel(), locales.DiscardAndQuit()},
 			CancelButton: 0, DestructiveButtons: []int{1},
@@ -850,7 +900,7 @@ func (app *nativeApp) prepareClose() bool {
 		}
 	}
 	if app.identityEditor != nil && app.identityEditor.dirty() {
-		result, err := mygo.Dialog.Message(mygo.MessageOptions{
+		result, err := app.closeMessage(mygo.MessageOptions{
 			Parent: app.win, Type: mygo.MessageWarning, Message: locales.DiscardUnsavedTitle(),
 			Detail: locales.DiscardIdentityDetail(), Buttons: []string{locales.Cancel(), locales.DiscardAndQuit()},
 			CancelButton: 0, DestructiveButtons: []int{1},
@@ -860,7 +910,7 @@ func (app *nativeApp) prepareClose() bool {
 		}
 	}
 	if err := app.savePreferences(); err != nil {
-		_, _ = mygo.Dialog.Message(mygo.MessageOptions{
+		_, _ = app.closeMessage(mygo.MessageOptions{
 			Parent: app.win, Type: mygo.MessageWarning, Message: locales.SaveStateFailed(),
 			Detail: err.Error(), Buttons: []string{locales.Ok()},
 		})

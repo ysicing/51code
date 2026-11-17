@@ -209,6 +209,19 @@ func (app *nativeApp) aiSettingsDialog() {
 }
 
 func (app *nativeApp) settingsDialogAt(initialTab int) {
+	if app.desktop != nil {
+		if app.desktop.checkingQuit || app.desktop.quitting {
+			return
+		}
+		for _, other := range app.desktop.windows() {
+			for dialog := other.dialog; dialog != nil; dialog = dialog.parent {
+				if dialog.applicationSettings {
+					app.desktop.present(other)
+					return
+				}
+			}
+		}
+	}
 	if app.busy || app.dialog != nil {
 		return
 	}
@@ -216,7 +229,7 @@ func (app *nativeApp) settingsDialogAt(initialTab int) {
 	app.settingsAutoDownloads = updater.AutomaticDownloads()
 	app.shortcutDraft = app.prefs.Shortcuts
 	app.settingsError = ""
-	dialog := &nativeDialog{title: locales.ApplicationSettings(), titleText: locales.ApplicationSettings, width: 620, height: 620, dismiss: locales.Cancel()}
+	dialog := &nativeDialog{title: locales.ApplicationSettings(), titleText: locales.ApplicationSettings, width: 620, height: 620, dismiss: locales.Cancel(), applicationSettings: true}
 	tab := initialTab
 	identity := &nativeIdentityEditor{}
 	app.identityEditor = identity
