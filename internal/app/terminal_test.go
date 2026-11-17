@@ -192,7 +192,8 @@ func TestNativeRepositoryTerminalMenu(t *testing.T) {
 			}
 			finish()
 			tester.Frame()
-			if !strings.Contains(app.problem, missing) || app.busy || app.dialog != nil {
+			if !strings.Contains(app.problem, missing) || app.busy || app.dialog == nil ||
+				app.dialog.errorDetails == nil || app.dialog.parent != nil {
 				t.Fatal("repository terminal action did not use the selected terminal safely", app.problem)
 			}
 		})

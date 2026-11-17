@@ -211,7 +211,7 @@ func (app *nativeApp) repositoryLFSView(c *ui.Context, path string, parent *nati
 		}
 		ui.Text(c, label).FontSize(12).TextColor(c.Theme().TextMuted)
 		if state.status.Problem != "" {
-			ui.Text(c, state.status.Problem).FontSize(12).TextColor(c.Theme().Danger).FillWidth().MaxLines(3).Tooltip(state.status.Problem)
+			app.inlineProblem(c, state.status.Problem)
 		}
 		if state.status.HooksPath != "" {
 			ui.Text(c, state.status.HooksPath).FontSize(11).TextColor(c.Theme().TextMuted).SingleLine().Tooltip(state.status.HooksPath)

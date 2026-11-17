@@ -50,7 +50,7 @@ func (app *nativeApp) gitPreferences(c *ui.Context) {
 		})
 	})
 	if app.settingsError != "" {
-		ui.Text(c, app.settingsError).FontSize(12).TextColor(c.Theme().Danger)
+		app.inlineProblem(c, app.settingsError)
 	}
 }
 

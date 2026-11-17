@@ -609,6 +609,7 @@ func TestNativeIdentityErrorKeepsDraft(t *testing.T) {
 	nativeGit(t, path, "config", "user.name", "External Name")
 	editor.save(app, dialog)
 	finish()
+	dismissNativeError(t, app)
 	if dialog.problem == "" || editor.name != "Pending Name" || !editor.dirty() || app.dialog != dialog {
 		t.Fatal("保存失败没有保留草稿和错误提示")
 	}
@@ -626,6 +627,7 @@ func TestNativeSettingsParentShowsRefreshFailure(t *testing.T) {
 		return exec.CommandContext(ctx, "git", "-C", path, "config", "core.repositoryformatversion", "999").Run()
 	})
 	finish()
+	dismissNativeError(t, app)
 	if app.dialog != parent || parent.problem == "" || app.writable {
 		t.Fatal("返回设置页时隐藏了刷新失败，或未禁止后续写入")
 	}

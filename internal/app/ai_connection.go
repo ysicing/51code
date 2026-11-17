@@ -76,7 +76,7 @@ func (editor *nativeAISettings) connectionFields(app *nativeApp, dialog *nativeD
 				}
 			})
 			if editor.keyProblem != "" {
-				ui.Text(c, editor.keyProblem).FontSize(12).TextColor(c.Theme().Danger)
+				app.inlineProblem(c, editor.keyProblem)
 			}
 		})
 	})

@@ -116,7 +116,7 @@ func (app *nativeApp) gitFeaturePreferences(c *ui.Context, parent *nativeDialog)
 		})
 	})
 	if app.settingsError != "" {
-		ui.Text(c, app.settingsError).FontSize(12).TextColor(c.Theme().Danger)
+		app.inlineProblem(c, app.settingsError)
 	}
 }
 
@@ -163,7 +163,7 @@ func (app *nativeApp) repositoryGitPreferences(c *ui.Context, path string, paren
 		})
 	})
 	if app.settingsError != "" {
-		ui.Text(c, app.settingsError).FontSize(12).TextColor(c.Theme().Danger)
+		app.inlineProblem(c, app.settingsError)
 	}
 	ui.Divider(c)
 	app.repositoryLFSView(c, path, parent)

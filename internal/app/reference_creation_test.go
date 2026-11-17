@@ -159,6 +159,7 @@ func TestNativeReferenceValidationAndPartialSuccess(t *testing.T) {
 		t.Fatal(err)
 	}
 	finish()
+	dismissNativeError(t, app)
 	tester.Frame()
 	if app.dialog != dialog || !dialog.fields[0].readOnly || dialog.action != "重试切换" ||
 		!strings.Contains(dialog.problem, "已创建") || nativeGit(t, path, "rev-parse", "refs/heads/fix/v1") != base {

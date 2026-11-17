@@ -269,6 +269,7 @@ func TestNativeMergeOptionsAndFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	finish()
+	dismissNativeError(t, app)
 	tester.Frame()
 	if app.dialog == nil || app.dialog.problem == "" {
 		t.Fatal("failed merge did not keep the dialog and error")

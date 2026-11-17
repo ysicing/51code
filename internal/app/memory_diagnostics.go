@@ -39,7 +39,7 @@ func (app *nativeApp) memoryDiagnosticsPreferences(c *ui.Context) {
 				OnClick(app.exportMemoryDiagnostics)
 			ui.Text(c, locales.MemoryDiagnosticsHint()).FontSize(12).TextColor(c.Theme().TextMuted).FillWidth()
 			if state.problem != "" {
-				ui.Text(c, state.problem).FontSize(12).TextColor(c.Theme().Danger).FillWidth()
+				app.inlineProblem(c, state.problem)
 			}
 			if state.path != "" && !state.busy {
 				ui.Text(c, locales.DiagnosticsSaved(state.path)).FontSize(12).TextColor(c.Theme().TextMuted).

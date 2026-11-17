@@ -155,7 +155,7 @@ func (app *nativeApp) searchControls(c *ui.Context) {
 			})
 		}
 		if app.searchDateEnabled && app.searchSince.Format(time.DateOnly) > app.searchUntil.Format(time.DateOnly) {
-			ui.Text(c, locales.SearchInvalidDates()).FontSize(12).TextColor(c.Theme().Danger)
+			app.inlineProblem(c, locales.SearchInvalidDates())
 		}
 	})
 }

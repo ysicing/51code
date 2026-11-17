@@ -113,6 +113,8 @@ func TestNativeHistoryScrollFailureWaitsForRetry(t *testing.T) {
 	if app.readTask != nil {
 		t.Fatal("续载失败后陷入自动重试")
 	}
+	dismissNativeError(t, app)
+	tester.Frame()
 	if err := os.Rename(held, metadata); err != nil {
 		t.Fatal(err)
 	}

@@ -122,7 +122,7 @@ func (app *nativeApp) gitExecutablePreferences(c *ui.Context, editor *nativeIden
 				ui.Text(c, path).FontSize(11).TextColor(c.Theme().TextMuted).FillWidth().MaxLines(1).Tooltip(path).Selectable()
 			}
 			if editor.gitError != "" {
-				ui.Text(c, locales.GitUnavailable()).FontSize(12).TextColor(c.Theme().Danger).FillWidth().Tooltip(editor.gitError)
+				app.inlineProblem(c, locales.GitUnavailable()+"\n"+editor.gitError)
 			}
 		})
 	})

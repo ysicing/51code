@@ -158,6 +158,7 @@ func (app *nativeApp) view(c *ui.Context) {
 				})
 			}).Fill().SplitReset(226)
 		})
+		app.problemNotice(c)
 		ui.Divider(c)
 		ui.Row(c).Height(34).Padding(0, 14).AlignItems(ui.Center).Gap(10).Children(func() {
 			if app.busy {
@@ -173,26 +174,6 @@ func (app *nativeApp) view(c *ui.Context) {
 					if ui.Button(c, locales.Cancel()).Clicked() {
 						app.operationCancel()
 					}
-				}
-			} else if app.problem != "" {
-				summary := strings.SplitN(app.problem, "\n", 2)[0]
-				if strings.HasPrefix(summary, "git ") || strings.HasPrefix(summary, "fatal:") || strings.HasPrefix(summary, "error:") || strings.HasPrefix(summary, "ssh:") {
-					summary = locales.GitOperationFailed()
-				}
-				ui.Text(c, summary).FontSize(12).TextColor(c.Theme().Danger).MaxLines(1).Grow(1).Selectable().Tooltip(app.problem)
-				if ui.Button(c, locales.ShowDetails()).Clicked() {
-					problem := app.problem
-					app.dialog = &nativeDialog{
-						title: locales.OperationFailed(),
-						body: func(c *ui.Context) {
-							ui.Scroll(c).Height(280).FillWidth().Children(func() {
-								ui.Text(c, problem).FontSize(12).Selectable().FillWidth()
-							})
-						},
-					}
-				}
-				if ui.Button(c, locales.DismissNotice()).Clicked() {
-					app.problem = ""
 				}
 			} else if app.repository != nil && app.screen != "library" {
 				ui.Text(c, app.repository.snapshot.Path).FontSize(12).TextColor(c.Theme().TextMuted).MinWidth(0).MaxLines(1).Shrink(1).Selectable()

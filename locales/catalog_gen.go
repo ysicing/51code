@@ -36,6 +36,206 @@ type Messages struct{ locale string }
 // source language.
 func In(locale string) Messages { return Messages{locale} }
 
+// CopyErrorDetails says "复制详情"
+// in the language the app shows.
+func CopyErrorDetails() string { return In(i18n.Locale()).CopyErrorDetails() }
+
+// CopyErrorDetails says "复制详情"
+// in the language of msgs.
+func (msgs Messages) CopyErrorDetails() string {
+	return Catalog.Format(msgs.locale, "copyErrorDetails", nil)
+}
+
+// MergeConflictError says "存在合并冲突"
+// in the language the app shows.
+func MergeConflictError() string { return In(i18n.Locale()).MergeConflictError() }
+
+// MergeConflictError says "存在合并冲突"
+// in the language of msgs.
+func (msgs Messages) MergeConflictError() string {
+	return Catalog.Format(msgs.locale, "mergeConflictError", nil)
+}
+
+// MergeConflictReason says "部分文件存在尚未解决的合并冲突。"
+// in the language the app shows.
+func MergeConflictReason() string { return In(i18n.Locale()).MergeConflictReason() }
+
+// MergeConflictReason says "部分文件存在尚未解决的合并冲突。"
+// in the language of msgs.
+func (msgs Messages) MergeConflictReason() string {
+	return Catalog.Format(msgs.locale, "mergeConflictReason", nil)
+}
+
+// CloseErrorDetails says "关闭错误详情"
+// in the language the app shows.
+func CloseErrorDetails() string { return In(i18n.Locale()).CloseErrorDetails() }
+
+// CloseErrorDetails says "关闭错误详情"
+// in the language of msgs.
+func (msgs Messages) CloseErrorDetails() string {
+	return Catalog.Format(msgs.locale, "closeErrorDetails", nil)
+}
+
+// RawErrorDetails says "原始错误信息"
+// in the language the app shows.
+func RawErrorDetails() string { return In(i18n.Locale()).RawErrorDetails() }
+
+// RawErrorDetails says "原始错误信息"
+// in the language of msgs.
+func (msgs Messages) RawErrorDetails() string {
+	return Catalog.Format(msgs.locale, "rawErrorDetails", nil)
+}
+
+// ErrorSummaryFallback says "操作未完成。"
+// in the language the app shows.
+func ErrorSummaryFallback() string { return In(i18n.Locale()).ErrorSummaryFallback() }
+
+// ErrorSummaryFallback says "操作未完成。"
+// in the language of msgs.
+func (msgs Messages) ErrorSummaryFallback() string {
+	return Catalog.Format(msgs.locale, "errorSummaryFallback", nil)
+}
+
+// BranchDeleteFailed says "无法删除分支"
+// in the language the app shows.
+func BranchDeleteFailed() string { return In(i18n.Locale()).BranchDeleteFailed() }
+
+// BranchDeleteFailed says "无法删除分支"
+// in the language of msgs.
+func (msgs Messages) BranchDeleteFailed() string {
+	return Catalog.Format(msgs.locale, "branchDeleteFailed", nil)
+}
+
+// BranchInWorktree says "分支 {branch} 正被另一个工作树使用。"
+// in the language the app shows.
+func BranchInWorktree(branch string) string { return In(i18n.Locale()).BranchInWorktree(branch) }
+
+// BranchInWorktree says "分支 {branch} 正被另一个工作树使用。"
+// in the language of msgs.
+func (msgs Messages) BranchInWorktree(branch string) string {
+	return Catalog.Format(msgs.locale, "branchInWorktree", map[string]any{"branch": branch})
+}
+
+// BranchInWorktreeHint says "请先在对应工作树切换到其他分支，再尝试删除。"
+// in the language the app shows.
+func BranchInWorktreeHint() string { return In(i18n.Locale()).BranchInWorktreeHint() }
+
+// BranchInWorktreeHint says "请先在对应工作树切换到其他分支，再尝试删除。"
+// in the language of msgs.
+func (msgs Messages) BranchInWorktreeHint() string {
+	return Catalog.Format(msgs.locale, "branchInWorktreeHint", nil)
+}
+
+// BranchUnmergedError says "该分支仍有尚未合并的提交。"
+// in the language the app shows.
+func BranchUnmergedError() string { return In(i18n.Locale()).BranchUnmergedError() }
+
+// BranchUnmergedError says "该分支仍有尚未合并的提交。"
+// in the language of msgs.
+func (msgs Messages) BranchUnmergedError() string {
+	return Catalog.Format(msgs.locale, "branchUnmergedError", nil)
+}
+
+// BranchUnmergedHint says "请先检查并保留需要的提交，再尝试删除分支。"
+// in the language the app shows.
+func BranchUnmergedHint() string { return In(i18n.Locale()).BranchUnmergedHint() }
+
+// BranchUnmergedHint says "请先检查并保留需要的提交，再尝试删除分支。"
+// in the language of msgs.
+func (msgs Messages) BranchUnmergedHint() string {
+	return Catalog.Format(msgs.locale, "branchUnmergedHint", nil)
+}
+
+// AuthenticationError says "身份验证失败"
+// in the language the app shows.
+func AuthenticationError() string { return In(i18n.Locale()).AuthenticationError() }
+
+// AuthenticationError says "身份验证失败"
+// in the language of msgs.
+func (msgs Messages) AuthenticationError() string {
+	return Catalog.Format(msgs.locale, "authenticationError", nil)
+}
+
+// AuthenticationErrorReason says "未能通过远端的身份验证。"
+// in the language the app shows.
+func AuthenticationErrorReason() string { return In(i18n.Locale()).AuthenticationErrorReason() }
+
+// AuthenticationErrorReason says "未能通过远端的身份验证。"
+// in the language of msgs.
+func (msgs Messages) AuthenticationErrorReason() string {
+	return Catalog.Format(msgs.locale, "authenticationErrorReason", nil)
+}
+
+// AuthenticationErrorHint says "请检查远端地址、访问凭证或 SSH 密钥，以及仓库访问权限。"
+// in the language the app shows.
+func AuthenticationErrorHint() string { return In(i18n.Locale()).AuthenticationErrorHint() }
+
+// AuthenticationErrorHint says "请检查远端地址、访问凭证或 SSH 密钥，以及仓库访问权限。"
+// in the language of msgs.
+func (msgs Messages) AuthenticationErrorHint() string {
+	return Catalog.Format(msgs.locale, "authenticationErrorHint", nil)
+}
+
+// ConnectionError says "无法连接远端"
+// in the language the app shows.
+func ConnectionError() string { return In(i18n.Locale()).ConnectionError() }
+
+// ConnectionError says "无法连接远端"
+// in the language of msgs.
+func (msgs Messages) ConnectionError() string {
+	return Catalog.Format(msgs.locale, "connectionError", nil)
+}
+
+// ConnectionErrorReason says "无法连接远端服务器。"
+// in the language the app shows.
+func ConnectionErrorReason() string { return In(i18n.Locale()).ConnectionErrorReason() }
+
+// ConnectionErrorReason says "无法连接远端服务器。"
+// in the language of msgs.
+func (msgs Messages) ConnectionErrorReason() string {
+	return Catalog.Format(msgs.locale, "connectionErrorReason", nil)
+}
+
+// ConnectionErrorHint says "请检查网络、代理和远端地址后重试。"
+// in the language the app shows.
+func ConnectionErrorHint() string { return In(i18n.Locale()).ConnectionErrorHint() }
+
+// ConnectionErrorHint says "请检查网络、代理和远端地址后重试。"
+// in the language of msgs.
+func (msgs Messages) ConnectionErrorHint() string {
+	return Catalog.Format(msgs.locale, "connectionErrorHint", nil)
+}
+
+// PermissionError says "权限不足"
+// in the language the app shows.
+func PermissionError() string { return In(i18n.Locale()).PermissionError() }
+
+// PermissionError says "权限不足"
+// in the language of msgs.
+func (msgs Messages) PermissionError() string {
+	return Catalog.Format(msgs.locale, "permissionError", nil)
+}
+
+// PermissionErrorReason says "当前操作所需的访问权限不足。"
+// in the language the app shows.
+func PermissionErrorReason() string { return In(i18n.Locale()).PermissionErrorReason() }
+
+// PermissionErrorReason says "当前操作所需的访问权限不足。"
+// in the language of msgs.
+func (msgs Messages) PermissionErrorReason() string {
+	return Catalog.Format(msgs.locale, "permissionErrorReason", nil)
+}
+
+// PermissionErrorHint says "请检查相关文件或目录的访问权限。"
+// in the language the app shows.
+func PermissionErrorHint() string { return In(i18n.Locale()).PermissionErrorHint() }
+
+// PermissionErrorHint says "请检查相关文件或目录的访问权限。"
+// in the language of msgs.
+func (msgs Messages) PermissionErrorHint() string {
+	return Catalog.Format(msgs.locale, "permissionErrorHint", nil)
+}
+
 // CancelOperation says "取消操作"
 // in the language the app shows.
 func CancelOperation() string { return In(i18n.Locale()).CancelOperation() }
@@ -1574,14 +1774,24 @@ func (msgs Messages) SelectWorktree() string {
 	return Catalog.Format(msgs.locale, "selectWorktree", nil)
 }
 
-// WorktreeRemoveDetail says "仅移除工作目录，保留本地分支"
+// WorktreeRemoveDetail says "删除工作目录及其中的所有文件（含忽略文件），保留本地分支"
 // in the language the app shows.
 func WorktreeRemoveDetail() string { return In(i18n.Locale()).WorktreeRemoveDetail() }
 
-// WorktreeRemoveDetail says "仅移除工作目录，保留本地分支"
+// WorktreeRemoveDetail says "删除工作目录及其中的所有文件（含忽略文件），保留本地分支"
 // in the language of msgs.
 func (msgs Messages) WorktreeRemoveDetail() string {
 	return Catalog.Format(msgs.locale, "worktreeRemoveDetail", nil)
+}
+
+// RemoveDetachedWorktreeDetail says "删除工作目录及其中的所有文件（含忽略文件）。该工作树处于分离 HEAD…"
+// in the language the app shows.
+func RemoveDetachedWorktreeDetail() string { return In(i18n.Locale()).RemoveDetachedWorktreeDetail() }
+
+// RemoveDetachedWorktreeDetail says "删除工作目录及其中的所有文件（含忽略文件）。该工作树处于分离 HEAD…"
+// in the language of msgs.
+func (msgs Messages) RemoveDetachedWorktreeDetail() string {
+	return Catalog.Format(msgs.locale, "removeDetachedWorktreeDetail", nil)
 }
 
 // CreatingWorktree says "正在创建工作树…"
@@ -3222,6 +3432,52 @@ func DeleteBranchDetail() string { return In(i18n.Locale()).DeleteBranchDetail()
 // in the language of msgs.
 func (msgs Messages) DeleteBranchDetail() string {
 	return Catalog.Format(msgs.locale, "deleteBranchDetail", nil)
+}
+
+// RemoveWorktreeAndDeleteBranch says "移除工作树并删除分支"
+// in the language the app shows.
+func RemoveWorktreeAndDeleteBranch() string { return In(i18n.Locale()).RemoveWorktreeAndDeleteBranch() }
+
+// RemoveWorktreeAndDeleteBranch says "移除工作树并删除分支"
+// in the language of msgs.
+func (msgs Messages) RemoveWorktreeAndDeleteBranch() string {
+	return Catalog.Format(msgs.locale, "removeWorktreeAndDeleteBranch", nil)
+}
+
+// RemoveWorktreeAndDeleteBranchTitle says "移除工作树并删除分支？"
+// in the language the app shows.
+func RemoveWorktreeAndDeleteBranchTitle() string {
+	return In(i18n.Locale()).RemoveWorktreeAndDeleteBranchTitle()
+}
+
+// RemoveWorktreeAndDeleteBranchTitle says "移除工作树并删除分支？"
+// in the language of msgs.
+func (msgs Messages) RemoveWorktreeAndDeleteBranchTitle() string {
+	return Catalog.Format(msgs.locale, "removeWorktreeAndDeleteBranchTitle", nil)
+}
+
+// RemoveWorktreeAndForceDeleteBranchTitle says "移除工作树并强制删除分支？"
+// in the language the app shows.
+func RemoveWorktreeAndForceDeleteBranchTitle() string {
+	return In(i18n.Locale()).RemoveWorktreeAndForceDeleteBranchTitle()
+}
+
+// RemoveWorktreeAndForceDeleteBranchTitle says "移除工作树并强制删除分支？"
+// in the language of msgs.
+func (msgs Messages) RemoveWorktreeAndForceDeleteBranchTitle() string {
+	return Catalog.Format(msgs.locale, "removeWorktreeAndForceDeleteBranchTitle", nil)
+}
+
+// RemoveWorktreeAndDeleteBranchDetail says "删除关联工作目录及其中的所有文件（含忽略文件），并删除本地分支，不影响远程分支。"
+// in the language the app shows.
+func RemoveWorktreeAndDeleteBranchDetail() string {
+	return In(i18n.Locale()).RemoveWorktreeAndDeleteBranchDetail()
+}
+
+// RemoveWorktreeAndDeleteBranchDetail says "删除关联工作目录及其中的所有文件（含忽略文件），并删除本地分支，不影响远程分支。"
+// in the language of msgs.
+func (msgs Messages) RemoveWorktreeAndDeleteBranchDetail() string {
+	return Catalog.Format(msgs.locale, "removeWorktreeAndDeleteBranchDetail", nil)
 }
 
 // ForceDeleteBranchDetail says "未合并的提交将失去此分支引用。"

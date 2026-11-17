@@ -239,13 +239,14 @@ func TestNativeFormKeepsFailedInput(t *testing.T) {
 		t.Fatal(err)
 	}
 	finish()
-	if app.dialog != dialog || dialog.fields[0].value != "taken-after-check" {
+	if app.dialog == nil || app.dialog.parent != dialog || dialog.fields[0].value != "taken-after-check" {
 		t.Fatal("失败后丢失表单输入")
 	}
 	tester.Frame()
 	if _, ok := tester.Find(app.problem); !ok || app.problem == "" {
 		t.Fatal("表单未显示失败原因")
 	}
+	dismissNativeError(t, app)
 	dialog.fields[0].value = "valid-branch"
 	dialog.onChange()
 	finish()
@@ -309,6 +310,7 @@ func TestNativeLibraryFormRetryAndReturn(t *testing.T) {
 		t.Fatal(err)
 	}
 	finish()
+	dismissNativeError(t, app)
 	if app.dialog != dialog || dialog.problem == "" || len(app.library.Groups) != 1 {
 		t.Fatal("重复分组未在表单内显示错误并保留输入")
 	}
@@ -334,8 +336,13 @@ func TestNativeSuccessfulFormDoesNotRetryAfterRefreshFailure(t *testing.T) {
 		return os.Rename(filepath.Join(path, ".git"), filepath.Join(path, ".git-hidden"))
 	})
 	finish()
-	if app.dialog != nil || app.writable || app.problem == "" {
+	if app.dialog == nil || app.dialog.errorDetails == nil || app.dialog.parent != nil ||
+		app.writable || app.problem == "" {
 		t.Fatal("操作成功但刷新失败时仍显示可重复提交的表单")
+	}
+	dismissNativeError(t, app)
+	if app.dialog != nil {
+		t.Fatal("关闭错误后不应返回已完成的表单")
 	}
 }
 
@@ -351,6 +358,7 @@ func TestNativeFailedFormBlocksWritesAfterRefreshFailure(t *testing.T) {
 		return errors.New("标签创建失败")
 	})
 	finish()
+	dismissNativeError(t, app)
 	tester := ui.NewTester(app.view, 1320, 860)
 	if app.dialog != dialog || dialog.problem == "" {
 		t.Fatal("失败表单未保留输入与错误")

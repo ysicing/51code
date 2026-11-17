@@ -26,6 +26,7 @@ type nativeField struct {
 
 type nativeDialog struct {
 	applicationSettings bool
+	errorDetails        *nativeProblem
 
 	parent          *nativeDialog
 	title           string
@@ -75,6 +76,9 @@ func (app *nativeApp) closeDialog(dialog *nativeDialog) {
 	if app.busy || app.dialog != dialog {
 		return
 	}
+	if dialog.errorDetails != nil && app.problem == dialog.errorDetails.raw {
+		app.problem = ""
+	}
 	if dialog.cancel != nil {
 		dialog.cancel()
 	}
@@ -114,6 +118,13 @@ func (app *nativeApp) dialogView(c *ui.Context) {
 				if dialog.titleText != nil {
 					title = dialog.titleText()
 				}
+				if dialog.errorDetails != nil {
+					problemIcon(c, 22)
+					ui.Text(c, title).FontSize(16).Bold().Grow(1).MinWidth(0).MaxLines(2)
+					iconButton(c, locales.CloseErrorDetails(), nativeIcons["close"]).Shrink(0).
+						OnClick(func() { app.closeDialog(dialog) })
+					return
+				}
 				if dialog.closeLabel != "" {
 					button := ui.Button(c, "").Label(dialog.closeLabel).Tooltip(dialog.closeLabel).
 						Size(28, 28).Padding(4).Disabled(app.busy)
@@ -143,6 +154,10 @@ func (app *nativeApp) dialogView(c *ui.Context) {
 				ui.Toolbar(c, header).Label(locales.SettingsActions()).FillWidth().Padding(0)
 			} else {
 				ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(12).Children(header)
+			}
+			if dialog.errorDetails != nil {
+				app.problemDetailsView(c, dialog)
+				return
 			}
 			if dialog.subject != "" {
 				ui.Text(c, dialog.subject).FontSize(13).Bold().FillWidth().MaxLines(3).Selectable().Tooltip(dialog.subject)
@@ -184,7 +199,7 @@ func (app *nativeApp) dialogView(c *ui.Context) {
 				body.Children(func() { dialog.body(c) })
 			}
 			if dialog.problem != "" {
-				ui.Text(c, dialog.problem).TextColor(c.Theme().Danger).MaxLines(4).Selectable().Tooltip(dialog.problem)
+				app.inlineProblem(c, dialog.problem)
 			}
 			if app.busy && app.operationCancel != nil {
 				ui.Row(c).FillWidth().Gap(12).AlignItems(ui.Center).Children(func() {

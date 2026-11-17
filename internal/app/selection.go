@@ -103,6 +103,7 @@ func (app *nativeApp) load(label string, kind nativeReadKind, task func(context.
 					app.historyFilter = app.historyResult.filter
 				}
 				app.problem = err.Error()
+				app.showProblemDetails(app.problem)
 			}
 		})
 	}()

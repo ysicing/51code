@@ -306,11 +306,12 @@ func (app *nativeApp) commitAIResult(c *ui.Context) {
 	}
 	if state.problem != "" {
 		ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(8).Children(func() {
-			problem, color, detail := state.problem, c.Theme().Danger, state.problem
 			if state.tooLarge {
-				problem, color, detail = locales.AiContextTooLarge(), c.Theme().TextMuted, locales.AiContextLimitDetail()
+				ui.Text(c, locales.AiContextTooLarge()).FontSize(12).TextColor(c.Theme().TextMuted).
+					Grow(1).MinWidth(0).MaxLines(3).Tooltip(locales.AiContextLimitDetail())
+			} else {
+				app.inlineProblem(c, state.problem).Grow(1).MinWidth(0)
 			}
-			ui.Text(c, problem).FontSize(12).TextColor(color).Grow(1).MinWidth(0).MaxLines(3).Tooltip(detail)
 			if state.tooLarge {
 				ui.Button(c, locales.WriteManually()).FontSize(12).OnClick(func() { app.commitInput.Focus(c) })
 			} else if state.settings {
@@ -546,7 +547,7 @@ func (editor *nativeAISettings) view(app *nativeApp, dialog *nativeDialog, c *ui
 			})
 			if editor.problem != "" {
 				aiSettingsRow(c, "", func() {
-					ui.Text(c, editor.problem).FontSize(12).TextColor(c.Theme().Danger).Selectable()
+					app.inlineProblem(c, editor.problem)
 				})
 			}
 			aiSettingsRow(c, locales.Model(), func() {
@@ -644,6 +645,6 @@ func (app *nativeApp) repositoryAISettings(c *ui.Context, path string) {
 		app.saveSettings()
 	}
 	if app.settingsError != "" {
-		ui.Text(c, app.settingsError).FontSize(12).TextColor(c.Theme().Danger)
+		app.inlineProblem(c, app.settingsError)
 	}
 }

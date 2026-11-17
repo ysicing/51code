@@ -91,8 +91,7 @@ func (app *nativeApp) referenceDialog(tag bool, source, hash string, checkout bo
 				ui.Spinner(c).Size(12, 12)
 				ui.Text(c, locales.CheckingReferenceName()).FontSize(12).TextColor(c.Theme().TextMuted)
 			case state.problem != "":
-				ui.Text(c, state.problem).FontSize(12).TextColor(c.Theme().Danger).
-					Grow(1).MinWidth(0).MaxLines(3).Selectable().Tooltip(state.problem)
+				app.inlineProblem(c, state.problem).Grow(1).MinWidth(0)
 				if ui.Button(c, locales.RecheckReferenceName()).Clicked() {
 					app.checkReferenceName(dialog, state)
 				}

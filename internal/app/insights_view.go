@@ -41,8 +41,7 @@ func (app *nativeApp) insightsPanel(c *ui.Context) {
 			}
 			if state.problem != "" {
 				ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Children(func() {
-					ui.Text(c, strings.SplitN(state.problem, "\n", 2)[0]).FontSize(12).
-						TextColor(c.Theme().Danger).Grow(1).MinWidth(0).MaxLines(2).Tooltip(state.problem)
+					app.inlineProblem(c, state.problem).Grow(1).MinWidth(0)
 					ui.Button(c, locales.Retry()).OnClick(func() { app.refreshInsights(true) })
 				})
 			}
