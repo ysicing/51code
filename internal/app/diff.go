@@ -159,24 +159,19 @@ func (app *nativeApp) fileDiffPanel(c *ui.Context) {
 		}
 		ui.Row(c).FillWidth().Padding(8, 12).Gap(8).AlignItems(ui.Center).Children(func() {
 			title := app.selectedFile
-			path := title
 			if (app.screen == "history" || app.screen == "search") && !app.historyWorking {
 				title = app.commitFile
-				path = title
 				if title == "" {
 					title = shortHash(app.commitHash)
 				}
 			} else if app.screen == "stash" {
 				title = locales.StashDiff()
-				path = ""
 			} else if app.screen == "compare" && app.comparison != nil {
 				title = app.comparison.file
-				path = title
 			}
 			if full == 1 {
 				if source := app.fileViewer.sources[app.fileViewer.side]; source != nil {
 					title = source.Path
-					path = title
 				}
 			}
 			if app.readTask != nil && app.readTask.kind != nativeReadHistory && app.readTask.kind != nativeReadHistoryPage {
@@ -184,9 +179,6 @@ func (app *nativeApp) fileDiffPanel(c *ui.Context) {
 				title = app.readTask.label
 			}
 			ui.Text(c, title).Bold().Grow(1).MinWidth(0).MaxLines(1).Tooltip(title)
-			if path != "" {
-				ui.MenuButton(c, locales.CopyPath(), app.filePathMenu(c, path)).Shrink(0)
-			}
 			ui.Segmented(c, &full, locales.FileDiff(), locales.FullFile()).
 				Label(locales.FileViewMode()).Disabled(!hasSources).Shrink(0).
 				OnChange(func() { app.fileViewer.full = full == 1 })

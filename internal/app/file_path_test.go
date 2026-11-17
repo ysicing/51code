@@ -66,27 +66,3 @@ func TestNativeFilePathMenusCopyClickedFile(t *testing.T) {
 		}
 	}
 }
-
-func TestNativeDiffHeaderCopiesFilePath(t *testing.T) {
-	app, root, _ := nativeFixture(t)
-	root, err := filepath.EvalSymlinks(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	app.writable = false
-	app.selectedFile = "目录 with spaces/deleted.go"
-	var clipboard ui.Services
-	tester := ui.NewTester(func(c *ui.Context) {
-		clipboard = c.Services()
-		app.fileDiffPanel(c)
-	}, 640, 480)
-	if err := tester.Click("复制路径"); err != nil {
-		t.Fatal(err)
-	}
-	if err := tester.ChooseMenuItem("复制完整路径"); err != nil {
-		t.Fatal(err)
-	}
-	if got, want := clipboard.ReadClipboard(), filepath.Join(root, filepath.FromSlash(app.selectedFile)); got != want {
-		t.Fatalf("clipboard=%q, want %q", got, want)
-	}
-}
