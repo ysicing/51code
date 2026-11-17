@@ -246,6 +246,76 @@ func (msgs Messages) LfsUnavailable() string {
 	return Catalog.Format(msgs.locale, "lfsUnavailable", nil)
 }
 
+// InstallLFS says "安装 Git LFS…"
+// in the language the app shows.
+func InstallLFS() string { return In(i18n.Locale()).InstallLFS() }
+
+// InstallLFS says "安装 Git LFS…"
+// in the language of msgs.
+func (msgs Messages) InstallLFS() string {
+	return Catalog.Format(msgs.locale, "installLFS", nil)
+}
+
+// InstallLFSTitle says "安装 Git LFS"
+// in the language the app shows.
+func InstallLFSTitle() string { return In(i18n.Locale()).InstallLFSTitle() }
+
+// InstallLFSTitle says "安装 Git LFS"
+// in the language of msgs.
+func (msgs Messages) InstallLFSTitle() string {
+	return Catalog.Format(msgs.locale, "installLFSTitle", nil)
+}
+
+// CopyInstallCommand says "复制安装命令"
+// in the language the app shows.
+func CopyInstallCommand() string { return In(i18n.Locale()).CopyInstallCommand() }
+
+// CopyInstallCommand says "复制安装命令"
+// in the language of msgs.
+func (msgs Messages) CopyInstallCommand() string {
+	return Catalog.Format(msgs.locale, "copyInstallCommand", nil)
+}
+
+// OpenLFSWebsite says "官网安装说明"
+// in the language the app shows.
+func OpenLFSWebsite() string { return In(i18n.Locale()).OpenLFSWebsite() }
+
+// OpenLFSWebsite says "官网安装说明"
+// in the language of msgs.
+func (msgs Messages) OpenLFSWebsite() string {
+	return Catalog.Format(msgs.locale, "openLFSWebsite", nil)
+}
+
+// LfsDownloadInstaller says "从 Git LFS 官网下载并运行适合当前系统的安装包。"
+// in the language the app shows.
+func LfsDownloadInstaller() string { return In(i18n.Locale()).LfsDownloadInstaller() }
+
+// LfsDownloadInstaller says "从 Git LFS 官网下载并运行适合当前系统的安装包。"
+// in the language of msgs.
+func (msgs Messages) LfsDownloadInstaller() string {
+	return Catalog.Format(msgs.locale, "lfsDownloadInstaller", nil)
+}
+
+// LfsInstallHint says "安装后返回设置，点击“重新检测”或选择 git-lfs 路径。"
+// in the language the app shows.
+func LfsInstallHint() string { return In(i18n.Locale()).LfsInstallHint() }
+
+// LfsInstallHint says "安装后返回设置，点击“重新检测”或选择 git-lfs 路径。"
+// in the language of msgs.
+func (msgs Messages) LfsInstallHint() string {
+	return Catalog.Format(msgs.locale, "lfsInstallHint", nil)
+}
+
+// LfsWebsiteOpenFailed says "无法打开 Git LFS 官网：{error}"
+// in the language the app shows.
+func LfsWebsiteOpenFailed(error string) string { return In(i18n.Locale()).LfsWebsiteOpenFailed(error) }
+
+// LfsWebsiteOpenFailed says "无法打开 Git LFS 官网：{error}"
+// in the language of msgs.
+func (msgs Messages) LfsWebsiteOpenFailed(error string) string {
+	return Catalog.Format(msgs.locale, "lfsWebsiteOpenFailed", map[string]any{"error": error})
+}
+
 // LfsNotInitialized says "尚未在此仓库初始化"
 // in the language the app shows.
 func LfsNotInitialized() string { return In(i18n.Locale()).LfsNotInitialized() }

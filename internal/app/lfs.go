@@ -116,9 +116,55 @@ func (app *nativeApp) lfsExecutablePreferences(c *ui.Context, editor *nativeIden
 			}
 			if editor.lfsError != "" {
 				ui.Text(c, locales.LfsUnavailable()).FontSize(12).TextColor(c.Theme().TextMuted).Tooltip(editor.lfsError)
+				if ui.Button(c, locales.InstallLFS()).Clicked() {
+					app.lfsInstallDialog(dialog)
+				}
 			}
 		})
 	})
+}
+
+func lfsInstallCommand(platform string) (string, string) {
+	switch platform {
+	case "darwin":
+		return "Homebrew", "brew install git-lfs"
+	case "linux":
+		return "Debian / Ubuntu", "sudo apt-get install git-lfs"
+	default:
+		return "", ""
+	}
+}
+
+func (app *nativeApp) lfsInstallDialog(parent *nativeDialog) {
+	dialog := &nativeDialog{
+		parent: parent, title: locales.InstallLFSTitle(), width: 520,
+		closeLabel: locales.Close(),
+	}
+	dialog.onClose = func() { app.dialog = parent }
+	dialog.body = func(c *ui.Context) {
+		services := c.Services()
+		ui.Column(c).FillWidth().Gap(12).Children(func() {
+			if manager, command := lfsInstallCommand(runtime.GOOS); command != "" {
+				ui.Text(c, manager).FontSize(12).TextColor(c.Theme().TextMuted)
+				ui.Text(c, command).FontSize(13).FillWidth().Selectable()
+				if ui.Button(c, locales.CopyInstallCommand()).Clicked() {
+					services.WriteClipboard(command)
+				}
+			} else {
+				ui.Text(c, locales.LfsDownloadInstaller()).FontSize(13).FillWidth()
+			}
+			if ui.Button(c, locales.OpenLFSWebsite()).Clicked() {
+				dialog.problem = ""
+				c.OpenURLThen("https://git-lfs.com/", func(err error) {
+					if err != nil && app.dialog == dialog {
+						dialog.problem = locales.LfsWebsiteOpenFailed(err.Error())
+					}
+				})
+			}
+			ui.Text(c, locales.LfsInstallHint()).FontSize(12).TextColor(c.Theme().TextMuted).FillWidth()
+		})
+	}
+	app.dialog = dialog
 }
 
 func (app *nativeApp) readLFSStatus(path string) {
