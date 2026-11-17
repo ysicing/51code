@@ -21,6 +21,9 @@ export async function releasePlan(root, directory = "build") {
   if (!/^[\w-]+\/[\w.-]+$/.test(config.githubRepository ?? "")) {
     throw new Error("发布配置缺少有效的 GitHub owner/repository");
   }
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(config.gemfuryAccount ?? "")) {
+    throw new Error("发布配置缺少有效的 Gemfury 组织名 gemfuryAccount");
+  }
   const base = new URL(config.downloadBase);
   if (!/^\d+\.\d+\.\d+$/.test(version) || base.protocol !== "https:" ||
       base.username || base.password || base.search || base.hash ||
@@ -106,7 +109,11 @@ export async function releasePlan(root, directory = "build") {
     }
     packages.push({ name, path, hash: sha256(data) });
   }
-  return { version, artifacts, feeds, scripts, github: { repository: config.githubRepository, notes, packages } };
+  return {
+    version, artifacts, feeds, scripts,
+    github: { repository: config.githubRepository, notes, packages },
+    gemfury: { account: config.gemfuryAccount, packages: packages.filter((file) => /\.(deb|rpm)$/.test(file.name)) },
+  };
 }
 
 export async function verifyAppleRelease(root, directory, plan, run = spawnSync) {
@@ -309,6 +316,68 @@ export async function publishGitHubRelease(plan, { run = spawnSync } = {}) {
   return `https://github.com/${repository}/releases/tag/${tag}`;
 }
 
+export async function publishGemfuryRelease(plan, { run = spawnSync, dryRun = false } = {}) {
+  const { account, packages } = plan.gemfury;
+  const common = ["--account", account, "--no-input", "--no-progress"];
+  if (dryRun) {
+    console.log(`随后发布 Gemfury 组织 ${account} 的公开 deb/rpm，已存在文件须通过 SHA-256 校验后复用：`);
+    console.log(`fury push --account ${account} --public --no-input --no-progress ${packages.map((file) => JSON.stringify(file.path)).join(" ")}`);
+    return;
+  }
+  const invoke = (args) => {
+    const result = run("fury", [...args, ...common], {
+      encoding: "utf8", timeout: args[0] === "push" ? 660_000 : 120_000, maxBuffer: 4 * 1024 * 1024,
+      stdio: ["ignore", "pipe", "pipe"], env: { ...process.env },
+    });
+    if (result.error || result.status !== 0) {
+      throw new Error(`Gemfury 操作失败，请确认 fury CLI 和 ${account} 的登录权限：${result.error?.message ?? result.stderr ?? result.stdout}`);
+    }
+    return result.stdout;
+  };
+  const listing = (args) => {
+    const records = JSON.parse(invoke([...args, "--json"]));
+    if (!Array.isArray(records)) throw new Error("Gemfury JSON 输出无效，请使用支持 --json 的 fury CLI");
+    return records;
+  };
+  const verifiedFiles = () => {
+    const entries = listing(["packages"]);
+    const verified = new Set();
+    for (const kind of ["deb", "rpm"]) {
+      const matching = entries.filter((entry) => entry?.name === "51code" && entry.kind_key === kind);
+      if (matching.length > 1) throw new Error(`Gemfury 中存在多个 51code ${kind} 包，停止发布`);
+      const entry = matching[0];
+      if (!entry) continue;
+      if (typeof entry.id !== "string" || !entry.id || entry.private !== false) {
+        throw new Error(`请先在 Gemfury 的 ${account} 组织中将 51code ${kind} 包设为公开，再用同一产物目录重试；--public 仅用于新建公开包`);
+      }
+      const versions = listing(["versions", entry.id]);
+      for (const file of packages.filter((file) => file.name.endsWith(`.${kind}`))) {
+        const existing = versions.filter((version) => version?.filename === file.name);
+        if (existing.length > 1 || existing.length === 1 && existing[0].digests?.sha256 !== file.hash) {
+          throw new Error(`Gemfury 中 ${file.name} 的 SHA-256 不一致或无法验证，禁止覆盖`);
+        }
+        if (existing.length === 1) verified.add(file.name);
+      }
+    }
+    return verified;
+  };
+  for (const file of packages) {
+    if (sha256(await readFile(file.path)) !== file.hash) {
+      throw new Error(`Gemfury 上传前 ${file.name} 已变化，请保留原发布产物，不要重建同版本包`);
+    }
+  }
+  const existing = verifiedFiles();
+  const pending = packages.filter((file) => !existing.has(file.name));
+  if (pending.length > 0) {
+    invoke(["push", "--public", ...pending.map((file) => file.path)]);
+    const published = verifiedFiles();
+    if (packages.some((file) => !published.has(file.name))) {
+      throw new Error("Gemfury 上传后缺少可验证的安装包，请用同一产物目录重试");
+    }
+  }
+  return `https://repo.fury.io/${account}/`;
+}
+
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
     const args = process.argv.slice(2).filter((value) => value !== "--");
@@ -343,6 +412,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       console.log([...plan.artifacts, ...plan.feeds, ...plan.scripts].map((file) => file.object).join("\n"));
       console.log(`随后发布 GitHub Release：${plan.github.repository} v${plan.version}，附加以下安装包：`);
       console.log(plan.github.packages.map((file) => file.name).join("\n"));
+      await publishGemfuryRelease(plan, { dryRun: true });
     } else {
       await publish(plan);
       console.log(`已发布 51Code ${plan.version}，全平台 CDN 文件、更新清单及 install.sh 回读通过`);
@@ -351,6 +421,12 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
         console.log(`GitHub Release 与 macOS、Windows、Linux 安装包已发布并校验：${url}`);
       } catch (error) {
         throw new Error(`CDN 与更新清单已发布，GitHub Release 尚未完成；请保留同一产物目录重试：${error.message}`);
+      }
+      try {
+        const url = await publishGemfuryRelease(plan);
+        console.log(`Gemfury 的公开 deb/rpm 已发布并校验：${url}`);
+      } catch (error) {
+        throw new Error(`CDN、更新清单和 GitHub Release 已发布，Gemfury 尚未完成；请保留同一产物目录重试：${error.message}`);
       }
     }
   } catch (error) {

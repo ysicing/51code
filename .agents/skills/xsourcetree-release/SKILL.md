@@ -1,6 +1,6 @@
 ---
 name: xsourcetree-release
-description: 为 51Code（原 XSourceTree）本地构建或正式发版；本地允许 ad-hoc，正式版使用 Apple 证书签名与公证，推送版本 tag、发布双架构包到对象存储及 CDN、创建附带安装包的 GitHub Release，并更新 ysicing/homebrew-tap。支持预演与中断恢复，不用于 XStats 或普通功能开发。
+description: 为 51Code（原 XSourceTree）本地构建或正式发版；本地允许 ad-hoc，正式版使用 Apple 证书签名与公证，推送版本 tag、发布更新包到对象存储及 CDN、创建 GitHub Release、用 fury push 发布公开 deb/rpm 到 ysicing 组织，并更新 ysicing/homebrew-tap。支持预演与中断恢复，不用于 XStats 或普通功能开发。
 ---
 
 # 51Code 发版
@@ -13,7 +13,7 @@ description: 为 51Code（原 XSourceTree）本地构建或正式发版；本地
 
 - 本地开发或预览使用 `task dev` / `task build`，默认 ad-hoc；本地产物不得用于正式发布。
 - 正式发布预演使用 `bun run release --dry-run`，执行双架构 Developer ID 签名、公证及校验；dry-run 仍会向 Apple 提交公证，但不上传对象、不打 tag、不更新 tap。
-- 按用户已明确的发布约定，“发布 51Code <版本>”（原 XSourceTree）包含发布源码 commit/push、创建并推送 `v<version>` tag、正式签名与公证、对象/CDN 发布、创建或补齐该 tag 的 GitHub Release 及双架构 DMG 附件、更新并推送 `ysicing/homebrew-tap`。用户明确缩小范围时遵循其限制。
+- 按用户已明确的发布约定，“发布 51Code <版本>”（原 XSourceTree）包含发布源码 commit/push、创建并推送 `v<version>` tag、正式签名与公证、对象/CDN 发布、创建或补齐该 tag 的 GitHub Release 及安装包附件、通过 `fury push` 发布公开 deb/rpm 到 `ysicing` 组织、更新并推送 `ysicing/homebrew-tap`。用户明确缩小范围时遵循其限制。
 - “整理技能”“准备发版”“预演”“只构建”“只发布已有产物”按请求范围执行；不推断额外发布动作。安装或覆盖用户正在运行的应用不属于默认流程。正式发版只推 tag 不算交付完成，必须同时有可下载的 GitHub Release 安装包附件。
 - 目标版本优先采用用户指定值，否则核对 `package.json`、`CHANGELOG.md` 与线上清单。不要静默升版本或覆盖已发布版本。
 
@@ -39,7 +39,7 @@ description: 为 51Code（原 XSourceTree）本地构建或正式发版；本地
 ## 准备与验证
 
 1. 目标版本使用 `x.y.z` 稳定版；依据实际代码变化更新 `package.json` 和对应中文 changelog，不将计划或未完成功能写成已发布能力。
-2. 确认 Go、Bun、MyGo、`mc` 与 `gh` 可用，使用 `gh auth status --hostname github.com` 确认发布账户具备目标仓库 Release 写权限，遵循锁文件。若 Bun 与锁文件不兼容，选择本机兼容版本并保证嵌套构建使用该版本，不降级锁文件或修改全局 PATH。
+2. 确认 Go、Bun、MyGo、`mc`、`gh` 与 `fury` 可用，使用 `gh auth status --hostname github.com` 确认发布账户具备目标仓库 Release 写权限。fury CLI 须支持 `push --public`、查询 `--json` 与 `--no-input`（已验证 1.0.0），通过已有登录或 `FURY_TOKEN` 提供目标组织权限，不输出凭证。遵循锁文件；若 Bun 与锁文件不兼容，选择本机兼容版本并保证嵌套构建使用该版本，不降级锁文件或修改全局 PATH。
 3. 同机重任务串行，Go worker 最多 2；资源不足时等待或报告验证缺口，不跳过发布门禁。
 4. 运行 `task check` 与 `git diff --check`。`task check` 是当前 Go 测试（包括原生 UI）、发布脚本测试和 Go 静态检查入口；不再运行旧 Web UI 的绑定生成、TypeScript 或 Vite 检查。桌面交互或更新安装流程变化时，按 `docs/development.md` 使用隔离 smoke；不覆盖或终止用户正在运行的应用。
 5. 正式发布时，只暂存本版本所需的源码、版本、更新日志与发布配置；核对暂存差异并排除无关内容。提交后记录发布提交 SHA，构建输入必须对应此提交。预演可以不提交，但须记录源码状态，不能把含未提交改动的产物冒充已提交源码的正式包。
@@ -93,6 +93,16 @@ bun run publish --dir "$RELEASE_DIR"
 
 上传失败可能留下同名、状态为 `starter` 的空占位附件，单纯重跑不能恢复。遇到脚本的占位附件提示时，报告对应仓库、版本和文件名，由维护者核实并手动删除该占位附件后，再用原产物目录重跑。脚本不自动删除；不得删除状态为 `uploaded` 的完整附件来绕过 SHA-256 冲突。
 
+## Gemfury deb/rpm
+
+用户约定发版时使用 `fury push` 将 Linux amd64/arm64 的 deb 与 rpm（共 4 个安装包）发布到 `ysicing` 组织，并设为公开。目标组织从 `release.config.json` 的 `gemfuryAccount` 读取，不依赖 CLI 当前默认账户。
+
+`release` 与 `publish` 在 GitHub Release 验收后自动执行此步骤，复用同一已验证产物目录。上传命令包含 `--account ysicing --public --no-input --no-progress`，首次创建包时设置为公开；后续版本继承公开状态。先回读 deb/rpm 包与版本列表，已存在且 SHA-256 相同的文件跳过，只补传缺失文件；上传后再次确认包公开且文件 SHA-256 一致。同名不同内容或无法校验时停止，不删除、覆盖或重新构建同版本包。
+
+如果已有 `51code` deb/rpm 包仍为私有，先在 Gemfury Dashboard 切换到 `ysicing` 组织，将该产品的对应包设为公开；`--public` 不能作为修改已有包权限的保证，不改变其他包的可见性。dry-run 只展示计划，不调用 fury 或验证远端权限。
+
+Gemfury 失败时 CDN、清单与 GitHub Release 可能已生效。保留原产物，用 `bun run publish --dir <原目录>` 补完，不能将 GitHub 发布成功视为完整发版完成。
+
 ## Homebrew tap
 
 对象与 CDN 验收通过后，更新 `ysicing/homebrew-tap`（tap 名称 `ysicing/tap`）。先核对远端默认分支、适用规则、已有 cask、CI 和本地工作区修改。正式 cask 为 `Casks/51code.rb`，token 为 `51code`；tap 根目录 `cask_renames.json` 保留 `"xsourcetree": "51code"`，兼容旧名称及已有安装的迁移。只维护新 cask，不恢复 `Casks/xsourcetree.rb`，不添加 `deprecate!`。只修改该产品及其安装说明，不改其他产品或添加无关自动化。没有正式发布新安装包时，不提前把线上 cask 指向尚未上传的 URL。
@@ -124,4 +134,4 @@ brew migrate --cask --dry-run ysicing/tap/51code
 - 历史 ad-hoc 版本不能用正式签名重建后覆盖同名对象；正式签名切换使用明确的新版本。
 - 首次启用自动更新前安装的旧应用需要手动安装一次新版本；未上传首个清单时检查更新失败不代表升级成功。
 
-完整正式发布须满足：源码提交及 `v<version>` tag 已推送且与产物对应；双架构 Apple 签名、公证与 Gatekeeper 检查通过；对象/CDN 与两个固定更新清单验收通过；GitHub Release 已公开且双架构 DMG 附件 SHA-256 校验一致；tap 更新已验证并推送。最终用简体中文报告版本、模式、源码提交与 tag、签名公证状态、GitHub Release 及双架构入口、对象和清单状态、tap 提交及验证缺口。未实际运行的跨版本安装和 Intel 桌面行为明确列为未验证。
+完整正式发布须满足：源码提交及 `v<version>` tag 已推送且与产物对应；双架构 Apple 签名、公证与 Gatekeeper 检查通过；对象/CDN 与固定更新清单验收通过；GitHub Release 已公开且安装包附件 SHA-256 校验一致；Gemfury 的 `ysicing` 组织中 deb/rpm 均公开且 4 个安装包 SHA-256 校验一致；tap 更新已验证并推送。最终用简体中文报告版本、模式、源码提交与 tag、签名公证状态、GitHub Release、Gemfury、对象和清单状态、tap 提交及验证缺口。未实际运行的跨版本安装和 Intel 桌面行为明确列为未验证。

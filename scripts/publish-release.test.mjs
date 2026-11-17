@@ -20,6 +20,7 @@ async function fixture(run) {
     await writeFile(join(root, "release.config.json"), JSON.stringify({
       downloadBase: base, storageTarget: "test/apps/51code",
       githubRepository: "ysicing/51code",
+      gemfuryAccount: "ysicing",
       publicKey: publicKey.export({ type: "spki", format: "der" }).subarray(-32).toString("base64"),
       macos: { teamID: "TEAM123456" },
     }));
@@ -391,5 +392,147 @@ test("reports failed starter uploads and resumes after the operator removes only
     await release.publishGitHubRelease(plan, fake);
     expect(fake.current.assets).toHaveLength(7);
     expect(fake.current.draft).toBe(false);
+  });
+});
+
+function gemfury(plan, options = {}) {
+  const files = plan.github.packages.filter((file) => /\.(deb|rpm)$/.test(file.name));
+  const packages = [];
+  const versions = new Map();
+  const events = [];
+  const add = (file) => {
+    const kind = file.name.endsWith(".deb") ? "deb" : "rpm";
+    let entry = packages.find((pkg) => pkg.kind_key === kind);
+    if (!entry) {
+      entry = { id: `package-${kind}`, name: "51code", kind_key: kind, private: false };
+      packages.push(entry);
+      versions.set(entry.id, []);
+    }
+    versions.get(entry.id).push({
+      filename: file.name, version: plan.version, digests: { sha256: file.hash },
+    });
+  };
+  if (options.existing) {
+    for (const file of options.partial ? files.slice(0, 1) : files) add(file);
+  }
+  if (options.private) packages[0].private = true;
+  if (options.conflict) versions.get(packages[0].id)[0].digests.sha256 = "wrong";
+  if (options.unverified) versions.get(packages[0].id)[0].digests = {};
+  return {
+    events,
+    run(program, args, settings) {
+      expect(program).toBe("fury");
+      expect(args).toContain("--no-input");
+      expect(args).toContain("--no-progress");
+      expect(args[args.indexOf("--account") + 1]).toBe("ysicing");
+      expect(settings.stdio[0]).toBe("ignore");
+      expect(settings.timeout).toBeGreaterThan(0);
+      events.push(args);
+      if (options.missingCLI) return { error: new Error("ENOENT"), status: null };
+      if (args[0] === "packages") {
+        if (options.lookupFailure) return { status: 4, stderr: "not authenticated" };
+        return { status: 0, stdout: options.malformed ? "{}" : JSON.stringify(packages) };
+      }
+      if (args[0] === "versions") {
+        expect(args).toContain("--json");
+        return { status: 0, stdout: JSON.stringify(versions.get(args[1])) };
+      }
+      if (args[0] === "push") {
+        expect(args).toContain("--public");
+        const pending = files.filter((file) => args.includes(file.path));
+        expect(pending.length).toBeGreaterThan(0);
+        if (options.uploadFailure) {
+          add(pending[0]);
+          return { status: 6, stderr: "upload interrupted" };
+        }
+        if (!options.missingUpload) for (const file of pending) add(file);
+        if (options.corrupt) versions.get(packages[0].id)[0].digests.sha256 = "wrong";
+        if (options.privateUpload) packages[0].private = true;
+        return { status: 0, stdout: "" };
+      }
+      throw new Error(`unexpected fury command: ${args.join(" ")}`);
+    },
+  };
+}
+
+test("publishes Linux deb and rpm packages to the configured public Gemfury account", async () => {
+  await fixture(async (root) => {
+    const plan = await releasePlan(root);
+    expect(plan.gemfury.account).toBe("ysicing");
+    expect(plan.gemfury.packages).toHaveLength(4);
+    const fake = gemfury(plan);
+    await release.publishGemfuryRelease(plan, fake);
+    const uploads = fake.events.filter((args) => args[0] === "push");
+    expect(uploads).toHaveLength(1);
+    for (const file of plan.gemfury.packages) expect(uploads[0]).toContain(file.path);
+    for (const file of plan.github.packages.filter((file) => !/\.(deb|rpm)$/.test(file.name))) {
+      expect(uploads[0]).not.toContain(file.path);
+    }
+    expect(fake.events.at(-1)[0]).toBe("versions");
+  });
+});
+
+test("resumes matching Gemfury packages and checks all existing digests before uploading", async () => {
+  await fixture(async (root) => {
+    const plan = await releasePlan(root);
+    for (const partial of [true, false]) {
+      const fake = gemfury(plan, { existing: true, partial });
+      await release.publishGemfuryRelease(plan, fake);
+      const uploads = fake.events.filter((args) => args[0] === "push");
+      expect(uploads).toHaveLength(partial ? 1 : 0);
+      if (partial) expect(uploads[0]).not.toContain(plan.gemfury.packages[0].path);
+    }
+    for (const options of [
+      { private: true }, { conflict: true }, { unverified: true },
+    ]) {
+      const fake = gemfury(plan, { existing: true, partial: true, ...options });
+      await expect(release.publishGemfuryRelease(plan, fake)).rejects.toThrow();
+      expect(fake.events.some((args) => args[0] === "push")).toBe(false);
+    }
+  });
+});
+
+test("rejects unreadable Gemfury state and verifies uploaded digests and privacy", async () => {
+  await fixture(async (root) => {
+    const plan = await releasePlan(root);
+    for (const options of [
+      { missingCLI: true }, { lookupFailure: true }, { malformed: true },
+      { uploadFailure: true }, { corrupt: true }, { missingUpload: true }, { privateUpload: true },
+    ]) {
+      await expect(release.publishGemfuryRelease(plan, gemfury(plan, options))).rejects.toThrow();
+    }
+    const options = { uploadFailure: true };
+    const fake = gemfury(plan, options);
+    await expect(release.publishGemfuryRelease(plan, fake)).rejects.toThrow("upload interrupted");
+    options.uploadFailure = false;
+    await release.publishGemfuryRelease(plan, fake);
+    expect(fake.events.filter((args) => args[0] === "push").at(-1)).not.toContain(plan.gemfury.packages[0].path);
+  });
+});
+
+test("Gemfury dry runs do not read remote state or upload packages", async () => {
+  await fixture(async (root) => {
+    const plan = await releasePlan(root);
+    await release.publishGemfuryRelease(plan, {
+      dryRun: true,
+      run() { throw new Error("dry run invoked fury"); },
+    });
+    const configPath = join(root, "release.config.json");
+    const config = JSON.parse(await readFile(configPath, "utf8"));
+    for (const account of ["", "../ysicing", "ysicing --other", undefined]) {
+      config.gemfuryAccount = account;
+      await writeFile(configPath, JSON.stringify(config));
+      await expect(releasePlan(root)).rejects.toThrow("Gemfury");
+    }
+  });
+});
+
+test("refuses changed local Gemfury artifacts before invoking the CLI", async () => {
+  await fixture(async (root) => {
+    const plan = await releasePlan(root);
+    const fake = gemfury(plan);
+    await writeFile(plan.gemfury.packages[0].path, "changed after release verification");
+    await expect(release.publishGemfuryRelease(plan, fake)).rejects.toThrow("已变化");
+    expect(fake.events).toHaveLength(0);
   });
 });

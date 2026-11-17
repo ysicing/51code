@@ -165,7 +165,7 @@ Git 命令使用参数数组执行，路径按字面值处理。写操作限定�
 - Linux 通过 `curl -fsSL https://c.ysicing.net/oss/apps/macOS/51code/install.sh | sh` 安装到 `~/.local`，可以自更新。
 - deb/rpm 装在 `/opt`，由包管理器负责，不能自更新；开发构建没有更新源。这些情况下菜单、设置页和右下角版本号都改为打开 GitHub Releases 手动下载，不弹出 MyGo 的“更新不可用”窗口。
 
-安装包（exe、deb、rpm）只发布到 GitHub Release；不发布 `install.ps1` 和 `SHA256SUMS`，Windows 统一用安装器安装。v0.2.0 及更早的 Windows/Linux 版本没有内嵌更新源，需要手动升级一次。
+安装包（exe、deb、rpm）发布到 GitHub Release，Linux 双架构 deb/rpm 还通过 `fury push` 发布到 Gemfury 的 `ysicing` 组织；不发布 `install.ps1` 和 `SHA256SUMS`，Windows 统一用安装器安装。v0.2.0 及更早的 Windows/Linux 版本没有内嵌更新源，需要手动升级一次。
 
 ### 存储与签名
 
@@ -213,6 +213,10 @@ MYGO_UPDATER_PRIVATE_KEY="$(cat ~/.config/xsourcetree/update-keys/mygo-update.ke
 通过校验后，上传带版本号的各平台归档、macOS DMG 及 `<version>/update-*.json` 历史清单。版本对象通过条件 PUT 禁止覆盖；已存在且内容相同可重跑，内容不同必须提升版本，包括从 ad-hoc 改为 Developer ID 重新签名的情况。全部版本对象经 CDN 完整回读并验证 SHA-256 后，才更新五份固定更新清单，最后更新 `install.sh`，逐个回读确认。固定清单和 `install.sh` 设置 `Cache-Control: no-cache,max-age=0,must-revalidate`，CDN 需遵守该响应头，不能强制长缓存。
 
 CDN 与更新清单验证通过后，脚本自动创建或补齐 `githubRepository`（`ysicing/51code`）中对应 `v<version>` 的 GitHub Release，附加同一产物目录中的 `51code-<version>-arm64.dmg`、`51code-<version>-amd64.dmg`、`51code-setup-<version>-amd64.exe`，以及 Linux amd64/arm64 的 deb 和 rpm，共 7 个附件。上传前只核对新平台安装包的文件格式头，防止空文件或误放产物。新 Release 先创建草稿，使用更新清单内的版本说明，确认全部附件在 GitHub 上的 SHA-256 digest 与本地一致后才公开。已有同名且 SHA-256 相同的附件直接复用，缺失附件补传，内容不同或无法校验时停止，绝不覆盖。tag 本身没有附件，正式发版不能仅有 tag 或 GitHub 自动生成的源码压缩包。
+
+GitHub Release 验收后，脚本继续发布 Gemfury。`release.config.json` 的 `gemfuryAccount` 固定目标组织（当前为 `ysicing`），发版机器需安装支持 `--public`、`--json` 和 `--no-input` 的 fury CLI（已验证 1.0.0），并提前通过 `fury login` 或 `FURY_TOKEN` 提供权限。脚本仅上传同一目录中的 Linux amd64/arm64 共 4 个 deb/rpm，执行 `fury push --account ysicing --public --no-input --no-progress <待上传文件…>`，首次创建包时即设为公开；不上传 DMG、exe 或更新归档。已存在的同名安装包必须通过 Gemfury 的 SHA-256 校验后才能跳过，缺失文件补传；上传后回读确认 deb/rpm 包均公开且各安装包 SHA-256 一致。已有私有包需要先在 Gemfury Dashboard 中切换到 `ysicing` 组织，将对应的 `51code` deb/rpm 包设为公开，`--public` 不作为修改已有包权限的保证。
+
+`--dry-run` 展示 Gemfury 上传计划，不调用 fury 或读取远端状态。Gemfury 阶段失败时 CDN 和 GitHub Release 可能已生效，必须保留同一发布产物目录，修复权限或网络后重跑 `bun run publish --dir <原目录>`，只补传缺失文件，不重建、覆盖或删除已发布版本。
 
 同一产品发布须串行执行，各平台及新旧目录的清单并非原子更新；中途失败可使用同一产物目录重跑，脚本拒绝覆盖新版本清单为旧版本。CDN 已生效但 GitHub 阶段失败会明确报告部分完成；保留原目录重跑，不重建同版本包、不回退清单。若上传失败留下同名 `starter` 占位附件，脚本会停止并提示：先在对应 Release 中核实并手动删除该占位附件，再用原产物目录重跑；脚本不自动删除附件，不允许删除已有完整附件来绕过内容冲突。`--dry-run` 仅列出 GitHub 发布计划，不验证远端 tag 或权限，不创建 Release、不上传附件。脚本不会修改存储权限、创建标签或提交推送 Git。
 

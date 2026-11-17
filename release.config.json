@@ -2,6 +2,7 @@
   "downloadBase": "https://c.ysicing.net/oss/apps/macOS/51code",
   "storageTarget": "c-ip/oss/apps/macOS/51code",
   "githubRepository": "ysicing/51code",
+  "gemfuryAccount": "ysicing",
   "publicKey": "4iCjLnmpkvE0x/McE+VVdS1PIt6XTKW8GDGKnqbqBsE=",
   "macos": {
     "signingIdentity": "7689880A7EC9AEE536DBA734E68D2D85510A01EF",
