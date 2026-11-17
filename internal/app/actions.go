@@ -5,6 +5,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -101,18 +102,59 @@ func (app *nativeApp) renameBranchDialog(old string) {
 }
 
 func (app *nativeApp) deleteBranch(name string, force bool) {
-	title := locales.DeleteLocalBranch()
-	detail := locales.DeleteBranchDetail()
-	if force {
-		title = locales.ForceDeleteLocalBranch()
-		detail += "\n" + locales.ForceDeleteBranchDetail()
+	if !app.canCreateReference() {
+		return
 	}
-	app.confirm(title, detail, locales.Delete(), func() {
-		app.mutate(locales.DeletingBranch(), func(ctx context.Context, path string) error {
-			return app.service.DeleteBranch(ctx, path, name, force)
-		})
+	path := app.repository.snapshot.Path
+	app.load(locales.ReviewingWorktree(), nativeReadCommit, func(ctx context.Context) (func(), error) {
+		review, err := app.service.ReviewBranchDeletion(ctx, path, name, force)
+		if err != nil {
+			return nil, err
+		}
+		return func() {
+			if app.dialog != nil {
+				return
+			}
+			dialog := &nativeDialog{
+				title: locales.DeleteLocalBranch(), detail: locales.DeleteBranchDetail(),
+				subject: name, danger: true, confirmation: true, width: 380,
+			}
+			action := locales.Delete()
+			if force {
+				dialog.title = locales.ForceDeleteLocalBranch()
+			}
+			if review.Worktree != nil {
+				dialog.width = 600
+				dialog.title = locales.RemoveWorktreeAndDeleteBranchTitle()
+				if force {
+					dialog.title = locales.RemoveWorktreeAndForceDeleteBranchTitle()
+				}
+				dialog.detail = review.Worktree.Path + "\n" + locales.RemoveWorktreeAndDeleteBranchDetail()
+				action = locales.RemoveWorktreeAndDeleteBranch()
+			}
+			if force {
+				dialog.detail += "\n" + locales.ForceDeleteBranchDetail()
+			}
+			if review.CanDelete {
+				dialog.action = action
+				dialog.submit = func(dialog *nativeDialog) {
+					app.mutateForm(dialog, locales.DeletingBranch(), func(ctx context.Context, path string) error {
+						return app.service.DeleteReviewedBranch(ctx, path, name, force, review.Token)
+					})
+				}
+				dialog.onResult = func(err error) {
+					var partial *gitrepo.BranchDeletionPartialError
+					if errors.As(err, &partial) {
+						dialog.blocked, dialog.action, dialog.submit = true, "", nil
+						dialog.dismiss = locales.Close()
+					}
+				}
+			} else {
+				dialog.blocked, dialog.problem, dialog.dismiss = true, review.Problem, locales.Close()
+			}
+			app.dialog = dialog
+		}, nil
 	})
-	app.dialog.subject = name
 }
 
 func (app *nativeApp) tagDialog() {

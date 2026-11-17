@@ -206,14 +206,6 @@ func (repo *Repository) reviewWorktree(ctx context.Context, common, path string)
 		MergeProblem:  worktreeMergeProblem(source.Worktree, target.Worktree),
 		RemoveProblem: worktreeRemoveProblem(source.Worktree, target.Worktree),
 	}
-	if review.RemoveProblem == "" {
-		_, err := repo.git(ctx, "merge-base", "--is-ancestor", source.Worktree.Head, target.Worktree.Head)
-		if exitCode(err, 1) {
-			review.RemoveProblem = "工作树含有未合并到当前目标 HEAD 的提交，不能移除"
-		} else if err != nil {
-			return WorktreeReview{}, worktreeReviewState{}, err
-		}
-	}
 	review.CanMerge = review.MergeProblem == ""
 	review.CanRemove = review.RemoveProblem == ""
 	data, err := json.Marshal(struct {
@@ -284,14 +276,10 @@ func worktreeRemoveProblem(source, target Worktree) string {
 	switch {
 	case source.Dirty:
 		return "工作树含有未提交或未跟踪文件，不能移除"
-	case source.Ignored:
-		return "工作树含有被忽略的文件，移除会丢失数据"
 	case source.Operation != "":
 		return "工作树正在进行 Git 操作，不能移除"
 	case target.Problem != "":
 		return "无法核实目标工作树：" + target.Problem
-	case source.Head == "" || target.Head == "":
-		return "无法确认工作树提交已合并到当前目标 HEAD，不能移除"
 	}
 	return ""
 }

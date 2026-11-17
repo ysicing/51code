@@ -15,7 +15,7 @@ import (
 )
 
 func TestNativeBranchConfirmationLayout(t *testing.T) {
-	app, _, _ := nativeFixture(t)
+	app, path, finish := nativeFixture(t)
 	for _, width := range []int{1024, 480} {
 		for _, dark := range []bool{false, true} {
 			for _, force := range []bool{false, true} {
@@ -23,7 +23,11 @@ func TestNativeBranchConfirmationLayout(t *testing.T) {
 				if width == 480 {
 					name = "feature/" + strings.Repeat("long-branch-name/", 15) + "end"
 				}
+				if nativeGit(t, path, "branch", "--list", name) == "" {
+					nativeGit(t, path, "branch", name)
+				}
 				app.deleteBranch(name, force)
+				finish()
 				tester := ui.NewTester(app.dialogView, width, 680)
 				tester.SetDark(dark)
 				dialog := app.dialog
@@ -52,6 +56,7 @@ func TestNativeBranchConfirmationLayout(t *testing.T) {
 				if directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); directory != "" {
 					saveNativeScreenshot(t, tester, directory, fmt.Sprintf("confirmation-%d-dark-%t-force-%t.png", width, dark, force))
 				}
+				app.closeDialog(dialog)
 			}
 		}
 	}
@@ -63,6 +68,7 @@ func TestNativeBranchConfirmationActions(t *testing.T) {
 	nativeGit(t, path, "branch", name)
 	for _, key := range []ui.Key{ui.KeyEscape, ui.KeyEnter} {
 		app.deleteBranch(name, false)
+		finish()
 		tester := ui.NewTester(app.dialogView, 800, 600)
 		tester.Key(0, key)
 		if app.dialog != nil || app.busy || nativeGit(t, path, "branch", "--list", name) == "" {
@@ -70,6 +76,7 @@ func TestNativeBranchConfirmationActions(t *testing.T) {
 		}
 	}
 	app.deleteBranch(name, false)
+	finish()
 	tester := ui.NewTester(app.dialogView, 800, 600)
 	app.busy = true
 	tester.Frame()

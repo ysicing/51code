@@ -48,3 +48,19 @@ func (service *RepositoryService) RemoveWorktree(ctx context.Context, repository
 	}
 	return repo.RemoveWorktree(ctx, path, token)
 }
+
+func (service *RepositoryService) ReviewBranchDeletion(ctx context.Context, path, name string, force bool) (gitrepo.BranchDeletionReview, error) {
+	repo, err := service.manager.Get(path)
+	if err != nil {
+		return gitrepo.BranchDeletionReview{}, err
+	}
+	return repo.ReviewBranchDeletion(ctx, name, force)
+}
+
+func (service *RepositoryService) DeleteReviewedBranch(ctx context.Context, path, name string, force bool, token string) error {
+	repo, err := service.manager.Get(path)
+	if err != nil {
+		return err
+	}
+	return repo.DeleteReviewedBranch(ctx, name, force, token)
+}

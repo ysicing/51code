@@ -179,18 +179,15 @@ func TestWorktreeCreateRejectsUnsafePathsWithoutTouchingData(t *testing.T) {
 	}
 }
 
-func TestWorktreeReviewRejectsUnmergedAndMergesPinnedCommit(t *testing.T) {
+func TestWorktreeReviewAllowsUnmergedAndMergesPinnedCommit(t *testing.T) {
 	repo, dir, path := worktreeFixture(t)
 	write(t, path, "topic.txt", "topic\n")
 	git(t, path, "add", ".")
 	git(t, path, "commit", "-m", "topic")
 	source := git(t, path, "rev-parse", "HEAD")
 	review := worktreeReview(t, repo, path)
-	if !review.CanMerge || review.CanRemove || !strings.Contains(review.RemoveProblem, "未合并") || review.Worktree.Head != source {
+	if !review.CanMerge || !review.CanRemove || review.Worktree.Head != source {
 		t.Fatalf("unmerged: %+v", review)
-	}
-	if err := repo.RemoveWorktree(context.Background(), path, review.Token); err == nil {
-		t.Fatal("removed unmerged worktree")
 	}
 	if err := repo.MergeWorktree(context.Background(), path, review.Token); err != nil {
 		t.Fatal(err)
@@ -213,8 +210,74 @@ func TestWorktreeReviewRejectsUnmergedAndMergesPinnedCommit(t *testing.T) {
 	}
 }
 
-func TestWorktreeReviewProtectsDirtyIgnoredAndOperations(t *testing.T) {
-	for _, state := range []string{"tracked", "untracked", "ignored", "merge", "assume-unchanged", "skip-worktree"} {
+func TestWorktreeRemovalPreservesUnmergedBranch(t *testing.T) {
+	repo, dir, path := worktreeFixture(t)
+	base := git(t, dir, "rev-parse", "HEAD")
+	git(t, path, "commit", "--allow-empty", "-m", "unmerged")
+	tip := git(t, path, "rev-parse", "HEAD")
+	review := worktreeReview(t, repo, path)
+	if !review.CanRemove {
+		t.Fatalf("standalone removal should preserve unmerged commits via the branch: %+v", review)
+	}
+	if err := repo.RemoveWorktree(context.Background(), path, review.Token); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("worktree still exists: %v", err)
+	}
+	if git(t, dir, "rev-parse", "refs/heads/topic") != tip || git(t, dir, "rev-parse", "HEAD") != base {
+		t.Fatal("standalone removal changed branch commits")
+	}
+}
+
+func TestWorktreeRemovalWithUnbornTarget(t *testing.T) {
+	repo, dir, linked := worktreeFixture(t)
+	tip := git(t, dir, "rev-parse", "refs/heads/topic")
+	git(t, dir, "switch", "--orphan", "empty-target")
+	review := worktreeReview(t, repo, linked)
+	if !review.CanRemove {
+		t.Fatalf("unborn target should not block standalone removal: %+v", review)
+	}
+	if err := repo.RemoveWorktree(context.Background(), linked, review.Token); err != nil {
+		t.Fatal(err)
+	}
+	if git(t, dir, "rev-parse", "refs/heads/topic") != tip {
+		t.Fatal("removal lost the retained branch")
+	}
+}
+
+func TestWorktreeRemovalAllowsIgnoredFiles(t *testing.T) {
+	for _, directGit := range []bool{true, false} {
+		t.Run(fmt.Sprintf("directGit=%t", directGit), func(t *testing.T) {
+			repo, dir, path := worktreeFixture(t)
+			head := git(t, path, "rev-parse", "HEAD")
+			write(t, path, "ignored/build/output", "build output\n")
+			if directGit {
+				git(t, dir, "worktree", "remove", "--", path)
+			} else {
+				review := worktreeReview(t, repo, path)
+				if !review.Worktree.Ignored || review.Worktree.Dirty || !review.CanRemove {
+					t.Fatalf("ignored files should not block removal: %+v", review)
+				}
+				if err := repo.RemoveWorktree(context.Background(), path, review.Token); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := os.Stat(path); !os.IsNotExist(err) {
+				t.Fatalf("worktree was not removed: %v", err)
+			}
+			if got := git(t, dir, "rev-parse", "refs/heads/topic"); got != head {
+				t.Fatalf("removal changed branch: %s", got)
+			}
+			if got := git(t, dir, "status", "--porcelain"); got != "" {
+				t.Fatalf("removal changed main worktree: %s", got)
+			}
+		})
+	}
+}
+
+func TestWorktreeReviewProtectsDirtyAndOperations(t *testing.T) {
+	for _, state := range []string{"tracked", "untracked", "merge", "assume-unchanged", "skip-worktree"} {
 		t.Run(state, func(t *testing.T) {
 			repo, _, path := worktreeFixture(t)
 			switch state {
@@ -222,8 +285,6 @@ func TestWorktreeReviewProtectsDirtyIgnoredAndOperations(t *testing.T) {
 				write(t, path, "base.txt", "changed\n")
 			case "untracked":
 				write(t, path, portableTestPath("untracked\n中文", "untracked 中文"), "precious")
-			case "ignored":
-				write(t, path, "ignored/precious", "precious")
 			case "merge":
 				hash := git(t, path, "rev-parse", "HEAD")
 				gitDir := git(t, path, "rev-parse", "--absolute-git-dir")
@@ -239,10 +300,7 @@ func TestWorktreeReviewProtectsDirtyIgnoredAndOperations(t *testing.T) {
 			if review.CanRemove || review.RemoveProblem == "" {
 				t.Fatalf("unsafe remove review: %+v", review)
 			}
-			if state == "ignored" && (!review.Worktree.Ignored || !strings.Contains(review.RemoveProblem, "忽略")) {
-				t.Fatalf("ignored data not explained: %+v", review)
-			}
-			if state != "ignored" && review.CanMerge {
+			if review.CanMerge {
 				t.Fatalf("unsafe merge review: %+v", review)
 			}
 			if err := repo.RemoveWorktree(context.Background(), path, review.Token); err == nil {

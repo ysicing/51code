@@ -43,6 +43,67 @@ func TestNativeWorktreesDiscoverAndOpen(t *testing.T) {
 	}
 }
 
+func TestNativeLinkedBranchDeletionConfirmation(t *testing.T) {
+	app, path, finish := nativeFixture(t)
+	linked := filepath.Join(t.TempDir(), "linked")
+	nativeGit(t, path, "worktree", "add", "-b", "topic", linked)
+	linked, err := filepath.EvalSymlinks(linked)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tester := ui.NewTester(app.view, 1024, 680)
+	for _, cancel := range []bool{true, false} {
+		app.deleteBranch("topic", false)
+		if app.readTask == nil {
+			t.Fatal("删除分支没有先预检关联工作树")
+		}
+		finish()
+		tester.Frame()
+		dialog := app.dialog
+		if dialog == nil || dialog.action != "移除工作树并删除分支" ||
+			!strings.Contains(dialog.detail, linked) || !dialog.danger {
+			t.Fatal("没有明确确认关联工作树目录及删除分支")
+		}
+		if cancel {
+			if err := tester.Click("取消"); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := os.Stat(linked); err != nil || nativeGit(t, path, "branch", "--list", "topic") == "" {
+				t.Fatal("取消确认改变了工作树或分支", err)
+			}
+			continue
+		}
+		if err := tester.Click("移除工作树并删除分支"); err != nil {
+			t.Fatal(err)
+		}
+		finish()
+		tester.Frame()
+		if app.dialog != nil || app.problem != "" || nativeGit(t, path, "branch", "--list", "topic") != "" {
+			t.Fatal("联动删除没有完成", app.problem)
+		}
+		if _, err := os.Stat(linked); !os.IsNotExist(err) {
+			t.Fatalf("工作树目录未移除: %v", err)
+		}
+	}
+}
+
+func TestNativeDetachedWorktreeRemovalExplainsCommitRetention(t *testing.T) {
+	app, path, finish := nativeFixture(t)
+	linked := filepath.Join(t.TempDir(), "detached")
+	nativeGit(t, path, "worktree", "add", "--detach", linked)
+	nativeGit(t, linked, "commit", "--allow-empty", "-m", "detached commit")
+	head := nativeGit(t, linked, "rev-parse", "HEAD")
+	app.openWorktrees()
+	finish()
+	app.reviewWorktree(linked, true)
+	finish()
+	dialog := app.dialog
+	if dialog == nil || dialog.blocked || !strings.Contains(dialog.detail, "分离 HEAD") ||
+		!strings.Contains(dialog.detail, head) || strings.Contains(dialog.detail, "保留本地分支") {
+		t.Fatal("分离 HEAD 的移除确认错误保证了分支会保留提交")
+	}
+}
+
 func TestNativeWorktreeCreateAndFailurePreservesDraft(t *testing.T) {
 	app, path, finish := nativeFixture(t)
 	app.openWorktrees()
@@ -69,6 +130,7 @@ func TestNativeWorktreeCreateAndFailurePreservesDraft(t *testing.T) {
 	dialog.fields[0].value, dialog.fields[1].value, dialog.fields[2].value = linked, "another", "HEAD"
 	dialog.submit(dialog)
 	finish()
+	dismissNativeError(t, app)
 	if app.dialog != dialog || dialog.problem == "" || dialog.fields[1].value != "another" {
 		t.Fatal("创建失败未保留草稿和错误")
 	}
@@ -162,6 +224,70 @@ func TestNativeWorktreeSafetyAndCanceledReads(t *testing.T) {
 	finish()
 	if app.screen != "changes" || app.readTask != nil {
 		t.Fatal("离开工作树管理后应用了过期读取")
+	}
+}
+
+func TestNativeWorktreeRemovalReviewsFiles(t *testing.T) {
+	for _, ignored := range []bool{false, true} {
+		t.Run(fmt.Sprintf("ignored=%t", ignored), func(t *testing.T) {
+			app, path, finish := nativeFixture(t)
+			linked := filepath.Join(t.TempDir(), "linked")
+			nativeGit(t, path, "worktree", "add", "-b", "topic", linked)
+			if ignored {
+				writeNativeFile(t, path, ".git/info/exclude", "local-data.txt\n")
+			}
+			writeNativeFile(t, linked, "local-data.txt", "keep me\n")
+			app.openWorktrees()
+			finish()
+			canonical, err := filepath.EvalSymlinks(linked)
+			if err != nil {
+				t.Fatal(err)
+			}
+			tester := ui.NewTester(app.view, 1024, 680)
+			if err := tester.Click(canonical); err != nil {
+				t.Fatal(err)
+			}
+			if err := tester.Click("工作树操作"); err != nil {
+				t.Fatal(err)
+			}
+			if err := tester.ChooseMenuItem("移除工作树…"); err != nil {
+				t.Fatalf("应允许查看移除受阻原因: %v", err)
+			}
+			finish()
+			tester.Frame()
+			dialog := app.dialog
+			if ignored {
+				if dialog == nil || dialog.blocked || dialog.action != "移除" || dialog.submit == nil {
+					t.Fatal("忽略文件不应阻止移除确认")
+				}
+				if !strings.Contains(dialog.detail, "忽略文件") {
+					t.Fatal("确认时没有说明忽略文件也会删除")
+				}
+			} else if dialog == nil || !dialog.blocked || dialog.action != "" || dialog.submit != nil {
+				t.Fatal("未跟踪文件应阻止执行移除")
+			} else if !strings.Contains(dialog.problem, "未提交或未跟踪文件") {
+				t.Fatalf("没有解释文件保护原因: %s", dialog.problem)
+			}
+			data, err := os.ReadFile(filepath.Join(linked, "local-data.txt"))
+			if err != nil || string(data) != "keep me\n" {
+				t.Fatalf("预检改变了用户文件: %q %v", data, err)
+			}
+			if ignored {
+				if err := tester.Click("移除"); err != nil {
+					t.Fatal(err)
+				}
+				finish()
+				if app.problem != "" || app.dialog != nil || len(app.worktrees.items) != 1 {
+					t.Fatal("未能移除含忽略文件的工作树", app.problem)
+				}
+				if _, err := os.Stat(linked); !os.IsNotExist(err) {
+					t.Fatalf("确认后工作目录未移除: %v", err)
+				}
+				if nativeGit(t, path, "branch", "--list", "topic") == "" {
+					t.Fatal("移除工作树误删分支")
+				}
+			}
+		})
 	}
 }
 

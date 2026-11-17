@@ -427,7 +427,8 @@ func (app *nativeApp) runTask(label string, readOnly bool, task func(context.Con
 				if dialog != nil && app.dialog == dialog {
 					dialog.problem = err.Error()
 				}
-				if !errors.Is(err, context.Canceled) {
+				var partial *gitrepo.BranchDeletionPartialError
+				if !errors.Is(err, context.Canceled) || errors.As(err, &partial) {
 					app.showProblemDetails(app.problem)
 				}
 			}

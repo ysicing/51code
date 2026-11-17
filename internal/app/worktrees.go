@@ -103,7 +103,8 @@ func (app *nativeApp) createWorktreeDialog() {
 }
 
 func (app *nativeApp) reviewWorktree(path string, remove bool) {
-	if app.repository == nil || app.screen != "worktrees" || !app.writable || app.busy || app.dialog != nil {
+	if app.repository == nil || app.screen != "worktrees" || !app.writable || app.busy ||
+		app.readTask != nil || app.dialog != nil {
 		return
 	}
 	repository := app.repository.snapshot.Path
@@ -122,6 +123,9 @@ func (app *nativeApp) reviewWorktree(path string, remove bool) {
 			if remove {
 				dialog.title = locales.RemoveWorktreeMenu()
 				dialog.detail = item.Path + "\n" + locales.WorktreeRemoveDetail()
+				if item.Detached {
+					dialog.detail = item.Path + "\n" + locales.RemoveDetachedWorktreeDetail() + "\n" + item.Head
+				}
 				if item.Branch != "" {
 					dialog.detail += "\n" + locales.BranchName() + ": " + worktreeBranch(item)
 				}
@@ -184,12 +188,12 @@ func (app *nativeApp) worktreeMenu(menu *ui.Menu, item gitrepo.Worktree) {
 	}
 	menu.Separator()
 	unavailable := app.repository == nil || app.busy || !app.writable || app.readTask != nil ||
-		app.dialog != nil || item.Current || item.Bare || item.Locked ||
-		item.Prunable || item.Problem != "" || item.Operation != "" || item.Dirty || item.Head == ""
-	if menu.Item(locales.MergeWorktreeMenu()).Disabled(unavailable).Chosen() {
+		app.dialog != nil || item.Current || item.Bare
+	if menu.Item(locales.MergeWorktreeMenu()).Disabled(unavailable || item.Locked ||
+		item.Prunable || item.Problem != "" || item.Operation != "" || item.Dirty || item.Head == "").Chosen() {
 		app.reviewWorktree(item.Path, false)
 	}
-	if menu.Item(locales.RemoveWorktreeMenu()).Danger().Disabled(unavailable || item.Main || item.Ignored).Chosen() {
+	if menu.Item(locales.RemoveWorktreeMenu()).Danger().Disabled(unavailable || item.Main).Chosen() {
 		app.reviewWorktree(item.Path, true)
 	}
 }
@@ -231,8 +235,7 @@ func (app *nativeApp) worktreePanel(c *ui.Context) {
 				case app.readTask != nil:
 					message = app.readTask.label
 				case app.problem != "":
-					ui.Text(c, app.problem).FillWidth().MaxLines(5).Selectable().
-						Tooltip(app.problem).TextColor(c.Theme().Danger)
+					app.inlineProblem(c, app.problem)
 					return
 				case state.canceled:
 					return
@@ -342,8 +345,7 @@ func (app *nativeApp) worktreeDetail(c *ui.Context, state *nativeWorktrees) {
 						FontSize(12).FillWidth()
 				}
 				if item.Problem != "" {
-					ui.Text(c, item.Problem).TextColor(c.Theme().Danger).FontSize(12).
-						FillWidth().Selectable().Tooltip(item.Problem)
+					app.inlineProblem(c, item.Problem)
 				}
 				if app.repository.snapshot.Operation.Kind == "merge" {
 					ui.Button(c, locales.FileChanges()).OnClick(func() {
