@@ -2064,6 +2064,36 @@ func (msgs Messages) CopyTagName() string {
 	return Catalog.Format(msgs.locale, "copyTagName", nil)
 }
 
+// CopyPath says "复制路径"
+// in the language the app shows.
+func CopyPath() string { return In(i18n.Locale()).CopyPath() }
+
+// CopyPath says "复制路径"
+// in the language of msgs.
+func (msgs Messages) CopyPath() string {
+	return Catalog.Format(msgs.locale, "copyPath", nil)
+}
+
+// CopyRelativePath says "复制相对路径"
+// in the language the app shows.
+func CopyRelativePath() string { return In(i18n.Locale()).CopyRelativePath() }
+
+// CopyRelativePath says "复制相对路径"
+// in the language of msgs.
+func (msgs Messages) CopyRelativePath() string {
+	return Catalog.Format(msgs.locale, "copyRelativePath", nil)
+}
+
+// CopyFullPath says "复制完整路径"
+// in the language the app shows.
+func CopyFullPath() string { return In(i18n.Locale()).CopyFullPath() }
+
+// CopyFullPath says "复制完整路径"
+// in the language of msgs.
+func (msgs Messages) CopyFullPath() string {
+	return Catalog.Format(msgs.locale, "copyFullPath", nil)
+}
+
 // ViewTagCommit says "查看标签提交"
 // in the language the app shows.
 func ViewTagCommit() string { return In(i18n.Locale()).ViewTagCommit() }

@@ -172,6 +172,22 @@ func nativeFileScroll(element ui.Element) ui.Element {
 	})
 }
 
+func (app *nativeApp) filePathMenu(c *ui.Context, path string) func(*ui.Menu) {
+	services := c.Services()
+	root := ""
+	if app.repository != nil {
+		root = app.repository.snapshot.Path
+	}
+	return func(menu *ui.Menu) {
+		if menu.Item(locales.CopyRelativePath()).Chosen() {
+			services.WriteClipboard(path)
+		}
+		if menu.Item(locales.CopyFullPath()).Disabled(root == "").Chosen() {
+			services.WriteClipboard(filepath.Join(root, filepath.FromSlash(path)))
+		}
+	}
+}
+
 func (app *nativeApp) filePathWidth(c *ui.Context, path string) float32 {
 	metrics := &app.fileMetrics
 	if metrics.source != app.repository || metrics.font != c.Theme().Font || metrics.zoom != c.Zoom() {
@@ -265,6 +281,7 @@ func (app *nativeApp) fileTree(c *ui.Context, tree ui.TreeParts, nodes []*native
 			}
 			row := item.Row.Label(label).Tooltip(node.path).Height(28).FillWidth().
 				Padding(0, 6).PaddingStart(6 + float32(depth)*16).Gap(6).AlignItems(ui.Center).Radius(5)
+			row.ContextMenu(app.filePathMenu(c, node.path))
 			row.FocusRing(row.FocusVisible())
 			if row.Hovered() || row.Pressed() {
 				row.Background(c.Theme().SurfaceHover)
@@ -321,6 +338,7 @@ func (app *nativeApp) changeFileRow(c *ui.Context, file gitrepo.File, staged boo
 		case "D", "!":
 			color = c.Theme().Danger
 		}
+		row.ContextMenu(app.filePathMenu(c, file.Path))
 		row.Grow(1).Height(28).Padding(4, 6).Gap(6).AlignItems(ui.Center).Tooltip(file.Path).Children(func() {
 			ui.Text(c, status).Width(12).Font("monospace").FontSize(11).TextColor(color)
 			nativeFileIcon(c, file.Path)

@@ -30,6 +30,7 @@ func (app *nativeApp) revisionFileTree(c *ui.Context, tree ui.TreeParts, nodes [
 			row := item.Row.Label(label).Tooltip(node.path).AccessSelected(active).
 				Height(30).FillWidth().Padding(0, 12).PaddingStart(12 + float32(depth)*16).
 				Gap(8).AlignItems(ui.Center)
+			row.ContextMenu(app.filePathMenu(c, node.path))
 			row.FocusRing(row.FocusVisible())
 			if active {
 				row.Background(c.Theme().Accent)

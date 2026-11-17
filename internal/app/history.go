@@ -506,7 +506,7 @@ func (app *nativeApp) revisionFileList(c *ui.Context, files []gitrepo.CommitFile
 		list.Label = func(index int) string { return files[index].Path }
 		if ui.List(c, list, len(files), func(index int) {
 			file := files[index]
-			ui.Row(c).FillWidth().Height(30).Padding(0, 12).Gap(8).AlignItems(ui.Center).Children(func() {
+			ui.Row(c).ContextMenu(app.filePathMenu(c, file.Path)).FillWidth().Height(30).Padding(0, 12).Gap(8).AlignItems(ui.Center).Children(func() {
 				nativeFileIcon(c, file.Path)
 				ui.Text(c, file.Path).FontSize(12).Grow(1).MinWidth(0).SingleLine().Tooltip(file.Path)
 				ui.Text(c, file.Status).FontSize(10).TextColor(c.Theme().TextMuted)

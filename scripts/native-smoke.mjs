@@ -256,6 +256,7 @@ try {
   console.log("✓ 历史工作区整文件、分组、区块与逐行暂存及取消暂存");
   await press("前往文件变更");
   await press("hello.txt");
+  await shown("复制路径");
   await press("差异");
   await press("差异布局");
   await press("并排");
