@@ -1,71 +1,134 @@
 <p align="center">
-  <img src="resources/icon.png" width="128" height="128" alt="51Code app icon">
+  <img src="resources/icon.png" width="96" height="96" alt="51Code app icon">
 </p>
 
-# 51Code
+<h1 align="center">51Code</h1>
 
-[简体中文](README.md) | English
+<p align="center">A lightweight, open-source desktop client for everyday Git workflows.</p>
 
-51Code is a lightweight, open-source Git desktop client focused on the everyday workflows people use in SourceTree. It runs on macOS, Windows 11 x64 and Linux x64/arm64 (deb and rpm packages, mainly tested on Ubuntu 24.04 LTS). The interface is built with Go and [MyGo Native UI](https://mygo.egoist.dev/docs/ui), and it uses the system Git.
+<p align="center"><a href="README.md">简体中文</a> · English</p>
 
-## Features
-
-- **Repositories**: add and scan local repositories, with groups and search
-- **Changes and commits**: file filters, bulk staging, hunk/line staging, commit drafts, adaptive unified/side-by-side diff, read-only full file view with in-file search
-- **History**: commit graph, full-text search, path filter, commit diffs and comparison between any two revisions
-- **Branches and tags**: manage local branches and tags, check out remote branches, first publish and upstream tracking
-- **Remotes**: manage remote URLs, Fetch, fast-forward Pull, Push, and ahead/behind counts
-- **Stashes and merges**: manage stashes, merge branches, edit conflicts, and continue or abort in-progress Git operations
-- **Worktrees**: discover, open and create worktrees, merge into the current worktree, and remove merged worktrees after checking their state
-- **Desktop experience**: light/dark appearance, native menus, keyboard shortcuts, resizable panes and signed in-app updates; sidebar entries for search, comparison, stashes and worktrees can be shown or hidden individually
-
-51Code currently manages repositories that already exist on your machine. There is no clone entry, interactive rebase or credential settings yet; remote operations use your system Git/SSH credentials. A recovery copy is saved before discarding file changes. See the [usage guide](docs/usage.md) (Chinese).
+<p align="center">
+  <a href="https://github.com/ysicing/51code/releases/latest">Download</a> ·
+  <a href="docs/usage.md">Usage guide</a> ·
+  <a href="CHANGELOG.md">Changelog</a>
+</p>
 
 ## Installation
 
-macOS:
+| Platform | Supported systems | Install |
+| --- | --- | --- |
+| macOS | Apple Silicon / Intel | [Download DMG](https://github.com/ysicing/51code/releases/latest) or Homebrew |
+| Windows | Windows 11 x64 | [Download installer](https://github.com/ysicing/51code/releases/latest), with Git, SSH and Git LFS included |
+| Linux | x64 / arm64 | Install script, APT / YUM repositories, or [deb / rpm packages](https://github.com/ysicing/51code/releases/latest) |
+
+<details>
+<summary>macOS · Homebrew</summary>
 
 ```sh
 brew install --cask ysicing/tap/51code
 ```
 
-Windows and Linux:
+Releases are Developer ID-signed and Apple-notarized, with in-app updates.
 
-- Windows: download `51code-setup-<version>-amd64.exe` from [GitHub Releases](https://github.com/ysicing/51code/releases) and install it; it updates itself afterwards. Install [Git for Windows](https://gitforwindows.org/) first and make sure `git` is on PATH. The installer is not Authenticode-signed.
-- Linux (recommended, with automatic updates): `curl -fsSL https://c.ysicing.net/oss/apps/macOS/51code/install.sh | sh`, which installs into `~/.local`.
-- Linux packages: download `51code_<version>_<amd64|arm64>.deb` (`sudo apt install ./<file>`) or `51code-<version>-1.<x86_64|aarch64>.rpm` (`sudo dnf install ./<file>`) from GitHub Releases. Packages install into `/opt` and cannot update themselves; use "Settings → Updates → Download New Version…" to get a new package and upgrade manually.
+</details>
 
-Windows/Linux builds of v0.2.0 and earlier need one manual upgrade; after that they update as described above.
+<details>
+<summary>Windows · Installer</summary>
 
-Linux requires a GTK 3 desktop. Saving AI keys also requires a running Secret Service (such as GNOME Keyring). On minimal desktops without one, 51Code shows a save error and keeps your draft instead of falling back to plain-text storage.
+Choose `51code-setup-<version>-amd64.exe` from the download page. In-app updates are supported; no separate Git installation is required. The installer is not yet Authenticode-signed.
 
-## Running locally
+</details>
 
-Requires Go **1.27.3+**, Bun, Git and Task; macOS also needs the Xcode Command Line Tools, and Ubuntu needs GTK 3. On Windows, start it with `bun run dev`. Installers for all three platforms are cross-built on macOS.
+<details>
+<summary>Linux · Install script (with in-app updates)</summary>
+
+```sh
+curl -fsSL https://c.ysicing.net/oss/apps/macOS/51code/install.sh | sh
+```
+
+Installs into `~/.local` with in-app updates.
+
+</details>
+
+<details>
+<summary>Debian / Ubuntu · APT</summary>
+
+```sh
+echo "deb [trusted=yes] https://mirrors.china.12306.work/repository/ysicing/apt/ /" | sudo tee /etc/apt/sources.list.d/ysicing.list
+sudo apt-get update
+sudo apt-get install 51code
+```
+
+Use APT for future upgrades. To install a downloaded deb package manually, use `sudo apt install ./<file>.deb`.
+
+</details>
+
+<details>
+<summary>YUM-based distributions · YUM</summary>
+
+Write the following configuration to `/etc/yum.repos.d/fury.repo`:
+
+```ini
+[fury]
+name=Gemfury Private Repo
+baseurl=https://yum.fury.io/ysicing/
+enabled=1
+gpgcheck=0
+```
+
+Then install, and use YUM for future upgrades:
+
+```sh
+sudo yum install 51code
+```
+
+To install a downloaded rpm package manually, use `sudo dnf install ./<file>.rpm`.
+
+</details>
+
+Linux requires a GTK 3 desktop and system Git, and is mainly tested on Ubuntu 24.04 LTS. Saving AI keys also requires a Secret Service such as GNOME Keyring. deb / rpm packages install into `/opt`; upgrade through the package manager or a new package, as in-app automatic updates are unavailable. Windows / Linux versions v0.2.0 and earlier need one manual upgrade first.
+
+## Everyday workflows
+
+Inspired by the everyday operations in SourceTree, with a native interface built using Go and [MyGo Native UI](https://mygo.egoist.dev/docs/ui), without a WebView.
+
+| Workflow | Capabilities |
+| --- | --- |
+| Organize repositories | Add and scan local repositories, groups, search and primary language detection |
+| Review and commit | File filters, bulk and hunk / line staging, commit drafts and AI commit messages |
+| Read diffs | Adaptive unified / side-by-side diff, syntax highlighting, read-only full files and in-file search |
+| Explore history | Commit graph, full-text search, path filters, commit diffs and comparison between any two revisions |
+| Branch and sync | Branches and tags, remote branch checkout, first publish and upstream tracking, remote URLs, Fetch / fast-forward Pull / Push and ahead / behind counts |
+| Stash and merge | Stash management, branch merges, conflict editing, and continuing or aborting Git operations |
+| Use worktrees | Discover, open and create worktrees; merge and remove merged worktrees after checking their state |
+| LFS and insights | Git LFS, large-file checks, commit activity, contributors and file hotspots |
+
+Light / dark appearance, native menus, keyboard shortcuts and resizable panes. Sidebar entries such as search, comparison, stashes and worktrees can be shown or hidden individually.
+
+## Getting started
+
+1. Add an existing local repository, or scan a folder to add several.
+2. Review diffs, stage your changes, and write or generate a commit message with AI.
+3. Commit, then fetch, pull or push from the toolbar.
+
+Cloning, interactive rebase and authentication settings are not yet available in the UI. Remote operations use the selected Git installation's credentials. A recovery copy is saved before discarding file changes. AI sends staged diffs only after confirmation and never commits or pushes automatically. See the [usage guide](docs/usage.md) (Chinese).
+
+## Documentation and development
+
+- [Usage guide](docs/usage.md) (Chinese): workflows, shortcuts, AI setup, updates and recovery copies
+- [Development and release](docs/development.md) (Chinese): setup, native UI development, testing, builds and releases
+- [Changelog](CHANGELOG.md): version history
+
+Local development requires Go **1.27.3+**, Bun, Git and Task; macOS also needs Xcode Command Line Tools.
 
 ```sh
 task setup
 task dev
 ```
 
-Build the app and installer for the current platform:
-
-```sh
-task build
-```
-
-macOS output goes to `build/darwin-arm64/` or `build/darwin-amd64/`. Local builds use ad-hoc signing; the release process uses Developer ID signing, Apple notarization and Gatekeeper checks. Windows and Linux installers are built and published together by `task release` on macOS; see [Development and release](docs/development.md) (Chinese).
-
-Run `task` to list all tasks. `task fmt` adds license headers and formats Go code. `task check` runs header and format checks, Go tests, native UI tests, release script tests and golangci-lint in sequence. Bun is only used for packaging tools and release scripts; the UI needs no WebView or frontend build.
-
-## Documentation
-
-- [Usage guide](docs/usage.md) (Chinese): shortcuts, updates, recovery copies and current limits
-- [Development and release](docs/development.md) (Chinese): native UI development, testing, project layout and object storage release flow
-- [Changelog](CHANGELOG.md)
+`task build` builds the local app. `task check` runs format checks, tests and lint in sequence. See the development guide for platform requirements and all commands.
 
 ## License
 
-Copyright (c) 2026 ysicing
-
-This project is licensed under the [GNU AGPL v3.0](LICENSE) (`AGPL-3.0-only`).
+Copyright (c) 2026 ysicing · [GNU AGPL v3.0](LICENSE) (`AGPL-3.0-only`)

@@ -1,71 +1,134 @@
 <p align="center">
-  <img src="resources/icon.png" width="128" height="128" alt="51Code 应用图标">
+  <img src="resources/icon.png" width="96" height="96" alt="51Code 应用图标">
 </p>
 
-# 51Code
+<h1 align="center">51Code</h1>
 
-简体中文 | [English](README.en.md)
+<p align="center">轻量、开源的 Git 桌面客户端，专注日常 Git 工作流。</p>
 
-51Code 是轻量的开源 Git 桌面客户端，专注 SourceTree 中常用的工作流。支持 macOS、Windows 11 x64 和 Linux x64/arm64（提供 deb 与 rpm，主要在 Ubuntu 24.04 LTS 上验证），使用 Go 和 [MyGo Native UI](https://mygo.egoist.dev/docs/ui) 构建界面，使用系统 Git。
+<p align="center">简体中文 · <a href="README.en.md">English</a></p>
 
-## 功能
-
-- **仓库管理**：添加、扫描本地仓库，支持分组与搜索
-- **查看与提交**：文件筛选、批量暂存、逐块/逐行暂存、提交草稿、自适应统一/并排 Diff、只读全文与文件内查找
-- **历史记录**：提交关系图、全文搜索、文件路径筛选、提交差异与任意两版本比较
-- **分支与标签**：管理本地分支和标签、检出远程分支、首次发布与上游跟踪
-- **远程同步**：管理远程地址、Fetch、快进 Pull、Push 与领先/落后计数
-- **贮藏与合并**：管理贮藏、合并分支、编辑冲突，继续或中止进行中的 Git 操作
-- **工作树（Worktree）**：发现、打开、创建工作目录，合并到当前工作树并核对状态后移除已合并目录
-- **桌面体验**：浅色/深色外观、原生菜单、快捷键、可调整面板与 macOS 应用内签名更新；搜索、版本比较、贮藏和工作树侧栏入口可独立显示或隐藏
-
-目前管理本机已有仓库，尚无克隆入口、交互式 rebase 或凭证配置界面。远程操作沿用系统 Git/SSH 凭证。丢弃文件修改前会保存恢复副本，详见[使用说明](docs/usage.md)。
+<p align="center">
+  <a href="https://github.com/ysicing/51code/releases/latest">下载最新版</a> ·
+  <a href="docs/usage.md">使用指南</a> ·
+  <a href="CHANGELOG.md">更新日志</a>
+</p>
 
 ## 安装
 
-macOS：
+| 平台 | 支持范围 | 安装方式 |
+| --- | --- | --- |
+| macOS | Apple Silicon / Intel | [下载 DMG](https://github.com/ysicing/51code/releases/latest) 或 Homebrew |
+| Windows | Windows 11 x64 | [下载安装器](https://github.com/ysicing/51code/releases/latest)，内置 Git、SSH 与 Git LFS |
+| Linux | x64 / arm64 | 安装脚本、APT / YUM 源，或 [deb / rpm 软件包](https://github.com/ysicing/51code/releases/latest) |
+
+<details>
+<summary>macOS · Homebrew</summary>
 
 ```sh
 brew install --cask ysicing/tap/51code
 ```
 
-Windows 和 Linux：
+正式版本经过 Developer ID 签名与 Apple 公证，支持应用内更新。
 
-- Windows：从 [GitHub Releases](https://github.com/ysicing/51code/releases) 下载 `51code-setup-<版本>-amd64.exe` 安装，之后自动更新。需先安装 [Git for Windows](https://gitforwindows.org/) 并确保 `git` 在 PATH 中；安装包未提供 Authenticode 签名。
-- Linux（推荐，可自动更新）：`curl -fsSL https://c.ysicing.net/oss/apps/macOS/51code/install.sh | sh`，安装到 `~/.local`。
-- Linux 软件包：从 GitHub Releases 下载 `51code_<版本>_<amd64|arm64>.deb`（`sudo apt install ./<文件>`）或 `51code-<版本>-1.<x86_64|aarch64>.rpm`（`sudo dnf install ./<文件>`）。软件包装在 `/opt`，不能自动更新，通过“设置 → 更新 → 下载新版本…”下载新包手动升级。
+</details>
 
-v0.2.0 及更早的 Windows/Linux 版本需要手动升级一次，之后按上述方式更新。
+<details>
+<summary>Windows · 安装器</summary>
 
-Linux 需要 GTK 3 桌面环境；AI 密钥保存还需要运行中的 Secret Service（如 GNOME Keyring）。最小桌面缺少凭证服务时会显示保存错误并保留草稿，不降级为明文保存。
+从下载页选择 `51code-setup-<版本>-amd64.exe`，安装后支持应用内更新，无需另行安装 Git。安装器暂未提供 Authenticode 签名。
 
-## 本地运行
+</details>
 
-需要 Go **1.27.3+**、Bun、Git 和 Task；macOS 另需 Xcode Command Line Tools，Ubuntu 需要 GTK 3。Windows 可用 `bun run dev` 启动；三个平台的安装包统一在 macOS 上交叉打包。
+<details>
+<summary>Linux · 安装脚本（支持应用内更新）</summary>
+
+```sh
+curl -fsSL https://c.ysicing.net/oss/apps/macOS/51code/install.sh | sh
+```
+
+安装到 `~/.local`，支持应用内更新。
+
+</details>
+
+<details>
+<summary>Debian / Ubuntu · APT</summary>
+
+```sh
+echo "deb [trusted=yes] https://mirrors.china.12306.work/repository/ysicing/apt/ /" | sudo tee /etc/apt/sources.list.d/ysicing.list
+sudo apt-get update
+sudo apt-get install 51code
+```
+
+后续通过 APT 升级。手动下载 deb 包时，使用 `sudo apt install ./<文件>.deb`。
+
+</details>
+
+<details>
+<summary>YUM 系发行版 · YUM</summary>
+
+将以下配置写入 `/etc/yum.repos.d/fury.repo`：
+
+```ini
+[fury]
+name=Gemfury Private Repo
+baseurl=https://yum.fury.io/ysicing/
+enabled=1
+gpgcheck=0
+```
+
+然后安装，后续通过 YUM 升级：
+
+```sh
+sudo yum install 51code
+```
+
+手动下载 rpm 包时，使用 `sudo dnf install ./<文件>.rpm`。
+
+</details>
+
+Linux 需要 GTK 3 桌面环境和系统 Git，主要在 Ubuntu 24.04 LTS 上验证；保存 AI 密钥还需 Secret Service（如 GNOME Keyring）。deb / rpm 安装到 `/opt`，通过包管理器或下载新包升级，不支持应用内自动更新。v0.2.0 及更早的 Windows / Linux 版本需先手动升级一次。
+
+## 日常工作流
+
+以 SourceTree 常用操作为参考，使用 Go 与 [MyGo Native UI](https://mygo.egoist.dev/docs/ui) 构建原生界面，无需 WebView。
+
+| 工作流 | 能力 |
+| --- | --- |
+| 管理仓库 | 添加与扫描本地仓库、分组、搜索、主要编程语言识别 |
+| 检查与提交 | 文件筛选、批量与逐块 / 逐行暂存、提交草稿、AI 提交说明 |
+| 阅读差异 | 自适应统一 / 并排 Diff、语法高亮、只读全文与文件内查找 |
+| 追溯历史 | 提交关系图、全文搜索、路径筛选、提交差异与任意两版本比较 |
+| 分支与同步 | 分支与标签、远程分支检出、首次发布与上游跟踪、远程地址、Fetch / 快进 Pull / Push、领先 / 落后计数 |
+| 贮藏与合并 | 贮藏管理、分支合并、冲突编辑、继续或中止 Git 操作 |
+| 多工作树 | 发现、打开与创建 Worktree，合并并核对状态后移除已合并目录 |
+| LFS 与洞察 | Git LFS、大文件检查、提交活跃度、贡献者与文件热点 |
+
+浅色 / 深色外观、原生菜单、快捷键和可调整面板；搜索、版本比较、贮藏和工作树等侧栏入口可独立显示或隐藏。
+
+## 开始使用
+
+1. 添加本机已有仓库，或扫描文件夹批量收录。
+2. 查看文件差异，暂存需要提交的内容，填写或使用 AI 生成提交说明。
+3. 提交后通过工具栏获取、拉取或推送。
+
+目前不提供克隆入口、交互式 rebase 或凭证配置界面，远程操作沿用所选 Git 的凭证配置。丢弃文件修改前会保存恢复副本；AI 仅在确认后发送暂存差异，不会自动提交或推送。详见[使用指南](docs/usage.md)。
+
+## 文档与开发
+
+- [使用指南](docs/usage.md)：功能操作、快捷键、AI 配置、更新与恢复副本
+- [开发与发布](docs/development.md)：环境准备、原生界面开发、测试、构建与发布
+- [更新日志](CHANGELOG.md)：版本变化
+
+本地开发需要 Go **1.27.3+**、Bun、Git 和 Task；macOS 另需 Xcode Command Line Tools。
 
 ```sh
 task setup
 task dev
 ```
 
-构建当前平台应用与安装包：
-
-```sh
-task build
-```
-
-macOS 产物位于 `build/darwin-arm64/` 或 `build/darwin-amd64/`，本地构建使用 ad-hoc 签名；正式发布流程使用 Developer ID 签名、Apple 公证及 Gatekeeper 校验。Windows 和 Linux 安装包由 `task release` 在 macOS 上一并构建发布，详见[开发与发布](docs/development.md)。
-
-运行 `task` 查看全部任务，`task fmt` 补齐版权头并格式化 Go 代码，`task check` 串行执行文件头与格式检查、Go 测试、原生界面测试、发布脚本测试及 golangci-lint。Bun 仅用于打包工具和发布脚本，界面无需 WebView 或前端构建。
-
-## 文档
-
-- [使用说明](docs/usage.md)：快捷键、更新、恢复副本与功能边界
-- [开发与发布](docs/development.md)：原生界面开发、测试、项目结构与对象存储发布流程
-- [更新日志](CHANGELOG.md)
+`task build` 构建本地应用，`task check` 串行运行格式检查、测试与 lint。各平台要求及完整命令见开发文档。
 
 ## License
 
-Copyright (c) 2026 ysicing
-
-本项目采用 [GNU AGPL v3.0](LICENSE)（`AGPL-3.0-only`）授权。
+Copyright (c) 2026 ysicing · [GNU AGPL v3.0](LICENSE)（`AGPL-3.0-only`）
