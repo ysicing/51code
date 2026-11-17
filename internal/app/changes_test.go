@@ -10,9 +10,96 @@ import (
 	"time"
 
 	"github.com/ysicing/51code/internal/gitrepo"
+	"github.com/ysicing/51code/locales"
 
 	"github.com/egoist/mygo/ui"
 )
+
+func TestNativeStagingKeepsWorkspaceVisible(t *testing.T) {
+	for _, screen := range []string{"changes", "history"} {
+		for _, appearance := range []string{appearanceLight, appearanceDark} {
+			t.Run(screen+"/"+appearance, func(t *testing.T) {
+				app, path, finish := nativeFixture(t)
+				writeNativeFile(t, path, "hello.txt", "等待暂存的内容\n")
+				paths := []string{"hello.txt"}
+				for index := range 40 {
+					name := fmt.Sprintf("z-generated-%02d.txt", index)
+					writeNativeFile(t, path, name, "新增文件\n")
+					paths = append(paths, name)
+				}
+				app.refresh()
+				finish()
+				app.screen, app.prefs.Appearance = screen, appearance
+				if screen == "history" {
+					app.searchHistory(false)
+					finish()
+					app.selectHistoryWorkingFile("hello.txt", false)
+				} else {
+					app.selectFile("hello.txt", false)
+				}
+				finish()
+				tester := ui.NewTester(app.view, 1024, 680)
+				row, found := tester.Find("hello.txt")
+				if !found {
+					t.Fatal("暂存前缺少选中文件")
+				}
+				before := tester.Image()
+				repository, preview := app.repository, app.diffViews[0]
+				gate := make(chan struct{})
+				app.readDone = gate
+				app.stagePaths(false, paths)
+				defer func() {
+					close(gate)
+					finish()
+					if app.problem != "" || app.busy {
+						t.Errorf("批量暂存失败: %s", app.problem)
+					}
+					for _, path := range paths {
+						if !fileExists(app.repository.snapshot.Files, path, true) {
+							t.Errorf("文件未成功暂存: %s", path)
+						}
+					}
+					tester.Frame()
+					check, found := tester.Access(locales.SelectStagedFile("hello.txt"))
+					if !found || check.Disabled {
+						t.Error("暂存完成后没有恢复文件操作")
+					}
+				}()
+				tester.Frame()
+				if !app.busy || app.repository != repository || app.diffViews[0] != preview {
+					t.Fatal("暂存期间没有保留原列表和差异预览")
+				}
+				control, found := tester.Access("hello.txt")
+				if !found || !control.Disabled || control.Offscreen {
+					t.Fatal("暂存期间应保留可见文件并禁止重复操作")
+				}
+				if _, found := tester.Find(app.status); !found || app.status == "" {
+					t.Fatal("暂存期间缺少操作状态")
+				}
+				check, found := tester.Access(locales.SelectUnstagedFile("hello.txt"))
+				if !found || !check.Disabled {
+					t.Fatal("暂存期间没有禁用文件勾选")
+				}
+				_ = tester.Click(locales.SelectUnstagedFile("hello.txt"))
+				if len(app.selectedFiles) != 0 {
+					t.Fatal("暂存期间仍可勾选文件")
+				}
+				after := tester.Image()
+				for y := int(row.Y) + 2; y < int(row.Y+row.H)-2; y++ {
+					for x := int(row.X) + 2; x < int(row.X+row.W)-16; x++ {
+						if before.RGBAAt(x, y) != after.RGBAAt(x, y) {
+							t.Fatalf("暂存期间文件行发生变暗或闪烁: (%d, %d) %v → %v, row=%+v",
+								x, y, before.RGBAAt(x, y), after.RGBAAt(x, y), row)
+						}
+					}
+				}
+				if directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); directory != "" {
+					saveNativeScreenshot(t, tester, directory, "staging-"+screen+"-"+appearance+".png")
+				}
+			})
+		}
+	}
+}
 
 func TestNativeChangesSectionsKeepStagedVisible(t *testing.T) {
 	app, _, _ := nativeFixture(t)

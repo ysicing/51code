@@ -138,7 +138,7 @@ func (app *nativeApp) view(c *ui.Context) {
 			}).Label(locales.ApplicationActions()).Padding(0).Shrink(0)
 		})
 		ui.Divider(c)
-		ui.Column(c).Grow(1).MinHeight(0).Disabled(app.busy).Children(func() {
+		ui.Column(c).Grow(1).MinHeight(0).Disabled(app.busy).DimDisabled(false).Children(func() {
 			ui.Split(c, &app.prefs.Sidebar, func() { app.sidebar(c) }, func() {
 				ui.Column(c).Fill().MinWidth(0).Children(func() {
 					switch app.screen {
