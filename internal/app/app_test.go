@@ -17,6 +17,7 @@ import (
 
 	"github.com/ysicing/51code/internal/gitrepo"
 	"github.com/ysicing/51code/internal/workspace"
+	"github.com/ysicing/51code/locales"
 
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
@@ -899,7 +900,7 @@ func TestNativeSidebarScopesLibraryNavigation(t *testing.T) {
 	for _, screen := range []string{"changes", "history", "stash"} {
 		app.screen = screen
 		tester.Frame()
-		for _, label := range []string{"本地仓库", "仓库组", "日常开发", "管理仓库组 日常开发", "新建仓库组"} {
+		for _, label := range []string{locales.LocalRepositories(), "仓库组", "日常开发", "管理仓库组 日常开发", "新建仓库组"} {
 			if _, found := tester.Find(label); found {
 				t.Errorf("%s 页面不应显示全局导航 %q", screen, label)
 			}
@@ -917,7 +918,7 @@ func TestNativeSidebarScopesLibraryNavigation(t *testing.T) {
 		t.Fatal("返回入口未切换到仓库首页")
 	}
 	tester.Frame()
-	for _, label := range []string{"本地仓库", "仓库组", "日常开发", "新建仓库组"} {
+	for _, label := range []string{locales.LocalRepositories(), "仓库组", "日常开发", "新建仓库组"} {
 		if _, found := tester.Find(label); !found {
 			t.Errorf("仓库首页缺少全局导航 %q", label)
 		}

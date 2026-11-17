@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/ysicing/51code/internal/gitrepo"
+	"github.com/ysicing/51code/locales"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -176,12 +177,17 @@ func TestNativeHistoryWorkspace(t *testing.T) {
 	if app.commitFile != "hello.txt" {
 		t.Fatal("文件列表不支持方向键选择")
 	}
-	for _, label := range []string{"差异布局", "并排", "换行"} {
+	for _, label := range []string{"差异布局", "并排"} {
 		if err := tester.Click(label); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if !app.prefs.Split || app.prefs.Wrap {
+	settings := ui.NewTester(app.gitPreferences, 640, 300)
+	if err := settings.Click(locales.Wrap()); err != nil {
+		t.Fatal(err)
+	}
+	tester.Frame()
+	if !app.prefs.Split || app.prefs.Wrap || app.diffViews[0].Wrap {
 		t.Fatal("差异布局和换行操作失效")
 	}
 	files, _ = tester.Find("提交文件列表")
