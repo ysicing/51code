@@ -179,6 +179,9 @@ func (app *nativeApp) fileDiffPanel(c *ui.Context) {
 				title = app.readTask.label
 			}
 			ui.Text(c, title).Bold().Grow(1).MinWidth(0).MaxLines(1).Tooltip(title)
+			if full == 0 {
+				app.diffLayoutControl(c)
+			}
 			ui.Segmented(c, &full, locales.FileDiff(), locales.FullFile()).
 				Label(locales.FileViewMode()).Disabled(!hasSources).Shrink(0).
 				OnChange(func() { app.fileViewer.full = full == 1 })
@@ -187,14 +190,11 @@ func (app *nativeApp) fileDiffPanel(c *ui.Context) {
 			app.fullFilePanel(c)
 			return
 		}
-		ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(4).Padding(0, 10).Children(func() {
-			ui.Column(c).Grow(1).MinWidth(0).Children(func() {
-				if app.workingFileActions() {
-					app.patchToolbar(c)
-				}
+		if app.workingFileActions() {
+			ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(4).Padding(0, 10).Children(func() {
+				app.patchToolbar(c)
 			})
-			app.diffLayoutControl(c)
-		})
+		}
 		ui.Divider(c)
 		if hasSources {
 			ui.Text(c, fileVersionLabel(app.diff.Old)+" → "+fileVersionLabel(app.diff.New)).

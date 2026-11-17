@@ -233,6 +233,39 @@ func TestNativeDiffLayoutMigratesLegacyPreference(t *testing.T) {
 	}
 }
 
+func TestNativeDiffHeaderControlsStayOnOneRow(t *testing.T) {
+	app, _, _ := nativeFixture(t)
+	app.selectedFile = strings.Repeat("很长的目录/", 20) + "preview.go"
+	app.setDiff(gitrepo.Diff{
+		Old: &gitrepo.FileContent{Path: app.selectedFile, Present: true},
+		New: &gitrepo.FileContent{Path: app.selectedFile, Present: true},
+	})
+	for _, width := range []int{360, 640, 1024} {
+		for _, dark := range []bool{false, true} {
+			tester := ui.NewTester(app.fileDiffPanel, width, 400)
+			tester.SetDark(dark)
+			layout, found := tester.Access("差异布局")
+			if !found || layout.Offscreen {
+				t.Fatal("布局选择必须保持可见")
+			}
+			for _, label := range []string{"差异", "全文"} {
+				control, found := tester.Access(label)
+				if !found || control.Offscreen || control.Bounds.X+control.Bounds.W > float32(width) {
+					t.Fatalf("width=%d: %s 控件被裁切", width, label)
+				}
+				center := control.Bounds.Y + control.Bounds.H/2
+				if center < layout.Bounds.Y || center > layout.Bounds.Y+layout.Bounds.H ||
+					control.Bounds.X < layout.Bounds.X+layout.Bounds.W {
+					t.Fatalf("width=%d: %s 与布局选择没有在同一行排列", width, label)
+				}
+			}
+			if directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); directory != "" {
+				saveNativeScreenshot(t, tester, directory, fmt.Sprintf("diff-header-%d-dark-%t.png", width, dark))
+			}
+		}
+	}
+}
+
 func TestNativeDiffReaderScreenshots(t *testing.T) {
 	directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS")
 	if directory == "" {
