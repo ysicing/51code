@@ -75,7 +75,7 @@ func TestInspectFilesBinaryAttributesAndLFS(t *testing.T) {
 		pointer       bool
 	}{
 		{"plain.txt", "plain\n", false, false, false},
-		{"nul.bin", "a\x00b", true, false, false},
+		{"nul-byte.bin", "a\x00b", true, false, false},
 		{"invalid.bin", "a\xffb", false, false, false},
 		{"forced.binary", "ordinary text", true, false, false},
 		{"forced.text", "\x00binary", false, false, false},
