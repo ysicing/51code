@@ -27,6 +27,9 @@ func (app *nativeApp) commitDate(commit gitrepo.Commit) string {
 func (app *nativeApp) gitPreferences(c *ui.Context) {
 	previous := *app.prefs
 	settingsSection(c, locales.OperationsAndDisplay(), func() {
+		settingsRow(c, locales.FileViewMode(), func() {
+			app.wrapPreference(c)
+		})
 		settingsRow(c, locales.DoubleClickFile(), func() {
 			ui.Checkbox(c, &app.prefs.DoubleClickStage, locales.StageOrUnstage()).Label(locales.DoubleClickStage()).OnClick(func() {
 				app.saveBehaviorPreferences(previous)
@@ -49,6 +52,16 @@ func (app *nativeApp) gitPreferences(c *ui.Context) {
 	if app.settingsError != "" {
 		ui.Text(c, app.settingsError).FontSize(12).TextColor(c.Theme().Danger)
 	}
+}
+
+func (app *nativeApp) wrapPreference(c *ui.Context) {
+	previous := *app.prefs
+	ui.Checkbox(c, &app.prefs.Wrap, locales.Wrap()).Shrink(0).OnClick(func() {
+		app.saveBehaviorPreferences(previous)
+		if app.settingsError != "" {
+			app.status = app.settingsError
+		}
+	})
 }
 
 func (app *nativeApp) stageDoubleClickedFile(file gitrepo.File, staged bool) {

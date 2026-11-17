@@ -202,7 +202,6 @@ func (app *nativeApp) fileDiffPanel(c *ui.Context) {
 				}
 			})
 			app.diffLayoutControl(c)
-			ui.Checkbox(c, &app.prefs.Wrap, locales.Wrap()).Shrink(0)
 		})
 		ui.Divider(c)
 		if hasSources {
@@ -258,7 +257,6 @@ func (app *nativeApp) fullFilePanel(c *ui.Context) {
 		ui.Column(c).Grow(1)
 		ui.Button(c, locales.FindInFile()).Disabled(state.Buffer == nil).
 			OnClick(func() { state.Run(editor.Find) })
-		ui.Checkbox(c, &app.prefs.Wrap, locales.Wrap())
 	})
 	ui.Divider(c)
 	if state.Buffer != nil {

@@ -114,6 +114,10 @@ func TestNativeGitPreferencesPersistAndRollback(t *testing.T) {
 	}
 	finish()
 	tester.Frame()
+	if checkbox, found := tester.AccessByRole(ui.RoleCheckBox, "换行"); !found || !checkbox.Checked {
+		t.Fatal("换行默认应勾选")
+	}
+	clickNativeSettingsControl(t, tester, ui.RoleCheckBox, "换行")
 	if checkbox, found := tester.AccessByRole(ui.RoleCheckBox, "双击文件暂存或取消暂存"); !found || !checkbox.Checked {
 		t.Fatal("双击暂存默认应勾选")
 	}
@@ -125,7 +129,7 @@ func TestNativeGitPreferencesPersistAndRollback(t *testing.T) {
 	tester.Frame()
 	restored := newNativeApp(app.service, app.stateFile)
 	t.Cleanup(restored.cancel)
-	if restored.prefs.DoubleClickStage || restored.prefs.HistoryDate != "committer" || app.identityEditor.dirty() {
+	if restored.prefs.Wrap || restored.prefs.DoubleClickStage || restored.prefs.HistoryDate != "committer" || app.identityEditor.dirty() {
 		t.Fatal("Git 应用偏好未即时保存，或错误修改了身份草稿")
 	}
 	blocker := filepath.Join(t.TempDir(), "file")
@@ -133,6 +137,10 @@ func TestNativeGitPreferencesPersistAndRollback(t *testing.T) {
 		t.Fatal(err)
 	}
 	app.stateFile = filepath.Join(blocker, "state.json")
+	clickNativeSettingsControl(t, tester, ui.RoleCheckBox, "换行")
+	if app.prefs.Wrap || app.settingsError == "" || !tester.HasText(app.settingsError) {
+		t.Fatal("保存失败时没有恢复换行偏好")
+	}
 	clickNativeSettingsControl(t, tester, ui.RoleCheckBox, "双击文件暂存或取消暂存")
 	if app.prefs.DoubleClickStage || app.settingsError == "" || !tester.HasText(app.settingsError) {
 		t.Fatal("保存失败时没有恢复双击偏好")
@@ -144,6 +152,85 @@ func TestNativeGitPreferencesPersistAndRollback(t *testing.T) {
 	tester.Frame()
 	if app.prefs.HistoryDate != "committer" || app.settingsError == "" || !tester.HasText(app.settingsError) {
 		t.Fatal("保存失败时没有恢复历史日期偏好")
+	}
+}
+
+func TestNativeWrapDefaultsAndMigration(t *testing.T) {
+	base, _, _ := nativeFixture(t)
+	for _, test := range []struct {
+		name, data string
+		enabled    bool
+	}{
+		{"new", "", true},
+		{"legacy", `{}`, true},
+		{"enabled", `{"wrap":true}`, true},
+		{"disabled", `{"wrap":false}`, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			stateFile := filepath.Join(t.TempDir(), "preferences.json")
+			if test.data != "" {
+				if err := os.WriteFile(stateFile, []byte(test.data), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			app := newNativeApp(base.service, stateFile)
+			t.Cleanup(app.cancel)
+			if app.prefs.Wrap != test.enabled {
+				t.Fatalf("换行 = %t，预期 %t", app.prefs.Wrap, test.enabled)
+			}
+		})
+	}
+}
+
+func TestNativeWrapSettingsPersistAcrossWindows(t *testing.T) {
+	desktop, path, updates, _ := desktopFixture(t)
+	app := openDesktopRepository(t, desktop, updates, path)
+	other := desktop.library
+	app.setDiff(gitrepo.Diff{
+		Text: "diff --git a/hello.txt b/hello.txt\n--- a/hello.txt\n+++ b/hello.txt\n@@ -1 +1 @@\n-old\n+new\n",
+		Old:  &gitrepo.FileContent{Path: "hello.txt", Present: true, Text: "old\n"},
+		New:  &gitrepo.FileContent{Path: "hello.txt", Present: true, Text: "new\n"},
+	})
+	for _, full := range []bool{false, true} {
+		app.fileViewer.full = full
+		tester := ui.NewTester(app.fileDiffPanel, 800, 500)
+		previous := app.prefs.Wrap
+		settings := ui.NewTester(app.gitPreferences, 800, 500)
+		if err := settings.Click("换行"); err != nil {
+			t.Fatal(err)
+		}
+		settings.Frame()
+		tester.Frame()
+		if _, found := tester.AccessByRole(ui.RoleCheckBox, "换行"); found {
+			t.Fatal("文件查看工具栏不应再显示换行开关")
+		}
+		restored := newNativeApp(app.service, app.stateFile)
+		t.Cleanup(restored.cancel)
+		if app.prefs.Wrap == previous || other.prefs.Wrap != app.prefs.Wrap ||
+			desktop.applied.Wrap != app.prefs.Wrap || restored.prefs.Wrap != app.prefs.Wrap {
+			t.Fatal("全局换行偏好未保存或同步其他窗口")
+		}
+		if full {
+			if app.fileViewer.states[app.fileViewer.side].SoftWrap != app.prefs.Wrap {
+				t.Fatal("全文预览未应用换行偏好")
+			}
+		} else if len(app.diffViews) == 0 || app.diffViews[0].Wrap != app.prefs.Wrap {
+			t.Fatal("Diff 未应用换行偏好")
+		}
+	}
+	blocker := filepath.Join(t.TempDir(), "file")
+	if err := os.WriteFile(blocker, nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	app.stateFile = filepath.Join(blocker, "state.json")
+	previous := app.prefs.Wrap
+	tester := ui.NewTester(app.gitPreferences, 800, 500)
+	if err := tester.Click("换行"); err != nil {
+		t.Fatal(err)
+	}
+	tester.Frame()
+	if app.prefs.Wrap != previous || other.prefs.Wrap != previous || app.settingsError == "" || app.status != app.settingsError {
+		t.Fatal("全局设置保存失败没有回滚或提示错误")
 	}
 }
 
