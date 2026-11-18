@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import net from "node:net";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 
@@ -441,16 +441,18 @@ try {
   assert(stashNode, "未显示贮藏记录");
   await press(stashNode.label);
   await capture("native-stash.png");
-  git("stash", "pop");
+  assert(git("stash", "list").includes("原生贮藏"), "没有保留创建的贮藏");
+  console.log("✓ 创建、预览贮藏");
+  console.log("↪ 桌面驱动无法选择系统右键菜单项，贮藏操作由 ui.Tester 的 TestNativeStashContextMenuTargetsEntry 覆盖");
+
+  writeFileSync(join(fixture, "hello.txt"), "待丢弃修改\n");
   await press("刷新");
-  assert.equal(readFileSync(join(fixture, "hello.txt"), "utf8"), "贮藏修改\n");
-  assert.equal(git("stash", "list"), "");
   await press("文件变更");
   await press("hello.txt");
   await press("丢弃修改…");
   await press("丢弃修改");
   assert.equal(git("status", "--porcelain"), "");
-  console.log("✓ 创建、预览、应用贮藏，以及备份后丢弃修改");
+  console.log("✓ 备份后丢弃修改");
 
   const linked = join(root, "中文工作树");
   const mainHead = git("rev-parse", "HEAD");

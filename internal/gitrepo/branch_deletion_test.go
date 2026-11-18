@@ -7,7 +7,9 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -54,6 +56,10 @@ func TestBranchDeletionReviewAndExecution(t *testing.T) {
 				t.Fatalf("unexpected deletion review: %+v", review)
 			}
 			head := git(t, dir, "rev-parse", "refs/heads/"+branch)
+			if scenario == "plain" {
+				git(t, dir, "config", "branch.topic.description", "删除后清理")
+				git(t, dir, "config", "branch.topic-other.description", "保留其他分支配置")
+			}
 			err = repo.DeleteReviewedBranch(context.Background(), branch, force, review.Token)
 			if blocked {
 				if err == nil || review.Problem == "" {
@@ -73,11 +79,105 @@ func TestBranchDeletionReviewAndExecution(t *testing.T) {
 			if git(t, dir, "branch", "--list", branch) != "" {
 				t.Fatal("deletion kept the branch")
 			}
+			if scenario == "plain" {
+				if config := git(t, dir, "config", "--local", "--list"); strings.Contains(config, "branch.topic.") ||
+					!strings.Contains(config, "branch.topic-other.description=") {
+					t.Fatalf("unexpected branch configuration after deletion: %s", config)
+				}
+			}
 			if _, err := os.Stat(linked); !os.IsNotExist(err) {
 				t.Fatal("deletion kept the linked directory", err)
 			}
 			if _, err := os.Stat(filepath.Join(dir, "base.txt")); err != nil {
 				t.Fatal("deletion affected the main worktree", err)
+			}
+		})
+	}
+}
+
+func TestBranchDeletionRejectsMovementAtRefWrite(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("requires a POSIX Git command wrapper")
+	}
+	for _, scenario := range []string{"plain", "linked"} {
+		t.Run(scenario, func(t *testing.T) {
+			repo, dir, linked := worktreeFixture(t)
+			if scenario == "plain" {
+				git(t, dir, "worktree", "remove", "--", linked)
+			}
+			force := scenario == "linked"
+			review, err := repo.ReviewBranchDeletion(context.Background(), "topic", force)
+			if err != nil || !review.CanDelete {
+				t.Fatalf("initial review failed: %+v, %v", review, err)
+			}
+			tree := git(t, dir, "rev-parse", "HEAD^{tree}")
+			newHead := git(t, dir, "commit-tree", tree, "-p", review.Head, "-m", "concurrent update")
+			git(t, dir, "config", "branch.topic.description", "keep this")
+			actual, err := exec.LookPath("git")
+			if err != nil {
+				t.Fatal(err)
+			}
+			wrapper := filepath.Join(t.TempDir(), "git")
+			script := `#!/bin/sh
+for arg in "$@"; do
+  case "$arg" in
+    --delete|-D|update-ref)
+      "$BRANCH_TEST_GIT" -C "$BRANCH_TEST_DIR" update-ref refs/heads/topic "$BRANCH_TEST_HEAD" || exit 1
+      break
+      ;;
+  esac
+done
+exec "$BRANCH_TEST_GIT" "$@"
+`
+			if err := os.WriteFile(wrapper, []byte(script), 0700); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("BRANCH_TEST_GIT", actual)
+			t.Setenv("BRANCH_TEST_DIR", dir)
+			t.Setenv("BRANCH_TEST_HEAD", newHead)
+			previous := currentExecutableOptions()
+			ConfigureExecutable(ExecutableOptions{Source: "custom", Path: wrapper})
+			t.Cleanup(func() { ConfigureExecutable(previous) })
+			err = repo.DeleteReviewedBranch(context.Background(), "topic", force, review.Token)
+			var partial *BranchDeletionPartialError
+			if err == nil || errors.As(err, &partial) != (scenario == "linked") {
+				t.Fatalf("unexpected result after concurrent movement: %v", err)
+			}
+			if head := git(t, dir, "rev-parse", "refs/heads/topic"); head != newHead {
+				t.Fatalf("concurrent branch tip was not preserved: %s", head)
+			}
+			if description := git(t, dir, "config", "branch.topic.description"); description != "keep this" {
+				t.Fatalf("configuration was changed after the rejected deletion: %q", description)
+			}
+		})
+	}
+}
+
+func TestBranchDeletionProtectsBranchInDetachedWorktree(t *testing.T) {
+	for marker, payload := range map[string]string{
+		"rebase-merge/head-name":   "refs/heads/topic\n",
+		"rebase-apply/head-name":   "refs/heads/topic\n",
+		"rebase-merge/update-refs": "refs/heads/topic\n",
+		"BISECT_START":             "topic\n",
+	} {
+		t.Run(marker, func(t *testing.T) {
+			repo, dir, linked := worktreeFixture(t)
+			git(t, linked, "switch", "--detach")
+			gitDir := git(t, linked, "rev-parse", "--absolute-git-dir")
+			write(t, gitDir, marker, payload)
+			review, err := repo.ReviewBranchDeletion(context.Background(), "topic", true)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if review.CanDelete || !strings.Contains(review.Problem, "变基或二分查找") {
+				t.Fatalf("expected branch operation to block the review: %+v", review)
+			}
+			err = repo.DeleteReviewedBranch(context.Background(), "topic", true, review.Token)
+			if err == nil || !strings.Contains(err.Error(), "变基或二分查找") {
+				t.Fatalf("expected branch operation protection: %v", err)
+			}
+			if head := git(t, dir, "rev-parse", "refs/heads/topic"); head != review.Head {
+				t.Fatalf("branch in use was not preserved: %s", head)
 			}
 		})
 	}

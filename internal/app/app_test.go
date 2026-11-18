@@ -689,6 +689,10 @@ func TestNativeStashContextMenuTargetsEntry(t *testing.T) {
 	if err := tester.Click(locales.Cancel()); err != nil {
 		t.Fatal(err)
 	}
+	if app.busy || app.dialog != nil || nativeGit(t, path, "rev-parse", "refs/stash") != target.Hash ||
+		nativeGit(t, path, "status", "--porcelain") != "" {
+		t.Fatal("取消应用并移除后修改了工作区或贮藏")
+	}
 	if err := tester.RightClick(target.Message); err != nil {
 		t.Fatal(err)
 	}
@@ -746,6 +750,9 @@ func TestNativeStashContextMenuTargetsEntry(t *testing.T) {
 	content, err = os.ReadFile(filepath.Join(path, "hello.txt"))
 	if err != nil || strings.TrimSpace(string(content)) != "保留贮藏" || len(app.repository.stashes) != 0 || app.problem != "" {
 		t.Fatalf("应用并移除没有完成: %q, %v, %s", content, err, app.problem)
+	}
+	if stashes := nativeGit(t, path, "stash", "list"); stashes != "" {
+		t.Fatalf("应用后 Git 仍保留贮藏: %s", stashes)
 	}
 }
 

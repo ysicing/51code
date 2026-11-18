@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -105,6 +106,15 @@ func (repo *Repository) reviewBranchDeletion(ctx context.Context, common, name s
 	}
 	if len(state.Sources) > 1 {
 		review.Problem = "分支被多个工作树使用，请先分别处理，不能批量移除"
+	}
+	if review.Problem == "" {
+		occupied, err := branchUsedByWorktreeOperation(common, ref)
+		if err != nil {
+			return review, state, err
+		}
+		if occupied {
+			review.Problem = "分支正被变基或二分查找使用，请先完成该操作"
+		}
 	}
 	if !force {
 		state.Reference, state.ReferenceHead, err = repo.branchDeletionReference(ctx, ref, state.Target.Worktree.Head)
@@ -203,13 +213,81 @@ func (repo *Repository) DeleteReviewedBranch(ctx context.Context, name string, f
 			return partial(errors.New("移除工作树后分支状态已改变，已停止删除分支"))
 		}
 	}
-	option := "--delete"
-	if force {
-		option = "-D"
-	}
-	_, err = repo.git(ctx, "branch", option, "--", name)
+	err = repo.deleteBranchAt(ctx, state)
 	if err != nil && removed {
 		return partial(err)
 	}
 	return err
+}
+
+func (repo *Repository) deleteBranchAt(ctx context.Context, state branchDeletionState) error {
+	ref := "refs/heads/" + state.Name
+	occupied, err := repo.git(ctx, "for-each-ref", "--format=%(worktreepath)", "--", ref)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(occupied) != "" {
+		return errors.New("分支已被工作树使用，请刷新后重新确认")
+	}
+	inOperation, err := branchUsedByWorktreeOperation(state.Common, ref)
+	if err != nil {
+		return err
+	}
+	if inOperation {
+		return errors.New("分支正被变基或二分查找使用，请先完成该操作")
+	}
+	if !state.Force {
+		head, err := repo.git(ctx, "rev-parse", "--verify", "--quiet", "HEAD^{commit}")
+		if err != nil && !exitCode(err, 1) {
+			return err
+		}
+		reference, tip, err := repo.branchDeletionReference(ctx, ref, strings.TrimSpace(head))
+		if err != nil {
+			return err
+		}
+		if reference != state.Reference || tip != state.ReferenceHead {
+			return errors.New("用于确认合并的引用已改变，请刷新后重新确认")
+		}
+	}
+	if _, err := repo.git(ctx, "update-ref", "--no-deref", "-d", ref, state.Head); err != nil {
+		return fmt.Errorf("无法删除确认时的分支引用，请刷新后重新确认：%w", err)
+	}
+	section := "branch." + state.Name
+	_, err = repo.git(ctx, "config", "--local", "--remove-section", section)
+	if err != nil && !(exitCode(err, 128) && err.Error() == "fatal: no such section: "+section) {
+		return fmt.Errorf("分支已删除，但无法清理分支配置：%w", err)
+	}
+	return nil
+}
+
+// 分支在变基或二分查找期间可能处于分离 HEAD，单查工作树当前分支会漏掉。
+func branchUsedByWorktreeOperation(common, ref string) (bool, error) {
+	directory := filepath.Join(common, "worktrees")
+	entries, err := os.ReadDir(directory)
+	if err != nil && !os.IsNotExist(err) {
+		return false, err
+	}
+	gitDirs := []string{common}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			gitDirs = append(gitDirs, filepath.Join(directory, entry.Name()))
+		}
+	}
+	for _, gitDir := range gitDirs {
+		for _, marker := range []string{"rebase-merge/head-name", "rebase-apply/head-name", "rebase-merge/update-refs", "BISECT_START"} {
+			data, err := os.ReadFile(filepath.Join(gitDir, marker))
+			if os.IsNotExist(err) {
+				continue
+			}
+			if err != nil {
+				return false, err
+			}
+			for line := range strings.SplitSeq(string(data), "\n") {
+				if line == ref || (marker == "BISECT_START" && "refs/heads/"+line == ref) {
+					return true, nil
+				}
+			}
+		}
+	}
+	return false, nil
 }
