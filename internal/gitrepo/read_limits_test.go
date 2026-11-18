@@ -82,6 +82,7 @@ func TestSnapshotStreamsStatusBeyondOutputLimit(t *testing.T) {
 		t.Skip("creates thousands of files")
 	}
 	repo, dir := fixture(t)
+	git(t, dir, "config", "--local", "core.longpaths", "true")
 	write(t, dir, "tracked.txt", "base\n")
 	git(t, dir, "add", ".")
 	git(t, dir, "commit", "-m", "base")

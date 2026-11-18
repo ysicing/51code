@@ -117,6 +117,7 @@ func TestNativeBranchDeletionReviewPreservesNewDialog(t *testing.T) {
 
 func TestNativeLinkedBranchConfirmationLayout(t *testing.T) {
 	app, path, finish := nativeFixture(t)
+	nativeGit(t, path, "config", "--local", "core.longpaths", "true")
 	name := "feature/" + strings.Repeat("long-branch-name/", 12) + "end"
 	linked := filepath.Join(t.TempDir(), strings.Repeat("long-worktree-", 8))
 	nativeGit(t, path, "worktree", "add", "-b", name, linked)

@@ -51,7 +51,8 @@ func TestNulRecordsKeepsPrefixesAcrossChunkBoundaries(t *testing.T) {
 }
 
 func TestWorktreeInspectionStreamsStatusBeyondOutputLimit(t *testing.T) {
-	repo, _, path := worktreeFixture(t)
+	repo, dir, path := worktreeFixture(t)
+	git(t, dir, "config", "--local", "core.longpaths", "true")
 	// 每条记录约 800 字节（不超过 macOS 的 PATH_MAX），约 5300 个未跟踪文件即超过 4 MiB 的输出上限。
 	directory := filepath.Join(path, strings.Repeat("d", 200), strings.Repeat("e", 200), strings.Repeat("f", 200))
 	if err := os.MkdirAll(directory, 0755); err != nil {

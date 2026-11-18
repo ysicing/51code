@@ -372,13 +372,13 @@ func TestNativeRepositoryWatchBacksOffUnchangedRefreshes(t *testing.T) {
 func TestNativeRepositoryWatchSkipsChangesCoveredByLaterRead(t *testing.T) {
 	app, path, state, updates, _ := watchedBackgroundFixture(t)
 	runBackgroundUpdates(t, updates, func() bool { return !state.readStarted.IsZero() && app.focusRefresh == nil })
-	// 写操作自带完整读取：读取开始前观察到的监听批次不应再触发一次读取。
-	observed := time.Now()
+	// 用上一轮读取时间模拟已经排队的事件，避免紧邻的 time.Now 在 Windows 上取到同一时钟刻度。
+	observed := state.readStarted
 	app.refresh()
 	runBackgroundUpdates(t, updates, func() bool { return !app.busy })
 	covered := state.readStarted
 	if !covered.After(observed) {
-		t.Fatal("写操作的完整读取没有登记")
+		t.Fatalf("手动刷新的完整读取没有登记：刷新错误=%q", app.problem)
 	}
 	state.refreshDelay = 0
 	app.queueRepositoryRefresh(state, observed)

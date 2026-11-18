@@ -16,6 +16,7 @@ import (
 
 func TestNativeBranchConfirmationLayout(t *testing.T) {
 	app, path, finish := nativeFixture(t)
+	nativeGit(t, path, "config", "--local", "core.longpaths", "true")
 	for _, width := range []int{1024, 480} {
 		for _, dark := range []bool{false, true} {
 			for _, force := range []bool{false, true} {
