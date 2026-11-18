@@ -36,9 +36,15 @@ description: 为 51Code（原 XSourceTree）本地构建或正式发版；本地
 
 正式发布必须具备有效 Developer ID Application 证书及私钥、公证权限。用 `security find-identity -v -p codesigning` 核验证书，用 `xcrun notarytool history --keychain-profile <配置名>` 检查公证权限。正式构建不能回退 ad-hoc；普通本地构建仍可 ad-hoc。
 
+## 整理更新日志
+
+1. 从目标发布渠道确认上一正式版本及其 tag，锁定本次构建的目标提交。用 `git log <上版tag>..<目标提交>` 盘点完整区间，再用 `git diff <上版tag> <目标提交>` 核对交付时的实际行为，特别检查中途撤回、迁移或改名的功能。
+2. 将相关改动合并成面向用户的中文要点，按「新功能」「改进」「修复」「废弃」「移除」选用有内容的分类。覆盖区间内的主要用户可感知变化、兼容性变化和关键限制。持续可用但计划淘汰的能力归入「废弃」，已经撤掉的功能或入口归入「移除」，并说明替代入口或迁移方法。省略重复提交、纯重构及常规测试调整。
+3. 在 `CHANGELOG.md` 用 `## <版本>` 标记版本，用 `###` 标记分类，避免分类标题截断 MyGo 提取的版本说明。构建前复核每个主题的覆盖和表述。正式上传前核对五个平台更新清单的 `notes` 与该版本段一致，发布后回读 GitHub Release 正文确认一致。
+
 ## 准备与验证
 
-1. 目标版本使用 `x.y.z` 稳定版；依据实际代码变化更新 `package.json` 和对应中文 changelog，不将计划或未完成功能写成已发布能力。
+1. 目标版本使用 `x.y.z` 稳定版。更新 `package.json`，按「整理更新日志」一节更新 `CHANGELOG.md`。
 2. 确认 Go、Bun、MyGo、`mc`、`gh` 与 `fury` 可用，使用 `gh auth status --hostname github.com` 确认发布账户具备目标仓库 Release 写权限。fury CLI 须支持 `push --public`、查询 `--json` 与 `--no-input`（已验证 1.0.0），通过已有登录或 `FURY_TOKEN` 提供目标组织权限，不输出凭证。遵循锁文件；若 Bun 与锁文件不兼容，选择本机兼容版本并保证嵌套构建使用该版本，不降级锁文件或修改全局 PATH。
 3. 同机重任务串行，Go worker 最多 2；资源不足时等待或报告验证缺口，不跳过发布门禁。
 4. 运行 `task check` 与 `git diff --check`。`task check` 是当前 Go 测试（包括原生 UI）、发布脚本测试和 Go 静态检查入口；不再运行旧 Web UI 的绑定生成、TypeScript 或 Vite 检查。桌面交互或更新安装流程变化时，按 `docs/development.md` 使用隔离 smoke；不覆盖或终止用户正在运行的应用。
