@@ -35,13 +35,22 @@ func TestRepositoryLanguageCacheReusesTreeAndRecoversCorruption(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	nativeGit(t, path, "commit", "--allow-empty", "-m", "same tree")
 	if _, err := readRepositoryLanguages(context.Background(), path, cache); err != nil {
 		t.Fatal(err)
 	}
 	unchanged, err := os.Stat(file)
 	if err != nil || !unchanged.ModTime().Equal(info.ModTime()) {
-		t.Fatalf("matching tree rewrote cache: %v", err)
+		t.Fatalf("unchanged HEAD rewrote cache: %v", err)
+	}
+	nativeGit(t, path, "commit", "--allow-empty", "-m", "same tree")
+	if _, hit := unchangedRepositoryLanguages(path, cache); hit {
+		t.Fatal("new commit reused the cache without checking its tree")
+	}
+	if same, err := readRepositoryLanguages(context.Background(), path, cache); err != nil || same.Tree != summary.Tree {
+		t.Fatalf("matching tree = %+v, %v", same, err)
+	}
+	if reused, hit := unchangedRepositoryLanguages(path, cache); !hit || reused.Tree != summary.Tree {
+		t.Fatal("matching tree did not record the new commit for process-free reuse")
 	}
 	nativeGit(t, path, "rm", "main.go")
 	writeNativeFile(t, path, "main.py", "print('hello')\n")
@@ -73,6 +82,41 @@ func TestRepositoryLanguageCacheReusesTreeAndRecoversCorruption(t *testing.T) {
 	if fallback, found := loadRepositoryLanguageCache(cache, path); !found ||
 		len(fallback.Languages) != 1 || fallback.Languages[0].Name != "Python" {
 		t.Fatalf("unavailable repository lost cached label: %+v", fallback)
+	}
+}
+
+func TestNativeManualLanguageRefreshReadsReplacedHead(t *testing.T) {
+	app, path, _ := nativeFixture(t)
+	cache := t.TempDir()
+	writeNativeFile(t, path, "main.py", "print('hello')\n")
+	nativeGit(t, path, "add", ".")
+	nativeGit(t, path, "commit", "-m", "Python")
+	python := nativeGit(t, path, "rev-parse", "HEAD")
+	nativeGit(t, path, "rm", "main.py")
+	writeNativeFile(t, path, "main.go", "package main\n")
+	nativeGit(t, path, "add", ".")
+	nativeGit(t, path, "commit", "-m", "Go")
+	if summary, err := readRepositoryLanguages(context.Background(), path, cache); err != nil ||
+		len(summary.Languages) != 1 || summary.Languages[0].Name != "Go" {
+		t.Fatalf("初始语言统计：%+v, %v", summary, err)
+	}
+	nativeGit(t, path, "replace", "HEAD", python)
+	updates := make(chan func(), 16)
+	app.post = func(update func()) { updates <- update }
+	app.screen = "library"
+	app.library = workspace.Library{Repositories: []workspace.LocalRepository{{Path: path}}}
+	app.languages = &nativeRepositoryLanguages{cacheDir: cache, entries: map[string]gitrepo.LanguageSummary{}}
+	app.refreshRepositoryLanguages(true)
+	select {
+	case <-app.languages.request.done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("手动刷新超时")
+	}
+	for len(updates) > 0 {
+		(<-updates)()
+	}
+	if got := app.languages.entries[path]; len(got.Languages) != 1 || got.Languages[0].Name != "Python" {
+		t.Fatalf("手动刷新未读取替换后的树：%+v", got)
 	}
 }
 
@@ -462,7 +506,7 @@ func TestRepositoryLanguageCachePruning(t *testing.T) {
 	cache := t.TempDir()
 	kept, removed := "/repositories/kept", "/repositories/removed"
 	for _, path := range []string{kept, removed} {
-		if err := saveRepositoryLanguageCache(cache, path, gitrepo.LanguageSummary{Complete: true}); err != nil {
+		if err := saveRepositoryLanguageCache(cache, path, gitrepo.LanguageSummary{Complete: true}, ""); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -507,7 +551,7 @@ func TestNativeLanguageRemovalWaitsForWriterBeforePruning(t *testing.T) {
 		close(blocked.done)
 		t.Fatal("removing a repository did not bypass automatic refresh throttling")
 	}
-	if err := saveRepositoryLanguageCache(cache, path, gitrepo.LanguageSummary{Complete: true}); err != nil {
+	if err := saveRepositoryLanguageCache(cache, path, gitrepo.LanguageSummary{Complete: true}, ""); err != nil {
 		close(blocked.done)
 		t.Fatal(err)
 	}
@@ -536,4 +580,27 @@ func TestNativeLibraryRefreshFailureKeepsLibrary(t *testing.T) {
 	if app.problem == "" || len(app.library.Repositories) != 1 {
 		t.Fatalf("刷新失败后列表被替换: problem=%q library=%+v", app.problem, app.library)
 	}
+}
+
+func TestRepositoryHeadCommitWithoutGit(t *testing.T) {
+	_, path, _ := nativeFixture(t)
+	want := strings.TrimSpace(nativeGit(t, path, "rev-parse", "HEAD"))
+	check := func(name, root, expected string, resolved bool) {
+		t.Helper()
+		got, ok := readHeadCommit(root)
+		if ok != resolved || ok && got != expected {
+			t.Fatalf("%s: readHeadCommit = %q %v, want %q %v", name, got, ok, expected, resolved)
+		}
+	}
+	check("loose", path, want, true)
+	nativeGit(t, path, "pack-refs", "--all")
+	check("packed", path, want, true)
+	linked := filepath.Join(t.TempDir(), "linked")
+	nativeGit(t, path, "worktree", "add", "-b", "linked", linked)
+	check("linked worktree", linked, want, true)
+	nativeGit(t, path, "checkout", "--detach")
+	check("detached", path, want, true)
+	nativeGit(t, path, "checkout", "--orphan", "unborn")
+	check("unborn", path, "", false)
+	check("not a repository", t.TempDir(), "", false)
 }

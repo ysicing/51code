@@ -25,23 +25,69 @@ func (repo *Repository) operation(ctx context.Context) (Operation, error) {
 	if err != nil {
 		return Operation{}, err
 	}
-	return repo.operationIn(ctx, directory)
+	return repo.operationAt(ctx, directory, nil)
 }
 
 // gitDirectory 返回工作区的 Git 目录。Path 是工作区根目录且环境中的 GIT_DIR 已被清除，
 // 根目录下的 .git 为真实目录时 Git 发现的就是它，省去每次刷新启动 rev-parse；
-// 链接工作树、子模块等 .git 文件或其他布局仍交给 Git 解析。
+// 链接工作树、子模块的 .git 文件按 Git 的 gitfile 规则直接解析，其他布局仍交给 Git。
 func (repo *Repository) gitDirectory(ctx context.Context) (string, error) {
-	directory := filepath.Join(repo.Path, ".git")
-	if info, err := os.Lstat(directory); err == nil && info.IsDir() {
+	if directory, ok := localGitDirectory(repo.Path); ok {
 		return directory, nil
 	}
 	output, err := repo.git(ctx, "rev-parse", "--absolute-git-dir")
 	return strings.TrimSuffix(output, "\n"), err
 }
 
+// localGitDirectory 不启动进程解析工作区根目录的 .git：真实目录直接使用；
+// 普通文件须是唯一一行 "gitdir: <路径>"（相对路径相对于工作区根目录），且目标是目录。
+// 任何不符合的情况返回 false，由调用方交给 Git 判断，不猜测。
+func localGitDirectory(root string) (string, bool) {
+	directory := filepath.Join(root, ".git")
+	info, err := os.Lstat(directory)
+	if err != nil {
+		return "", false
+	}
+	if info.IsDir() {
+		return directory, true
+	}
+	if !info.Mode().IsRegular() || info.Size() > 4096 {
+		return "", false
+	}
+	content, err := os.ReadFile(directory)
+	if err != nil {
+		return "", false
+	}
+	line := strings.TrimSuffix(strings.TrimSuffix(string(content), "\n"), "\r")
+	target, ok := strings.CutPrefix(line, "gitdir: ")
+	if !ok || target == "" || strings.ContainsAny(target, "\x00\n\r") {
+		return "", false
+	}
+	// Join 和 Clean 会在解析符号链接前折叠 ..，可能选中另一个 Git 目录。
+	for part := range strings.SplitSeq(filepath.ToSlash(target), "/") {
+		if part == ".." {
+			return "", false
+		}
+	}
+	if !filepath.IsAbs(target) {
+		target = filepath.Join(root, target)
+	}
+	target = filepath.Clean(target)
+	if info, err := os.Stat(target); err != nil || !info.IsDir() {
+		return "", false
+	}
+	return target, true
+}
+
 // operationIn 根据已知的 Git 目录检查进行中的操作。
 func (repo *Repository) operationIn(ctx context.Context, directory string) (Operation, error) {
+	return repo.operationAt(ctx, directory, nil)
+}
+
+// operationAt 的 head 非空时直接使用调用方刚读到的 HEAD（未出生分支为空串），
+// 省去进行中操作时再启动一次 rev-parse。HEAD 若在两次读取间变化，令牌只会与
+// OperationAction 重新计算的值不一致并提示刷新，不会误放行。
+func (repo *Repository) operationAt(ctx context.Context, directory string, head *string) (Operation, error) {
 	for _, marker := range []struct{ path, kind string }{
 		{"rebase-merge", "rebase"}, {"rebase-apply", "rebase"},
 		{"MERGE_HEAD", "merge"}, {"CHERRY_PICK_HEAD", "cherry-pick"}, {"REVERT_HEAD", "revert"},
@@ -82,11 +128,13 @@ func (repo *Repository) operationIn(ctx context.Context, directory string) (Oper
 				return Operation{}, err
 			}
 		}
-		head, err := repo.head(ctx)
-		if err != nil {
+		var current string
+		if head != nil {
+			current = *head
+		} else if current, err = repo.head(ctx); err != nil {
 			return Operation{}, err
 		}
-		sum := sha256.Sum256(append([]byte(kind+"\x00"+head+"\x00"), data...))
+		sum := sha256.Sum256(append([]byte(kind+"\x00"+current+"\x00"), data...))
 		return Operation{Kind: kind, Token: hex.EncodeToString(sum[:])}, nil
 	}
 	return Operation{}, nil
@@ -192,8 +240,8 @@ func (repo *Repository) MergeWithOptions(ctx context.Context, branch string, opt
 		return nil
 	}
 	// squash 不建立 MERGE_HEAD；仅在确有暂存结果时单独提交，失败时保留暂存区供重试。
-	changed, err := repo.git(ctx, "diff", "--cached", "--name-only", "-z")
-	if err != nil || changed == "" {
+	// --quiet 以退出码表示有无差异，无需列出全部路径（大合并时路径列表可能超过输出上限）。
+	if _, err := repo.git(ctx, "diff", "--cached", "--quiet", "--no-ext-diff", "--no-textconv"); !exitCode(err, 1) {
 		return err
 	}
 	_, err = run(ctx, repo.Path, "", 2*time.Minute, "commit", "--no-edit")
@@ -238,6 +286,9 @@ func (repo *Repository) checkMergeIgnoredPaths(ctx context.Context, ref string) 
 		info os.FileInfo
 	}
 	var existing []ignoredPath
+	// 同一父目录会被多个新增路径与忽略目录反复比较，按路径缓存 Stat 结果；
+	// 检查期间仓库锁已持有，缓存只在本次调用内有效。
+	parents := map[string]os.FileInfo{}
 	for _, path := range strings.Split(strings.TrimSuffix(ignored, "\x00"), "\x00") {
 		path = strings.TrimSuffix(path, "/")
 		info, err := root.Lstat(path)
@@ -263,10 +314,10 @@ func (repo *Repository) checkMergeIgnoredPaths(ctx context.Context, ref string) 
 		for _, ignored := range existing {
 			collision := os.SameFile(info, ignored.info)
 			if !collision && ignored.info.IsDir() {
-				collision, err = mergePathInside(root, path, ignored.info)
+				collision, err = mergePathInside(root, path, ignored.info, parents)
 			}
 			if !collision && err == nil && info.IsDir() {
-				collision, err = mergePathInside(root, ignored.path, info)
+				collision, err = mergePathInside(root, ignored.path, info, parents)
 			}
 			if err != nil {
 				return err
@@ -279,12 +330,16 @@ func (repo *Repository) checkMergeIgnoredPaths(ctx context.Context, ref string) 
 	return nil
 }
 
-func mergePathInside(root *os.Root, path string, directory os.FileInfo) (bool, error) {
+func mergePathInside(root *os.Root, path string, directory os.FileInfo, parents map[string]os.FileInfo) (bool, error) {
 	// 文件身份比较同时覆盖大小写不敏感卷和 Unicode 文件名别名。
 	for parent := filepath.Dir(path); parent != "."; parent = filepath.Dir(parent) {
-		info, err := root.Stat(parent)
-		if err != nil {
-			return false, err
+		info, cached := parents[parent]
+		if !cached {
+			var err error
+			if info, err = root.Stat(parent); err != nil {
+				return false, err
+			}
+			parents[parent] = info
 		}
 		if os.SameFile(info, directory) {
 			return true, nil

@@ -6,7 +6,6 @@ package app
 import (
 	"context"
 	"errors"
-	"fmt"
 	"slices"
 	"strings"
 
@@ -16,20 +15,9 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
+// visibleFiles 返回分组内通过过滤的文件（快照顺序）。结果来自缓存，调用方只读。
 func (app *nativeApp) visibleFiles(staged bool) []gitrepo.File {
-	var files []gitrepo.File
-	if app.repository == nil {
-		return files
-	}
-	query := strings.ToLower(app.fileQuery)
-	filtered := app.filesFiltered()
-	for _, file := range app.repository.snapshot.Files {
-		if (staged && isStaged(file) || !staged && isWorking(file)) &&
-			(!filtered || strings.Contains(strings.ToLower(file.Path), query) && matchesNativeFileFilter(file, app.fileFilter)) {
-			files = append(files, file)
-		}
-	}
-	return files
+	return app.fileSection(staged).visible
 }
 
 func (app *nativeApp) checkedFiles(staged bool) []string {
@@ -37,12 +25,27 @@ func (app *nativeApp) checkedFiles(staged bool) []string {
 	if app.repository == nil || len(app.selectedFiles) == 0 {
 		return files
 	}
-	for _, file := range app.visibleFiles(staged) {
-		if !file.Conflict && app.selectedFiles[fmt.Sprintf("%t:%s", staged, file.Path)] {
+	section := app.fileSection(staged)
+	for index, file := range section.visible {
+		if !file.Conflict && app.selectedFiles[section.keys[index]] {
 			files = append(files, file.Path)
 		}
 	}
 	return files
+}
+
+// hasCheckedFiles 与 checkedFiles 判断一致，但找到第一项即返回，供每遍构建使用。
+func (app *nativeApp) hasCheckedFiles(staged bool) bool {
+	if app.repository == nil || len(app.selectedFiles) == 0 {
+		return false
+	}
+	section := app.fileSection(staged)
+	for index, file := range section.visible {
+		if !file.Conflict && app.selectedFiles[section.keys[index]] {
+			return true
+		}
+	}
+	return false
 }
 
 func (app *nativeApp) stageFiles(staged, all bool) {

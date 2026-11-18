@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -81,12 +82,12 @@ func TestCommitFileDiffReusesCommitFiles(t *testing.T) {
 				t.Fatalf("%s %s:\n got %+v\nwant %+v", hash, file.Path, got, want)
 			}
 		}
-		// 新实例各读取一次；复用实例不再重复类型检查、diff-tree，父提交也只读一次。
-		if got, want := calls("diff-tree"), len(files); got != want {
-			t.Fatalf("%s diff-tree calls = %d, want %d", hash, got, want)
+		// 新实例各用一次 log 同时取得文件列表与父提交；复用实例不再启动任何读取列表或父提交的进程。
+		if got, want := calls("log"), len(files); got != want {
+			t.Fatalf("%s log calls = %d, want %d", hash, got, want)
 		}
-		if got, want := calls("rev-list"), len(files)+1; got != want {
-			t.Fatalf("%s rev-list calls = %d, want %d", hash, got, want)
+		if got := calls("rev-list") + calls("diff-tree") + calls("cat-file -t"); got != 0 {
+			t.Fatalf("%s extra commit reads = %d, want 0", hash, got)
 		}
 	}
 	// 缓存属于最近一次 CommitFiles；查看其他提交时仍从 Git 读取。
@@ -151,7 +152,7 @@ func TestDiffAndPatchShareBlobReads(t *testing.T) {
 		{path: "work.txt", blobs: 1},
 		{path: "staged.txt", staged: true, blobs: 2},
 	} {
-		repo.blobs = nil
+		repo.forgetBlobs()
 		reset()
 		diff, err := repo.Diff(ctx, test.path, test.staged)
 		if err != nil {
@@ -181,6 +182,7 @@ func TestDiffAndPatchShareBlobReads(t *testing.T) {
 
 func TestBlobCacheIsBounded(t *testing.T) {
 	repo := &Repository{}
+	t.Cleanup(repo.forgetBlobs)
 	repo.rememberBlob("large", strings.Repeat("x", fileContentLimit+1))
 	if _, ok := repo.cachedBlob("large"); ok {
 		t.Fatal("blob over fileContentLimit should not be cached")
@@ -188,10 +190,66 @@ func TestBlobCacheIsBounded(t *testing.T) {
 	for index := range blobCacheEntries + 1 {
 		repo.rememberBlob(string(rune('a'+index)), "content")
 	}
-	if len(repo.blobs) != blobCacheEntries {
-		t.Fatalf("cache entries = %d, want %d", len(repo.blobs), blobCacheEntries)
+	if got := ownedBlobs(repo); got != blobCacheEntries {
+		t.Fatalf("cache entries = %d, want %d", got, blobCacheEntries)
 	}
 	if _, ok := repo.cachedBlob("a"); ok {
 		t.Fatal("oldest blob should be evicted")
 	}
+}
+
+// 多个仓库共享总量上限：切换到其他仓库后，先前仓库的大 blob 会被淘汰而不是一直保留。
+func TestBlobCacheIsSharedAcrossRepositories(t *testing.T) {
+	first, second := &Repository{}, &Repository{}
+	t.Cleanup(first.forgetBlobs)
+	t.Cleanup(second.forgetBlobs)
+	large := strings.Repeat("x", fileContentLimit)
+	for index := range blobCacheBytes / fileContentLimit {
+		first.rememberBlob(string(rune('a'+index)), large)
+	}
+	if _, ok := first.cachedBlob("a"); !ok {
+		t.Fatal("first repository blob should be cached")
+	}
+	// 命中会刷新最近使用顺序，"a" 不应先于 "b" 被淘汰。
+	second.rememberBlob("a", large)
+	if _, ok := first.cachedBlob("a"); !ok {
+		t.Fatal("recently used blob should stay cached")
+	}
+	if _, ok := first.cachedBlob("b"); ok {
+		t.Fatal("least recently used blob should be evicted")
+	}
+	if content, ok := second.cachedBlob("a"); !ok || content != large {
+		t.Fatal("repositories must not share entries by hash")
+	}
+	blobCache.Lock()
+	total := blobCache.bytes
+	blobCache.Unlock()
+	if total > blobCacheBytes {
+		t.Fatalf("cache bytes = %d, want <= %d", total, blobCacheBytes)
+	}
+}
+
+func ownedBlobs(repo *Repository) int {
+	blobCache.Lock()
+	defer blobCache.Unlock()
+	count := 0
+	for _, blob := range blobCache.entries {
+		if blob.owner == repo {
+			count++
+		}
+	}
+	return count
+}
+
+// forgetBlobs 丢弃该仓库实例的全部 blob 缓存。
+func (repo *Repository) forgetBlobs() {
+	blobCache.Lock()
+	defer blobCache.Unlock()
+	blobCache.entries = slices.DeleteFunc(blobCache.entries, func(blob cachedBlob) bool {
+		if blob.owner == repo {
+			blobCache.bytes -= len(blob.content)
+			return true
+		}
+		return false
+	})
 }

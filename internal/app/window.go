@@ -72,18 +72,20 @@ type repositoryView struct {
 
 type nativeApp struct {
 	nativeHistoryState
-	browseState           nativeHistoryState
-	searchState           nativeHistoryState
-	searchInput           ui.Handle
-	searchDateEnabled     bool
-	searchSince           time.Time
-	searchUntil           time.Time
-	service               *RepositoryService
-	desktop               *nativeDesktop
-	win                   *mygo.Window
-	ctx                   context.Context
-	cancel                context.CancelFunc
-	post                  func(func())
+	browseState       nativeHistoryState
+	searchState       nativeHistoryState
+	searchInput       ui.Handle
+	searchDateEnabled bool
+	searchSince       time.Time
+	searchUntil       time.Time
+	service           *RepositoryService
+	desktop           *nativeDesktop
+	win               *mygo.Window
+	ctx               context.Context
+	cancel            context.CancelFunc
+	post              func(func())
+	// runOnMain 在主线程同步执行且不重绘，供纯调度逻辑使用；见 postQuiet。
+	runOnMain             func(func())
 	closed                bool
 	busy                  bool
 	operationCancel       context.CancelFunc
@@ -100,6 +102,8 @@ type nativeApp struct {
 	background            *nativeRepositoryBackground
 	watchDirectories      []string
 	watchFiles            func(context.Context, string, mygo.FileWatchOptions) (repositoryFileWatcher, error)
+	// watchRetryDelays 为空时使用 defaultRepositoryWatchRetryDelays，测试可缩短。
+	watchRetryDelays      []time.Duration
 	readDone              <-chan struct{}
 	writable              bool
 	status                string
@@ -285,6 +289,7 @@ func (app *nativeApp) open() {
 	})
 	app.win.SetWindowButtonsTheme(appearanceThemeSource(app.prefs.Appearance))
 	app.post = app.win.Update
+	app.runOnMain = mygo.RunOnMain
 	app.discoverTerminals = discoverTerminalApplications
 	app.watchFiles = func(ctx context.Context, path string, options mygo.FileWatchOptions) (repositoryFileWatcher, error) {
 		return mygo.WatchFiles(ctx, path, options)
@@ -418,6 +423,10 @@ func (app *nativeApp) runTask(label string, readOnly bool, task func(context.Con
 				return
 			}
 			app.busy, app.readOnlyBusy, app.status = false, false, ""
+			// 用户操作后外部工具常随之改动仓库（如构建、格式化），恢复监听刷新的灵敏度。
+			if app.background != nil {
+				app.background.refreshDelay = 0
+			}
 			if apply != nil {
 				apply()
 			}
@@ -598,6 +607,7 @@ func (app *nativeApp) mutateFormResult(dialog *nativeDialog, label string, opera
 		if operation != nil {
 			operationErr = operation(ctx, path)
 		}
+		readStarted := time.Now()
 		result, refreshErr := app.readRepository(ctx, path, false)
 		var refreshedAIToken string
 		if refreshErr == nil && blockedToken != "" {
@@ -667,6 +677,8 @@ func (app *nativeApp) mutateFormResult(dialog *nativeDialog, label string, opera
 			preserveDetails := preserveHistory && !wasWorking && historyScreen &&
 				refreshErr == nil && (retained >= 0 || app.viewedTag != "" && app.viewedCommit.Hash == app.commitHash)
 			if result != nil {
+				// 记录读取开始时间，监听随后报告的、早于该时间的变化无需再完整读取一次。
+				app.noteRepositoryRead(path, readStarted)
 				if preserveDetails {
 					app.repository = result
 					app.library = app.service.Library()

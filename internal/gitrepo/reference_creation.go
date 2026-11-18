@@ -100,7 +100,8 @@ func (repo *Repository) CreateBranchAt(ctx context.Context, name, hash string) e
 }
 
 func (repo *Repository) SwitchCreatedBranch(ctx context.Context, name, hash string) error {
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	// 切换会改写工作区，LFS smudge 可能下载对象；超时被杀会留下 index.lock 和半更新的工作区。
+	ctx, cancel := context.WithTimeout(ctx, checkoutTimeout)
 	defer cancel()
 	if err := repo.lockHistory(ctx); err != nil {
 		return err
@@ -119,6 +120,6 @@ func (repo *Repository) SwitchCreatedBranch(ctx context.Context, name, hash stri
 	if strings.TrimSpace(actual) != hash {
 		return errors.New("新分支已被其他操作移动，请关闭表单并检查该分支")
 	}
-	_, err = repo.git(ctx, "switch", "--no-guess", "--no-overwrite-ignore", "--", name)
+	_, err = run(ctx, repo.Path, "", checkoutTimeout, "switch", "--no-guess", "--no-overwrite-ignore", "--", name)
 	return err
 }

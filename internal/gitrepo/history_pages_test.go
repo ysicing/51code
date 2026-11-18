@@ -79,7 +79,7 @@ func TestSearchHistoryVariablePageSize(t *testing.T) {
 			}
 		})
 	}
-	for _, sizes := range [][]int{{0}, {-1}, {501}, {100, 500}} {
+	for _, sizes := range [][]int{{0}, {-1}, {MaxHistoryReloadSize + 1}, {100, 500}} {
 		if _, err := repo.SearchHistory(context.Background(), "", "", 0, HistoryFilter{}, sizes...); err == nil {
 			t.Fatalf("accepted invalid page size: %v", sizes)
 		}

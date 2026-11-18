@@ -18,7 +18,7 @@ import (
 )
 
 func TestGopsAgentDiagnosticsAndCleanup(t *testing.T) {
-	t.Setenv("XSOURCETREE_GOPS", "")
+	t.Setenv("XSOURCETREE_GOPS", "1")
 	directory := t.TempDir()
 	t.Setenv("GOPS_CONFIG_DIR", directory)
 	stop := startGopsAgent()
@@ -52,20 +52,24 @@ func TestGopsAgentDiagnosticsAndCleanup(t *testing.T) {
 	}
 }
 
-func TestGopsAgentDisabled(t *testing.T) {
-	t.Setenv("XSOURCETREE_GOPS", "0")
-	directory := t.TempDir()
-	t.Setenv("GOPS_CONFIG_DIR", directory)
-	stop := startGopsAgent()
-	t.Cleanup(stop)
-	entries, err := os.ReadDir(directory)
-	if err != nil || len(entries) != 0 {
-		t.Fatalf("关闭诊断后仍写入发现文件: %v %v", entries, err)
+func TestGopsAgentDisabledUnlessExplicitlyEnabled(t *testing.T) {
+	for _, value := range []string{"", "0", "true"} {
+		t.Run(strconv.Quote(value), func(t *testing.T) {
+			t.Setenv("XSOURCETREE_GOPS", value)
+			directory := t.TempDir()
+			t.Setenv("GOPS_CONFIG_DIR", directory)
+			stop := startGopsAgent()
+			t.Cleanup(stop)
+			entries, err := os.ReadDir(directory)
+			if err != nil || len(entries) != 0 {
+				t.Fatalf("未显式开启诊断时仍写入发现文件: %v %v", entries, err)
+			}
+		})
 	}
 }
 
 func TestGopsAgentStartFailureReleasesListener(t *testing.T) {
-	t.Setenv("XSOURCETREE_GOPS", "")
+	t.Setenv("XSOURCETREE_GOPS", "1")
 	directory := t.TempDir()
 	blocked := filepath.Join(directory, "blocked")
 	if err := os.WriteFile(blocked, nil, 0o600); err != nil {

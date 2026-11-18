@@ -28,7 +28,7 @@ func TestNativeFilePathMenusCopyClickedFile(t *testing.T) {
 			files := []gitrepo.CommitFile{{Path: "selected.go", Status: "M"}, {Path: path, Status: "D"}}
 			app.selectedFile = "selected.go"
 			var clipboard ui.Services
-			list := &ui.ListState{}
+			list, outline := &ui.ListState{}, newNativeFileOutline()
 			tester := ui.NewTester(func(c *ui.Context) {
 				clipboard = c.Services()
 				if revision {
@@ -36,12 +36,11 @@ func TestNativeFilePathMenusCopyClickedFile(t *testing.T) {
 				} else {
 					ui.Column(c).Fill().Children(func() {
 						if tree {
-							parts := ui.TreeBase(c)
-							parts.Root.Fill().Children(func() {
-								app.fileTree(c, parts, nativeFileNodes([]gitrepo.File{{Path: path, Index: "D"}}, "path", false, true), true, 0)
-							})
+							nodes := newNativeFileTree([]gitrepo.File{{Path: path, Index: "D"}}, "path", false, true,
+								func(path string) string { return nativeSelectionKey(true, path) })
+							app.changesFileTree(c, outline, nodes, true, "已暂存文件", 0)
 						} else {
-							app.changeFileRow(c, gitrepo.File{Path: path, Index: "D"}, true, nil, 0)
+							app.changeFileRow(c, gitrepo.File{Path: path, Index: "D"}, true)
 						}
 					})
 				}

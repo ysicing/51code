@@ -526,17 +526,22 @@ func (app *nativeApp) changesFileSections(c *ui.Context) {
 	})
 }
 
+func (app *nativeApp) fileCollapsedNode(node *nativeFileNode) bool {
+	return app.fileCollapsed[node.collapseKey]
+}
+
 func (app *nativeApp) changesSectionHeight(c *ui.Context, staged bool) float32 {
-	files := app.visibleFiles(staged)
-	if len(files) == 0 {
+	section := app.fileSection(staged)
+	if len(section.visible) == 0 {
 		return 72
 	}
-	rows := len(files)
+	rows := len(section.visible)
 	if app.prefs.FileTree {
-		rows, _ = app.fileTreeSize(c, nativeFileNodes(files, app.prefs.FileSort, app.prefs.FileDescending, staged), staged, 0)
+		tree := section.sortedFiles(app.prefs.FileSort, app.prefs.FileDescending).fileTree(staged)
+		rows, _ = app.fileTreeRows(c, tree, app.fileCollapsedNode)
 	}
 	height := 44 + float32(rows)*28
-	if len(app.checkedFiles(staged)) > 0 {
+	if app.hasCheckedFiles(staged) {
 		height += 40
 	}
 	return height
@@ -547,23 +552,15 @@ func (app *nativeApp) changesSection(c *ui.Context, staged bool) {
 	if staged {
 		label, action, selectedAction = locales.StagedFiles(), locales.UnstageAll(), locales.UnstageSelected()
 	}
-	files := app.visibleFiles(staged)
-	slices.SortFunc(files, func(first, second gitrepo.File) int {
-		return compareNativeFiles(first, second, app.prefs.FileSort, app.prefs.FileDescending, staged)
-	})
-	count := 0
-	var pathWidth float32
-	for _, file := range files {
-		if !file.Conflict {
-			count++
-		}
-		pathWidth = max(pathWidth, app.filePathWidth(c, file.Path))
-	}
-	rowCount, listWidth := len(files), pathWidth+88
-	var nodes []*nativeFileNode
+	cached := app.fileSection(staged)
+	sorted := cached.sortedFiles(app.prefs.FileSort, app.prefs.FileDescending)
+	files, count := sorted.files, cached.actionable
+	checked := app.hasCheckedFiles(staged)
+	rowCount, listWidth := len(files), app.maxPathWidth(c, cached)+88
+	var tree *nativeFileTree
 	if app.prefs.FileTree {
-		nodes = nativeFileNodes(files, app.prefs.FileSort, app.prefs.FileDescending, staged)
-		rowCount, listWidth = app.fileTreeSize(c, nodes, staged, 0)
+		tree = sorted.fileTree(staged)
+		rowCount, listWidth = app.fileTreeRows(c, tree, app.fileCollapsedNode)
 	}
 	if app.filesFiltered() {
 		action = locales.StageFiltered(fmt.Sprint(count))
@@ -572,11 +569,12 @@ func (app *nativeApp) changesSection(c *ui.Context, staged bool) {
 		}
 	}
 	section := ui.Column(c).Key(staged).FillWidth().MinHeight(0)
+	outline := *ui.Local(section, "file-outline", newNativeFileOutline)
 	if len(files) == 0 {
 		section.Height(72)
 	} else {
 		height := 44 + float32(rowCount)*28
-		if len(app.checkedFiles(staged)) > 0 {
+		if checked {
 			height += 40
 		}
 		section.Grow(1).MaxHeight(height)
@@ -586,13 +584,7 @@ func (app *nativeApp) changesSection(c *ui.Context, staged bool) {
 			ui.Text(c, label).FontSize(12).Bold()
 			badge := fmt.Sprint(len(files))
 			if app.filesFiltered() {
-				total := 0
-				for _, file := range app.repository.snapshot.Files {
-					if staged && isStaged(file) || !staged && isWorking(file) {
-						total++
-					}
-				}
-				badge = fmt.Sprintf("%d / %d", len(files), total)
+				badge = fmt.Sprintf("%d / %d", len(files), cached.total)
 			}
 			ui.Badge(c, badge)
 			ui.Spacer(c)
@@ -611,25 +603,18 @@ func (app *nativeApp) changesSection(c *ui.Context, staged bool) {
 			ui.Text(c, message).FontSize(12).TextColor(c.Theme().TextMuted).Padding(6, 12)
 			return
 		}
-		if app.prefs.FileTree {
-			scroll := nativeFileScroll(ui.ScrollBoth(c).Label(locales.SectionList(label)).Grow(1).MinHeight(0).FillWidth().Padding(0, 6, 6))
-			scroll.Children(func() {
-				ui.Column(c).FillWidth().MinWidth(max(listWidth, scroll.LayoutBounds().W-12)).Children(func() {
-					tree := ui.TreeBase(c)
-					tree.Root.Label(locales.SectionTree(label)).FillWidth().Children(func() {
-						app.fileTree(c, tree, nodes, staged, 0)
-					})
-				})
-			})
+		if tree != nil {
+			app.changesFileTree(c, outline, tree, staged, label, listWidth)
 		} else {
 			list := ui.List(c, nil, len(files)).
 				ItemKey(func(index int) any { return files[index].Path }).
 				Label(locales.SectionList(label)).Grow(1).MinHeight(0).FillWidth().
 				Padding(0, 6, 6).RowWidth(listWidth)
 			nativeFileScroll(list).
-				Rows(func(row ui.ListRow) { app.changeFileRow(row.Context, files[row.Index], staged, nil, 0) })
+				Rows(func(row ui.ListRow) { app.changeFileRow(row.Context, files[row.Index], staged) })
 		}
-		if count := len(app.checkedFiles(staged)); count > 0 {
+		if checked {
+			count := len(app.checkedFiles(staged))
 			ui.Toolbar(c, func() {
 				if ui.Button(c, fmt.Sprintf("%s (%d)", selectedAction, count)).Label(selectedAction).
 					Disabled(!app.writable || app.readTask != nil).Clicked() {

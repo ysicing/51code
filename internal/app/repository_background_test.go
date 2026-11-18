@@ -6,6 +6,7 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -75,7 +76,7 @@ func TestNativeRepositoryWatchRefreshAndCleanup(t *testing.T) {
 	}
 	runBackgroundUpdates(t, updates, func() bool { return state.refreshTimer != nil })
 	timer := state.refreshTimer
-	app.queueRepositoryRefresh(state)
+	app.queueRepositoryRefresh(state, time.Now())
 	if timer != state.refreshTimer || app.focusRefresh != nil {
 		t.Fatal("watch events were not coalesced or interrupted a foreground task")
 	}
@@ -90,7 +91,7 @@ func TestNativeRepositoryWatchRefreshAndCleanup(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("returning to the library did not close the watch")
 	}
-	app.queueRepositoryRefresh(state)
+	app.queueRepositoryRefresh(state, time.Now())
 	if app.background != nil || app.autoFetch != nil || app.focusRefresh != nil {
 		t.Fatal("obsolete watch restarted work after leaving the repository")
 	}
@@ -221,8 +222,9 @@ func TestNativeAutomaticFetchYieldsToForeground(t *testing.T) {
 	}
 }
 
-func TestNativeAutomaticFetchYieldsToFocusRefresh(t *testing.T) {
+func TestNativeDeferredFocusRefreshSurvivesCanceledFetch(t *testing.T) {
 	app, state, updates := automaticFetchFixture(t)
+	app.prefs.AutoRefreshFiles = false
 	started := make(chan struct{})
 	state.fetch = func(ctx context.Context, _ string) error {
 		close(started)
@@ -232,13 +234,45 @@ func TestNativeAutomaticFetchYieldsToFocusRefresh(t *testing.T) {
 	state.lastFetch = time.Now().Add(-app.automaticFetchInterval())
 	app.tryAutomaticFetch(state, time.Now())
 	<-started
+	writeNativeFile(t, state.path, "hello.txt", "外部编辑\n")
 	app.refreshOnFocus()
-	if app.autoFetch != nil || app.focusRefresh == nil {
-		t.Fatal("focus refresh waited for networking instead of canceling the background fetch")
-	}
-	runBackgroundUpdates(t, updates, func() bool { return app.focusRefresh == nil })
-	if app.problem != "" || !app.writable {
-		t.Fatal("canceling fetch for focus refresh changed the repository's usable state")
+	app.selectFile("hello.txt", false)
+	runBackgroundUpdates(t, updates, func() bool {
+		return app.readTask == nil && app.focusRefresh == nil && len(app.repository.snapshot.Files) == 1
+	})
+}
+
+func TestNativeFocusRefreshDoesNotCancelAutomaticFetch(t *testing.T) {
+	for _, fetchErr := range []error{nil, errors.New("offline")} {
+		t.Run(fmt.Sprint(fetchErr), func(t *testing.T) {
+			app, state, updates := automaticFetchFixture(t)
+			path := app.repository.snapshot.Path
+			started, release := make(chan struct{}), make(chan struct{})
+			state.fetch = func(ctx context.Context, _ string) error {
+				close(started)
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-release:
+					return fetchErr
+				}
+			}
+			state.lastFetch = time.Now().Add(-app.automaticFetchInterval())
+			app.tryAutomaticFetch(state, time.Now())
+			<-started
+			writeNativeFile(t, path, "hello.txt", "fetch 期间的外部修改\n")
+			app.refreshOnFocus()
+			if app.autoFetch == nil || app.focusRefresh != nil {
+				t.Fatal("聚焦刷新取消了进行中的自动 fetch")
+			}
+			close(release)
+			runBackgroundUpdates(t, updates, func() bool {
+				return app.autoFetch == nil && app.focusRefresh == nil && len(app.repository.snapshot.Files) == 1
+			})
+			if !app.writable || (fetchErr == nil) != (app.problem == "") {
+				t.Fatalf("fetch 结束后的状态异常: writable=%v problem=%q", app.writable, app.problem)
+			}
+		})
 	}
 }
 
@@ -279,4 +313,183 @@ func TestNativeAutomaticFetchStopsOnNavigation(t *testing.T) {
 	if app.background != nil || app.autoFetch != nil || app.problem != "" || app.screen != "library" {
 		t.Fatal("a canceled fetch changed the library or retained its background state")
 	}
+}
+
+func watchedBackgroundFixture(t *testing.T) (*nativeApp, string, *nativeRepositoryBackground, chan func(), chan *testRepositoryWatch) {
+	t.Helper()
+	app, path, _ := nativeFixture(t)
+	updates := make(chan func(), 32)
+	app.post = func(update func()) { updates <- update }
+	created := make(chan *testRepositoryWatch, 8)
+	app.watchFiles = func(context.Context, string, mygo.FileWatchOptions) (repositoryFileWatcher, error) {
+		watch := &testRepositoryWatch{events: make(chan []mygo.FileEvent, 8), closed: make(chan struct{})}
+		created <- watch
+		return watch, nil
+	}
+	app.restartRepositoryBackground()
+	t.Cleanup(app.stopRepositoryBackground)
+	return app, path, app.background, updates, created
+}
+
+func TestNativeRepositoryWatchBacksOffUnchangedRefreshes(t *testing.T) {
+	app, path, state, updates, _ := watchedBackgroundFixture(t)
+	// 订阅建立后的补查也是监听刷新；仓库未变化时开始退避。
+	runBackgroundUpdates(t, updates, func() bool { return !state.readStarted.IsZero() && app.focusRefresh == nil })
+	want := 2 * repositoryRefreshDelay
+	for state.refreshDelay < repositoryRefreshMaxDelay {
+		if state.refreshDelay != want {
+			t.Fatalf("无变化刷新的退避延迟 = %v，期望 %v", state.refreshDelay, want)
+		}
+		app.refreshRepositoryView(true)
+		runBackgroundUpdates(t, updates, func() bool { return app.focusRefresh == nil })
+		want = min(want*2, repositoryRefreshMaxDelay)
+	}
+	app.refreshRepositoryView(true)
+	runBackgroundUpdates(t, updates, func() bool { return app.focusRefresh == nil })
+	if state.refreshDelay != repositoryRefreshMaxDelay {
+		t.Fatalf("退避超过上限: %v", state.refreshDelay)
+	}
+	writeNativeFile(t, path, "hello.txt", "真实变化\n")
+	app.refreshRepositoryView(true)
+	runBackgroundUpdates(t, updates, func() bool { return app.focusRefresh == nil })
+	if state.refreshDelay != 0 || len(app.repository.snapshot.Files) != 1 {
+		t.Fatal("仓库变化后没有复位退避")
+	}
+	state.refreshDelay = repositoryRefreshMaxDelay
+	app.refreshOnFocus()
+	if state.refreshDelay != 0 {
+		t.Fatal("窗口聚焦没有复位退避")
+	}
+	runBackgroundUpdates(t, updates, func() bool { return app.focusRefresh == nil })
+	state.refreshDelay = repositoryRefreshMaxDelay
+	app.runTask("用户操作", true, func(context.Context) (func(), error) { return nil, nil })
+	runBackgroundUpdates(t, updates, func() bool { return !app.busy })
+	if state.refreshDelay != 0 {
+		t.Fatal("用户操作后没有复位退避")
+	}
+}
+
+func TestNativeRepositoryWatchSkipsChangesCoveredByLaterRead(t *testing.T) {
+	app, path, state, updates, _ := watchedBackgroundFixture(t)
+	runBackgroundUpdates(t, updates, func() bool { return !state.readStarted.IsZero() && app.focusRefresh == nil })
+	// 写操作自带完整读取：读取开始前观察到的监听批次不应再触发一次读取。
+	observed := time.Now()
+	app.refresh()
+	runBackgroundUpdates(t, updates, func() bool { return !app.busy })
+	covered := state.readStarted
+	if !covered.After(observed) {
+		t.Fatal("写操作的完整读取没有登记")
+	}
+	state.refreshDelay = 0
+	app.queueRepositoryRefresh(state, observed)
+	runBackgroundUpdates(t, updates, func() bool { return state.refreshTimer == nil })
+	if app.focusRefresh != nil || !state.readStarted.Equal(covered) {
+		t.Fatal("已被后续读取覆盖的变化又触发了完整读取")
+	}
+	// 读取开始之后才观察到的变化必须刷新。
+	writeNativeFile(t, path, "hello.txt", "读取之后的变化\n")
+	app.queueRepositoryRefresh(state, time.Now())
+	runBackgroundUpdates(t, updates, func() bool { return state.readStarted.After(covered) && app.focusRefresh == nil })
+	if len(app.repository.snapshot.Files) != 1 {
+		t.Fatal("读取开始后的变化被跳过")
+	}
+}
+
+func TestNativeRepositoryWatchRetriesAfterFailure(t *testing.T) {
+	app, _, _ := nativeFixture(t)
+	updates := make(chan func(), 32)
+	app.post = func(update func()) { updates <- update }
+	app.watchRetryDelays = []time.Duration{10 * time.Millisecond}
+	created := make(chan *testRepositoryWatch, 8)
+	failures := make(chan error, 8)
+	app.watchFiles = func(context.Context, string, mygo.FileWatchOptions) (repositoryFileWatcher, error) {
+		watch := &testRepositoryWatch{events: make(chan []mygo.FileEvent, 8), closed: make(chan struct{})}
+		created <- watch
+		return &failingRepositoryWatch{testRepositoryWatch: watch, failures: failures}, nil
+	}
+	app.restartRepositoryBackground()
+	t.Cleanup(app.stopRepositoryBackground)
+	first := <-created
+	failures <- errors.New("stream ended")
+	select {
+	case <-first.closed:
+	case <-time.After(5 * time.Second):
+		t.Fatal("失败的订阅没有关闭")
+	}
+	var second *testRepositoryWatch
+	select {
+	case second = <-created:
+	case <-time.After(5 * time.Second):
+		t.Fatal("监听出错后没有重建订阅")
+	}
+	second.events <- []mygo.FileEvent{{Op: mygo.FileHint, Path: "."}}
+	runBackgroundUpdates(t, updates, func() bool { return app.background.refreshTimer != nil })
+	if app.problem != "" {
+		t.Fatal("可恢复的监听错误直接提示了用户")
+	}
+	failures <- errors.New("stream ended again")
+	runBackgroundUpdates(t, updates, func() bool { return app.problem != "" })
+	if len(created) != 0 {
+		t.Fatal("重试次数用完后仍在重建订阅")
+	}
+}
+
+type failingRepositoryWatch struct {
+	*testRepositoryWatch
+	failures chan error
+}
+
+func (watch *failingRepositoryWatch) Next(ctx context.Context) ([]mygo.FileEvent, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case err := <-watch.failures:
+		return nil, err
+	case events := <-watch.events:
+		return events, nil
+	}
+}
+
+func TestNativeBackgroundPollingDoesNotRedraw(t *testing.T) {
+	app, _, _ := nativeFixture(t)
+	updates, quiet := make(chan func(), 32), make(chan func(), 32)
+	app.post = func(update func()) { updates <- update }
+	app.runOnMain = func(fn func()) { quiet <- fn }
+	app.watchFiles = func(context.Context, string, mygo.FileWatchOptions) (repositoryFileWatcher, error) {
+		return &testRepositoryWatch{events: make(chan []mygo.FileEvent), closed: make(chan struct{})}, nil
+	}
+	app.restartRepositoryBackground()
+	t.Cleanup(app.stopRepositoryBackground)
+	state := app.background
+	nextQuiet := func() {
+		t.Helper()
+		select {
+		case fn := <-quiet:
+			fn()
+		case <-time.After(5 * time.Second):
+			t.Fatal("后台调度没有执行")
+		}
+	}
+	// 订阅补查：排队与启动刷新都走不重绘的主线程调度，只有刷新结果经 post 更新界面。
+	for app.focusRefresh == nil {
+		nextQuiet()
+	}
+	if len(updates) != 0 {
+		t.Fatal("排队刷新触发了整窗重绘")
+	}
+	runBackgroundUpdates(t, updates, func() bool { return app.focusRefresh == nil })
+	app.dialog = &nativeDialog{}
+	state.refreshDelay = 0
+	app.queueRepositoryRefresh(state, time.Now())
+	for range 3 {
+		nextQuiet()
+		if len(updates) != 0 || app.focusRefresh != nil || state.refreshTimer == nil {
+			t.Fatal("弹窗期间的刷新复查触发了重绘、打断了弹窗或丢失了排队")
+		}
+	}
+	app.dialog = nil
+	for app.focusRefresh == nil {
+		nextQuiet()
+	}
+	runBackgroundUpdates(t, updates, func() bool { return app.focusRefresh == nil })
 }

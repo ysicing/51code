@@ -14,8 +14,8 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
@@ -42,7 +42,10 @@ type Conflict struct {
 }
 
 func (repo *Repository) Conflict(ctx context.Context, path string) (Conflict, error) {
-	repo.mu.Lock()
+	// 只读载入与 Diff 等读取入口一致，等待仓库锁时也响应取消。
+	if err := repo.lockHistory(ctx); err != nil {
+		return Conflict{}, err
+	}
 	defer repo.mu.Unlock()
 	return repo.conflict(ctx, path)
 }
@@ -69,24 +72,14 @@ func (repo *Repository) conflict(ctx context.Context, path string) (Conflict, er
 		if side.Mode == "160000" {
 			return view, errors.New("子模块冲突请在外部 Git 工具中解决后刷新")
 		}
-		size, err := repo.git(ctx, "cat-file", "-s", side.Hash)
+		// 一次带上限的读取代替先查大小再读内容；超过上限即结束进程并按二进制处理。
+		content, truncated, err := runCapped(ctx, repo.Path, "", 30*time.Second, conflictTextLimit, "cat-file", "blob", side.Hash)
 		if err != nil {
 			return view, err
 		}
-		length, err := strconv.ParseInt(strings.TrimSpace(size), 10, 64)
-		if err != nil {
-			return view, err
-		}
-		side.Binary = length > conflictTextLimit
+		side.Binary = truncated || strings.ContainsRune(content, 0) || !utf8.ValidString(content)
 		if !side.Binary {
-			content, err := repo.git(ctx, "cat-file", "blob", side.Hash)
-			if err != nil {
-				return view, err
-			}
-			side.Binary = strings.ContainsRune(content, 0) || !utf8.ValidString(content)
-			if !side.Binary {
-				side.Text = content
-			}
+			side.Text = content
 		}
 		switch fields[2] {
 		case "1":
@@ -153,25 +146,34 @@ func (repo *Repository) conflict(ctx context.Context, path string) (Conflict, er
 }
 
 func (repo *Repository) checkConflictAncestors(ctx context.Context, root *os.Root, path string) error {
-	var metadata []os.FileInfo
+	return repo.newAncestorGuard().check(ctx, root, path)
+}
+
+// ancestorGuard 在一次检查内复用 Git 元数据目录信息，逐个检查多个路径时只解析一次。
+// 只在单次调用内复用而不缓存在 Repository 上：子模块吸收、工作树迁移等会改变 Git 目录，
+// 长期缓存的路径会使检查失效或永久失败。
+type ancestorGuard struct {
+	repo     *Repository
+	metadata []os.FileInfo
+}
+
+func (repo *Repository) newAncestorGuard() *ancestorGuard {
+	return &ancestorGuard{repo: repo}
+}
+
+func (guard *ancestorGuard) check(ctx context.Context, root *os.Root, path string) error {
 	parent := ""
 	for _, part := range strings.Split(filepath.ToSlash(filepath.Dir(filepath.FromSlash(path))), "/") {
 		if part == "." {
 			continue
 		}
-		// 仅在存在祖先目录时才需要元数据目录，顶层文件不必启动 Git。
-		if metadata == nil {
-			directories, err := repo.metadataDirectories(ctx)
+		// 仅在存在祖先目录时才需要元数据目录，顶层文件不必读取。
+		if guard.metadata == nil {
+			metadata, err := guard.repo.metadataInfos(ctx)
 			if err != nil {
 				return err
 			}
-			for _, directory := range directories {
-				info, err := os.Stat(directory)
-				if err != nil {
-					return err
-				}
-				metadata = append(metadata, info)
-			}
+			guard.metadata = metadata
 		}
 		parent = filepath.Join(parent, part)
 		info, err := root.Lstat(parent)
@@ -185,13 +187,58 @@ func (repo *Repository) checkConflictAncestors(ctx context.Context, root *os.Roo
 		if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
 			return errUnsupportedAncestor
 		}
-		for _, directory := range metadata {
+		for _, directory := range guard.metadata {
 			if os.SameFile(info, directory) {
 				return errors.New("不能操作 Git 元数据目录中的冲突文件")
 			}
 		}
 	}
 	return nil
+}
+
+// metadataInfos 返回 Git 目录与共享目录的文件信息，只用于按文件身份比较。
+// 常见布局直接从文件系统解析，无法确定时才启动 rev-parse。
+func (repo *Repository) metadataInfos(ctx context.Context) ([]os.FileInfo, error) {
+	directories, ok := localMetadataDirectories(repo.Path)
+	if !ok {
+		var err error
+		if directories, err = repo.metadataDirectories(ctx); err != nil {
+			return nil, err
+		}
+	}
+	metadata := make([]os.FileInfo, 0, len(directories))
+	for _, directory := range directories {
+		info, err := os.Stat(directory)
+		if err != nil {
+			return nil, err
+		}
+		metadata = append(metadata, info)
+	}
+	return metadata, nil
+}
+
+// localMetadataDirectories 按 Git 的规则解析 Git 目录及其 commondir：
+// commondir 不存在时共享目录就是 Git 目录；文件内容异常时返回 false 交给 Git。
+func localMetadataDirectories(root string) ([]string, bool) {
+	directory, ok := localGitDirectory(root)
+	if !ok {
+		return nil, false
+	}
+	content, err := os.ReadFile(filepath.Join(directory, "commondir"))
+	if os.IsNotExist(err) {
+		return []string{directory, directory}, true
+	}
+	if err != nil || len(content) > 4096 {
+		return nil, false
+	}
+	common := strings.TrimRight(string(content), "\r\n")
+	if common == "" || strings.ContainsAny(common, "\x00\n\r") {
+		return nil, false
+	}
+	if !filepath.IsAbs(common) {
+		common = filepath.Join(directory, common)
+	}
+	return []string{directory, filepath.Clean(common)}, true
 }
 
 // metadataDirectories 读取当前 Git 目录与共享目录。

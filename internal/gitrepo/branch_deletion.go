@@ -74,8 +74,14 @@ func (repo *Repository) reviewBranchDeletion(ctx context.Context, common, name s
 	}
 	state.Head = strings.TrimSpace(output)
 	review.Head = state.Head
-	worktrees, err := repo.worktrees(ctx, common)
+	// 只完整检查当前工作树和持有该分支的工作树；删除普通分支时通常只有当前工作树一项。
+	worktrees, err := repo.worktreeEntries(ctx)
 	if err != nil {
+		return review, state, err
+	}
+	if err := inspectWorktrees(ctx, common, worktrees, func(worktree Worktree) bool {
+		return worktree.Current || worktree.Branch == ref
+	}); err != nil {
 		return review, state, err
 	}
 	foundTarget := false
@@ -147,7 +153,8 @@ func (repo *Repository) branchDeletionReference(ctx context.Context, ref, head s
 }
 
 func (repo *Repository) DeleteReviewedBranch(ctx context.Context, name string, force bool, token string) error {
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	// 可能先移除持有分支的工作树，大目录删除不能被两分钟上限中途打断。
+	ctx, cancel := context.WithTimeout(ctx, checkoutTimeout)
 	defer cancel()
 	common, unlock, err := repo.lockWorktree(ctx)
 	if err != nil {
@@ -175,7 +182,7 @@ func (repo *Repository) DeleteReviewedBranch(ctx context.Context, name string, f
 		if err := state.Sources[0].checkIdentity(ctx, common); err != nil {
 			return err
 		}
-		if _, err := run(ctx, repo.Path, "", 2*time.Minute, "worktree", "remove", "--", review.Worktree.Path); err != nil {
+		if _, err := run(ctx, repo.Path, "", checkoutTimeout, "worktree", "remove", "--", review.Worktree.Path); err != nil {
 			if _, statErr := os.Lstat(review.Worktree.Path); os.IsNotExist(statErr) {
 				return partial(err)
 			}

@@ -124,15 +124,10 @@ func (repo *Repository) CompareFileDiff(ctx context.Context, from, target, path 
 		oldPath = selected.OriginalPath
 		args = append(args, oldPath)
 	}
-	output, err := repo.git(ctx, args...)
+	diff, err := repo.selectedPatchPreview(ctx, args, *selected)
 	if err != nil {
 		return Diff{}, err
 	}
-	output, err = selectedCommitPatch(output, *selected)
-	if err != nil {
-		return Diff{}, err
-	}
-	diff := Diff{Text: output, Binary: strings.Contains(output, "Binary files ")}
 	if diff.Old, err = repo.treeFileContent(ctx, oldPath, from, from); err != nil {
 		return Diff{}, err
 	}

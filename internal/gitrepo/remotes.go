@@ -219,7 +219,9 @@ func (repo *Repository) PushBranch(ctx context.Context, request PushBranchReques
 }
 
 func (repo *Repository) pushBranch(ctx context.Context, request PublishBranchRequest, publish bool) error {
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	// 总时限与 runRemote 一致：大仓库首次推送或 LFS pre-push 上传可能远超几分钟，
+	// 卡住的连接由 remoteOptions 的无进度检测中断；前置校验各自受 repo.git 的 30 秒限制。
+	ctx, cancel := context.WithTimeout(ctx, remoteTimeout)
 	defer cancel()
 	if err := repo.lockHistory(ctx); err != nil {
 		return err

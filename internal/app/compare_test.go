@@ -6,8 +6,13 @@ package app
 import (
 	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/ysicing/51code/internal/gitrepo"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -263,9 +268,23 @@ func TestNativeComparisonKeepsResultWhenFirstDiffFails(t *testing.T) {
 	app.startComparison()
 	finish()
 	result, text := app.comparison.result, app.diff.Text
-	writeNativeFile(t, path, "aaa-large.txt", strings.Repeat("large new line\n", 320000))
+	writeNativeFile(t, path, "aaa-first.txt", "first\n")
 	nativeGit(t, path, "add", ".")
-	nativeGit(t, path, "commit", "-m", "large")
+	nativeGit(t, path, "commit", "-m", "first")
+	// 超大 diff 现在截断展示而不报错，改用包装脚本只让读取首文件补丁失败，
+	// 比较列表本身照常成功，以验证失败时不覆盖已有比较。
+	actual, err := exec.LookPath("git")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wrapper := filepath.Join(t.TempDir(), "git")
+	script := "#!/bin/sh\nfor arg in \"$@\"; do\n  if [ \"$arg\" = \"--patch\" ]; then echo 'diff failed' >&2; exit 1; fi\ndone\nexec " +
+		strconv.Quote(actual) + " \"$@\"\n"
+	if err := os.WriteFile(wrapper, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	gitrepo.ConfigureExecutable(gitrepo.ExecutableOptions{Source: "custom", Path: wrapper})
+	t.Cleanup(func() { gitrepo.ConfigureExecutable(gitrepo.ExecutableOptions{Source: "system"}) })
 	app.startComparison()
 	finish()
 	if app.problem == "" || app.comparison.result != result || app.diff.Text != text {

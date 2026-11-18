@@ -74,7 +74,9 @@ func nativeReferenceNodes(names []string, prefix, current, preferred string) []*
 	return roots
 }
 
-func (app *nativeApp) referenceSidebar(c *ui.Context, title, label string, icon *ui.SVG, nodes []*nativeRefNode, leaf func(string, ui.Element)) {
+// referenceSidebar 绘制一个引用分组。build 构建节点树，只在分组展开且引用快照变化时调用（见 nativeRefTree）；
+// leaf 绘制叶子节点时可从 refs 读取 build 写入的数据。
+func (app *nativeApp) referenceSidebar(c *ui.Context, title, label string, icon *ui.SVG, build func(refs *nativeRefTree), leaf func(refs *nativeRefTree, name string, item ui.Element)) {
 	key := nativeRefKey{repository: app.repository.snapshot.Path, kind: title}
 	collapsed, known := app.refCollapsed[key]
 	expanded := !collapsed
@@ -85,7 +87,9 @@ func (app *nativeApp) referenceSidebar(c *ui.Context, title, label string, icon 
 	if title == "远端" {
 		label = locales.RemoteBranchTree()
 	}
-	ui.Column(c).Key(title+":"+app.repository.snapshot.Path).FillWidth().Margin(16, 0, 0, 0).Children(func() {
+	group := ui.Column(c).Key(title+":"+app.repository.snapshot.Path).FillWidth().Margin(16, 0, 0, 0)
+	refs := *ui.Local(group, "ref-tree", func() *nativeRefTree { return &nativeRefTree{} })
+	group.Children(func() {
 		tree := ui.TreeBase(c)
 		tree.Root.FillWidth().Label(label).Children(func() {
 			section := tree.Item(&expanded)
@@ -104,8 +108,10 @@ func (app *nativeApp) referenceSidebar(c *ui.Context, title, label string, icon 
 				nativeDisclosure(c, expanded, c.Theme().TextMuted)
 			})
 			app.refCollapsed[key] = !expanded
+			// 折叠时 Group 不调用回调，节点树也不会构建。
 			section.Group(func() {
-				app.referenceItems(c, tree, nodes, title, leaf)
+				refs.sync(app.refSource(), build)
+				app.referenceItems(c, tree, refs.nodes, title, func(name string, item ui.Element) { leaf(refs, name, item) })
 			})
 		})
 	})
@@ -214,24 +220,27 @@ func (app *nativeApp) referenceItems(c *ui.Context, tree ui.TreeParts, nodes []*
 }
 
 func (app *nativeApp) localBranchSidebar(c *ui.Context) {
-	var names []string
-	var current string
-	var preferred string
-	branches := make(map[string]gitrepo.Branch)
-	for _, branch := range app.repository.branches {
-		if !branch.Remote {
-			names = append(names, branch.Name)
-			branches[branch.Name] = branch
-			if branch.Current {
-				current = branch.Name
-			}
-			if branch.Default {
-				preferred = branch.Name
+	build := func(refs *nativeRefTree) {
+		var names []string
+		var current string
+		var preferred string
+		refs.branches = make(map[string]gitrepo.Branch)
+		for _, branch := range app.repository.branches {
+			if !branch.Remote {
+				names = append(names, branch.Name)
+				refs.branches[branch.Name] = branch
+				if branch.Current {
+					current = branch.Name
+				}
+				if branch.Default {
+					preferred = branch.Name
+				}
 			}
 		}
+		refs.nodes = nativeReferenceNodes(names, "", current, preferred)
 	}
-	app.referenceSidebar(c, "本地分支", "本地分支树", nativeIcons["branch"], nativeReferenceNodes(names, "", current, preferred), func(name string, item ui.Element) {
-		branch := branches[name]
+	app.referenceSidebar(c, "本地分支", "本地分支树", nativeIcons["branch"], build, func(refs *nativeRefTree, name string, item ui.Element) {
+		branch := refs.branches[name]
 		if branch.Current {
 			item.Tooltip(name + " · " + locales.CurrentBranch())
 		}
@@ -272,12 +281,15 @@ func (app *nativeApp) localBranchSidebar(c *ui.Context) {
 }
 
 func (app *nativeApp) tagSidebar(c *ui.Context) {
-	var names []string
-	for _, tag := range app.repository.tags {
-		names = append(names, tag.Name)
+	build := func(refs *nativeRefTree) {
+		names := make([]string, 0, len(app.repository.tags))
+		for _, tag := range app.repository.tags {
+			names = append(names, tag.Name)
+		}
+		refs.nodes = nativeReferenceNodes(names, "", "", "")
 	}
 	services := c.Services()
-	app.referenceSidebar(c, "标签", "标签树", nativeIcons["tag"], nativeReferenceNodes(names, "", "", ""), func(name string, item ui.Element) {
+	app.referenceSidebar(c, "标签", "标签树", nativeIcons["tag"], build, func(_ *nativeRefTree, name string, item ui.Element) {
 		item.ContextMenu(func(menu *ui.Menu) {
 			app.refSelected = nativeRefKey{repository: app.repository.snapshot.Path, kind: "标签", reference: name}
 			if menu.Item(locales.CopyTagName()).Chosen() {

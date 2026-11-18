@@ -93,7 +93,7 @@ func (repo *Repository) applyIndexPatch(ctx context.Context, path string, staged
 }
 
 func (repo *Repository) prepareHunkApply(ctx context.Context, patch hunkPatch, id int, staged bool) (string, error) {
-	before, err := repo.git(ctx, "cat-file", "blob", patch.indexHash)
+	before, err := repo.blobText(ctx, patch.indexHash)
 	if err != nil {
 		return "", err
 	}
@@ -279,11 +279,8 @@ func (repo *Repository) hunkPatch(ctx context.Context, path string, staged bool)
 	if err != nil || head == "" {
 		return patch, err
 	}
-	index, err := repo.indexDigest(ctx)
-	if err != nil {
-		return patch, err
-	}
-	entry, err := repo.git(ctx, "ls-files", "--stage", "-z", "--", path)
+	// 摘要整份索引时顺带取出该路径的条目，省去单独的 ls-files -- path，且两者来自同一快照。
+	index, entry, err := repo.indexDigestEntry(ctx, path)
 	if err != nil {
 		return patch, err
 	}
@@ -384,6 +381,34 @@ func (repo *Repository) indexDigest(ctx context.Context) (string, error) {
 	return runDigest(ctx, repo.Path, 30*time.Second, "ls-files", "--stage", "-z")
 }
 
+// indexDigestEntry 返回与 indexDigest 相同的摘要，以及 path 自身的全部索引记录（NUL 结尾）。
+func (repo *Repository) indexDigestEntry(ctx context.Context, path string) (string, string, error) {
+	processCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	digest := sha256.New()
+	var entries strings.Builder
+	records := nulRecordWriter{cancel: cancel, record: func(record string) error {
+		if _, name, ok := strings.Cut(record, "\t"); ok && name == path {
+			entries.WriteString(record)
+			entries.WriteByte(0)
+		}
+		return nil
+	}}
+	err := runTo(processCtx, repo.Path, "", 30*time.Second, io.MultiWriter(digest, &records),
+		func() string { return "" }, "ls-files", "--stage", "-z")
+	if records.err != nil && ctx.Err() == nil {
+		return "", "", records.err
+	}
+	if err != nil {
+		return "", "", err
+	}
+	// ls-files -z 的每条记录都以 NUL 结尾，flush 只会处理异常的残缺记录。
+	if err := records.flush(); err != nil {
+		return "", "", err
+	}
+	return hex.EncodeToString(digest.Sum(nil)), entries.String(), nil
+}
+
 func patchIndexEntry(index, path string) (mode, hash string) {
 	found := false
 	for _, entry := range strings.Split(index, "\x00") {
@@ -439,19 +464,21 @@ func (repo *Repository) patchTextBlob(ctx context.Context, hash string) (bool, e
 	if content, ok := repo.cachedBlob(hash); ok {
 		return utf8.ValidString(content) && !strings.ContainsRune(content, 0), nil
 	}
-	size, err := repo.git(ctx, "cat-file", "-s", hash)
-	if err != nil {
+	// 一次带上限的读取代替 cat-file -s 加 cat-file blob；超过 outputLimit 即结束进程并视为不支持。
+	content, truncated, err := runCapped(ctx, repo.Path, "", 30*time.Second, outputLimit, "cat-file", "blob", hash)
+	if err != nil || truncated {
 		return false, err
 	}
-	length, err := strconv.ParseInt(strings.TrimSpace(size), 10, 64)
-	if err != nil || length < 0 || length > outputLimit {
-		return false, err
+	repo.rememberBlob(hash, content)
+	return utf8.ValidString(content) && !strings.ContainsRune(content, 0), nil
+}
+
+// blobText 读取完整 blob；hunkPatch 刚校验过的索引 blob 通常已在缓存中，不必再启动 Git。
+func (repo *Repository) blobText(ctx context.Context, hash string) (string, error) {
+	if content, ok := repo.cachedBlob(hash); ok {
+		return content, nil
 	}
-	content, err := repo.git(ctx, "cat-file", "blob", hash)
-	if err == nil {
-		repo.rememberBlob(hash, content)
-	}
-	return err == nil && utf8.ValidString(content) && !strings.ContainsRune(content, 0), err
+	return repo.git(ctx, "cat-file", "blob", hash)
 }
 
 func (repo *Repository) stableHunkDiff(ctx context.Context, path string, staged bool) (string, error) {

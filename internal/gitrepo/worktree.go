@@ -48,7 +48,8 @@ type WorktreeReview struct {
 }
 
 type worktreeState struct {
-	Worktree       Worktree
+	Worktree Worktree
+	// Status 是完整 status 输出的 SHA-256，只用于复核凭据，不保留可能很大的原文。
 	Status         string
 	OperationToken string
 	GitDir         string
@@ -181,8 +182,14 @@ func (repo *Repository) reviewWorktree(ctx context.Context, common, path string)
 	if err != nil {
 		return WorktreeReview{}, worktreeReviewState{}, err
 	}
-	states, err := repo.worktrees(ctx, common)
+	// 审查只需要源和目标（当前）工作树；其余条目不参与凭据，逐个完整检查只会拖慢持锁时间。
+	states, err := repo.worktreeEntries(ctx)
 	if err != nil {
+		return WorktreeReview{}, worktreeReviewState{}, err
+	}
+	if err := inspectWorktrees(ctx, common, states, func(worktree Worktree) bool {
+		return worktree.Current || worktreeSamePath(worktree.Path, canonical)
+	}); err != nil {
 		return WorktreeReview{}, worktreeReviewState{}, err
 	}
 	var source, target *worktreeState
@@ -286,14 +293,16 @@ func worktreeRemoveProblem(source, target Worktree) string {
 
 // CreateWorktree 不覆盖路径，不强制检出；失败后不删除分支或用户目录。
 func (repo *Repository) CreateWorktree(ctx context.Context, path, branch, start string, existing bool) (Worktree, error) {
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	// 检出新工作树可能经 LFS smudge 下载大量对象，与切换分支使用同一上限。
+	ctx, cancel := context.WithTimeout(ctx, checkoutTimeout)
 	defer cancel()
 	common, unlock, err := repo.lockWorktree(ctx)
 	if err != nil {
 		return Worktree{}, err
 	}
 	defer unlock()
-	states, err := repo.worktrees(ctx, common)
+	// 创建前只需各工作树的路径与分支，用于重叠和占用检查，不读取各自的文件状态。
+	states, err := repo.worktreeEntries(ctx)
 	if err != nil {
 		return Worktree{}, err
 	}
@@ -348,11 +357,16 @@ func (repo *Repository) CreateWorktree(ctx context.Context, path, branch, start 
 	} else {
 		args = append(args, "--no-track", "-b", branch, "--", path, head)
 	}
-	if _, err := run(ctx, repo.Path, "", 2*time.Minute, args...); err != nil {
+	if _, err := run(ctx, repo.Path, "", checkoutTimeout, args...); err != nil {
 		return Worktree{}, err
 	}
-	states, err = repo.worktrees(ctx, common)
+	states, err = repo.worktreeEntries(ctx)
 	if err != nil {
+		return Worktree{}, err
+	}
+	if err := inspectWorktrees(ctx, common, states, func(worktree Worktree) bool {
+		return worktreeSamePath(worktree.Path, path)
+	}); err != nil {
 		return Worktree{}, err
 	}
 	for _, state := range states {
@@ -368,7 +382,8 @@ func (repo *Repository) CreateWorktree(ctx context.Context, path, branch, start 
 
 // MergeWorktree 合并复核后的固定提交；冲突状态留给现有操作界面处理。
 func (repo *Repository) MergeWorktree(ctx context.Context, path, token string) error {
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	// 合并会改写目标工作区，被提前杀掉会留下 index.lock 和半完成的合并。
+	ctx, cancel := context.WithTimeout(ctx, checkoutTimeout)
 	defer cancel()
 	common, unlock, err := repo.lockWorktree(ctx)
 	if err != nil {
@@ -395,14 +410,15 @@ func (repo *Repository) MergeWorktree(ctx context.Context, path, token string) e
 	if err := repo.checkMergeIgnoredPaths(ctx, review.Worktree.Head); err != nil {
 		return err
 	}
-	_, err = run(ctx, repo.Path, "", 2*time.Minute, "merge", "--no-edit", "--no-autostash",
+	_, err = run(ctx, repo.Path, "", checkoutTimeout, "merge", "--no-edit", "--no-autostash",
 		"--no-overwrite-ignore", "--", review.Worktree.Head)
 	return err
 }
 
 // RemoveWorktree 不强制移除，不删除分支，也不清理其他工作树元数据。
 func (repo *Repository) RemoveWorktree(ctx context.Context, path, token string) error {
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	// 删除大型工作树目录可能耗时较长，中途被杀会留下部分删除的目录。
+	ctx, cancel := context.WithTimeout(ctx, checkoutTimeout)
 	defer cancel()
 	common, unlock, err := repo.lockWorktree(ctx)
 	if err != nil {
@@ -425,6 +441,6 @@ func (repo *Repository) RemoveWorktree(ctx context.Context, path, token string) 
 	if err := state.source.checkIdentity(ctx, common); err != nil {
 		return err
 	}
-	_, err = run(ctx, repo.Path, "", 2*time.Minute, "worktree", "remove", "--", review.Worktree.Path)
+	_, err = run(ctx, repo.Path, "", checkoutTimeout, "worktree", "remove", "--", review.Worktree.Path)
 	return err
 }

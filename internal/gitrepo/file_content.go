@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
@@ -148,7 +149,7 @@ func (repo *Repository) blobFileContent(ctx context.Context, side *FileContent, 
 	return repo.blobFileContentSized(ctx, side, mode, hash, -1)
 }
 
-// blobFileContentSized 的 size 为 -1 时先查询大小；已从 ls-tree -l 得到大小时直接使用。
+// blobFileContentSized 的 size 为 -1 时表示大小未知；已从 ls-tree -l 得到大小时可直接跳过大对象。
 func (repo *Repository) blobFileContentSized(ctx context.Context, side *FileContent, mode, hash string, size int64) (*FileContent, error) {
 	side.Present = true
 	if mode != "100644" && mode != "100755" {
@@ -159,24 +160,19 @@ func (repo *Repository) blobFileContentSized(ctx context.Context, side *FileCont
 		setFileContentText(side, content)
 		return side, nil
 	}
-	// 先查询大小，避免把大 blob 加载到内存；对象消失或读取失败必须向上报错。
-	if size < 0 {
-		output, err := repo.git(ctx, "cat-file", "-s", hash)
-		if err != nil {
-			return nil, err
-		}
-		size, err = strconv.ParseInt(strings.TrimSpace(output), 10, 64)
-		if err != nil || size < 0 {
-			return nil, errors.New("文件对象大小无效")
-		}
-	}
 	if size > fileContentLimit {
 		side.Truncated = true
 		return side, nil
 	}
-	content, err := repo.git(ctx, "cat-file", "blob", hash)
+	// 大小未知时不再单独 cat-file -s：带上限读取，超过 fileContentLimit 即结束进程，
+	// 同样不会把大 blob 载入内存；对象消失或读取失败仍向上报错。
+	content, truncated, err := runCapped(ctx, repo.Path, "", 30*time.Second, fileContentLimit, "cat-file", "blob", hash)
 	if err != nil {
 		return nil, err
+	}
+	if truncated {
+		side.Truncated = true
+		return side, nil
 	}
 	repo.rememberBlob(hash, content)
 	setFileContentText(side, content)

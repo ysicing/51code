@@ -25,7 +25,7 @@ func historyGraphWithWorking(commits []gitrepo.Commit, head string, working bool
 		return commitGraph(commits)
 	}
 	rows := make([]gitrepo.Commit, 1, len(commits)+1)
-	rows[0] = gitrepo.Commit{Hash: "working-tree", Parents: []string{head}}
+	rows[0] = historyWorkingCommit(head)
 	rows = append(rows, commits...)
 	graph := commitGraph(rows)
 	graph[0].Working = true

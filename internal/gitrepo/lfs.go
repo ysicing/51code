@@ -210,13 +210,25 @@ func lfsEnvironment(ctx context.Context, gitPath, lfsPath string) ([]string, err
 }
 
 func runLFS(ctx context.Context, root string, options ExecutableOptions, timeout time.Duration, args ...string) (string, error) {
+	var stdout limitedBuffer
+	if err := runLFSTo(ctx, root, options, timeout, &stdout, stdout.String, args...); err != nil {
+		return "", err
+	}
+	if stdout.overflow {
+		return "", errors.New("Git LFS 输出超过 4 MiB，请使用命令行查看完整结果")
+	}
+	return stdout.String(), nil
+}
+
+// runLFSTo 将标准输出直接交给 stdout，供可能超过 4 MiB 的列表流式解析；details 在失败且 stderr 为空时补充说明。
+func runLFSTo(ctx context.Context, root string, options ExecutableOptions, timeout time.Duration, stdout io.Writer, details func() string, args ...string) error {
 	path, err := ResolveLFSExecutable(options)
 	if err != nil {
-		return "", err
+		return err
 	}
 	gitPath, err := ResolveExecutable(currentExecutableOptions())
 	if err != nil {
-		return "", err
+		return err
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -224,33 +236,44 @@ func runLFS(ctx context.Context, root string, options ExecutableOptions, timeout
 	command.Dir = root
 	command.Env, err = lfsEnvironment(ctx, gitPath, path)
 	if err != nil {
-		return "", err
+		return err
 	}
-	return runLFSProcess(ctx, command)
+	return runLFSProcessTo(ctx, command, stdout, details)
 }
 
 func runLFSProcess(ctx context.Context, command *exec.Cmd) (string, error) {
+	var stdout limitedBuffer
+	if err := runLFSProcessTo(ctx, command, &stdout, stdout.String); err != nil {
+		return "", err
+	}
+	if stdout.overflow {
+		return "", errors.New("Git LFS 输出超过 4 MiB，请使用命令行查看完整结果")
+	}
+	return stdout.String(), nil
+}
+
+func runLFSProcessTo(ctx context.Context, command *exec.Cmd, stdout io.Writer, details func() string) error {
 	command.WaitDelay = 2 * time.Second
-	var stdout, stderr limitedBuffer
-	command.Stdout, command.Stderr = &stdout, &stderr
+	var stderr limitedBuffer
+	command.Stdout, command.Stderr = stdout, &stderr
 	err := runProcess(ctx, command)
 	if ctx.Err() != nil {
-		return "", fmt.Errorf("Git LFS 操作已取消或超时：%w", ctx.Err())
+		return fmt.Errorf("Git LFS 操作已取消或超时：%w", ctx.Err())
 	}
 	if err != nil {
 		message := strings.TrimSpace(stderr.String())
 		if message == "" {
-			message = strings.TrimSpace(stdout.String())
+			message = strings.TrimSpace(details())
 		}
 		if message == "" {
 			message = err.Error()
 		}
-		return "", fmt.Errorf("Git LFS 执行失败：%s: %w", message, err)
+		return fmt.Errorf("Git LFS 执行失败：%s: %w", message, err)
 	}
-	if stdout.overflow || stderr.overflow {
-		return "", errors.New("Git LFS 输出超过 4 MiB，请使用命令行查看完整结果")
+	if stderr.overflow {
+		return errors.New("Git LFS 输出超过 4 MiB，请使用命令行查看完整结果")
 	}
-	return stdout.String(), nil
+	return nil
 }
 
 func InspectLFSExecutable(ctx context.Context, options ExecutableOptions) (ExecutableInfo, error) {
@@ -289,35 +312,104 @@ func (repo *Repository) LFSStatus(ctx context.Context) (LFSStatus, error) {
 		}
 		return state, nil
 	}
-	output, err := runLFS(ctx, repo.Path, currentLFSExecutableOptions(), 30*time.Second, "ls-files", "--json")
+	// 每个文件约 200 字节 JSON，约 2 万个 LFS 文件即超过 4 MiB 输出上限；改为边读边解码。
+	reader, writer := io.Pipe()
+	type decoded struct {
+		files     []LFSFile
+		truncated bool
+		err       error
+	}
+	result := make(chan decoded, 1)
+	go func() {
+		files, truncated, err := decodeLFSFiles(reader, maxLFSStatusFiles)
+		// 解码提前结束（出错或达到上限）时继续排空，Git LFS 不会阻塞在满管道上。
+		_, _ = io.Copy(io.Discard, reader)
+		result <- decoded{files, truncated, err}
+	}()
+	err = runLFSTo(ctx, repo.Path, currentLFSExecutableOptions(), 30*time.Second, writer, func() string { return "" }, "ls-files", "--json")
+	_ = writer.CloseWithError(err)
+	files := <-result
 	if err != nil {
 		state.Problem = err.Error()
 		return state, err
 	}
-	var document struct {
-		Files []struct {
-			Name       string `json:"name"`
-			Downloaded bool   `json:"downloaded"`
-		} `json:"files"`
+	if files.err != nil {
+		return state, files.err
 	}
-	if err := json.Unmarshal([]byte(output), &document); err != nil {
-		return state, fmt.Errorf("无法解析 Git LFS 文件状态：%w", err)
-	}
-	for _, file := range document.Files {
-		name := file.Name
-		if len(name) >= 2 && strings.HasPrefix(name, "\"") && strings.HasSuffix(name, "\"") {
-			var err error
-			name, err = strconv.Unquote(name)
-			if err != nil {
-				return state, fmt.Errorf("无法解析 Git LFS 的 C-quoted 文件名：%w", err)
-			}
-		}
-		if err := validPath(name); err != nil {
-			return state, fmt.Errorf("Git LFS 返回了不安全的文件路径：%w", err)
-		}
-		state.Files = append(state.Files, LFSFile{Path: name, Downloaded: file.Downloaded})
+	state.Files = files.files
+	if files.truncated {
+		state.Problem = strings.TrimSpace(state.Problem + "\n" + fmt.Sprintf("LFS 文件过多，仅列出前 %d 个，请使用命令行查看完整列表", maxLFSStatusFiles))
 	}
 	return state, nil
+}
+
+// maxLFSStatusFiles 限制界面列表的条目数，避免超大仓库一次性构建过长列表。
+const maxLFSStatusFiles = 100000
+
+// decodeLFSFiles 流式解析 git lfs ls-files --json 的 {"files":[...]}，最多保留 limit 条。
+func decodeLFSFiles(reader io.Reader, limit int) ([]LFSFile, bool, error) {
+	files := []LFSFile{}
+	invalid := func(err error) ([]LFSFile, bool, error) {
+		return nil, false, fmt.Errorf("无法解析 Git LFS 文件状态：%w", err)
+	}
+	decoder := json.NewDecoder(reader)
+	if token, err := decoder.Token(); err != nil {
+		return invalid(err)
+	} else if token != json.Delim('{') {
+		return invalid(errors.New("顶层不是对象"))
+	}
+	for decoder.More() {
+		token, err := decoder.Token()
+		if err != nil {
+			return invalid(err)
+		}
+		if token != "files" {
+			var skipped json.RawMessage
+			if err := decoder.Decode(&skipped); err != nil {
+				return invalid(err)
+			}
+			continue
+		}
+		// 无文件时 Git LFS 可能输出 null。
+		if token, err = decoder.Token(); err != nil {
+			return invalid(err)
+		} else if token == nil {
+			continue
+		} else if token != json.Delim('[') {
+			return invalid(errors.New("files 不是数组"))
+		}
+		for decoder.More() {
+			if len(files) >= limit {
+				return files, true, nil
+			}
+			var file struct {
+				Name       string `json:"name"`
+				Downloaded bool   `json:"downloaded"`
+			}
+			if err := decoder.Decode(&file); err != nil {
+				return invalid(err)
+			}
+			name := file.Name
+			if len(name) >= 2 && strings.HasPrefix(name, "\"") && strings.HasSuffix(name, "\"") {
+				var err error
+				name, err = strconv.Unquote(name)
+				if err != nil {
+					return nil, false, fmt.Errorf("无法解析 Git LFS 的 C-quoted 文件名：%w", err)
+				}
+			}
+			if err := validPath(name); err != nil {
+				return nil, false, fmt.Errorf("Git LFS 返回了不安全的文件路径：%w", err)
+			}
+			files = append(files, LFSFile{Path: name, Downloaded: file.Downloaded})
+		}
+		if _, err := decoder.Token(); err != nil {
+			return invalid(err)
+		}
+	}
+	if _, err := decoder.Token(); err != nil {
+		return invalid(err)
+	}
+	return files, false, nil
 }
 
 func (repo *Repository) lfsInstallation(ctx context.Context) (bool, string, string, error) {
@@ -1170,11 +1262,28 @@ func (repo *Repository) stageWithLFS(ctx context.Context, paths []string, expect
 			}
 		}
 	}
-	if _, err := repo.lfsGit(ctx, index, "", append([]string{"add", "--"}, names...)...); err != nil {
-		return err
+	// 每个文件只经过一次 clean filter：已在索引中的文件即使 stat 未变也须 --renormalize 才会重新清洗，
+	// 且 renormalize 本身从工作区读取内容，等价于先 add 再 renormalize；未跟踪文件不受 renormalize
+	// 影响，普通 add 已按新的 lfs 属性清洗。临时索引复制自真实索引，originalEntries 即其跟踪状态，
+	// 两者若在此期间分歧，后面的条目检查或发布前的索引比对会拒绝发布。
+	var tracked, untracked []string
+	for _, name := range names {
+		if originalEntries[name] != "" {
+			tracked = append(tracked, name)
+		} else {
+			untracked = append(untracked, name)
+		}
 	}
-	if _, err := repo.lfsGit(ctx, index, "", append([]string{"add", "--renormalize", "--"}, names...)...); err != nil {
-		return err
+	// 列表为空时不能调用：不带路径的 add --renormalize 会重新清洗所有已跟踪文件。
+	if len(untracked) > 0 {
+		if _, err := repo.lfsGit(ctx, index, "", append([]string{"add", "--"}, untracked...)...); err != nil {
+			return err
+		}
+	}
+	if len(tracked) > 0 {
+		if _, err := repo.lfsGit(ctx, index, "", append([]string{"add", "--renormalize", "--"}, tracked...)...); err != nil {
+			return err
+		}
 	}
 	updated, err := repo.lfsIndexEntries(ctx, index, allPaths)
 	if err != nil {
@@ -1184,25 +1293,16 @@ func (repo *Repository) stageWithLFS(ctx context.Context, paths []string, expect
 	if err != nil {
 		return err
 	}
+	objects := make([]string, 0, len(names))
 	for _, name := range names {
 		entry := entries[name]
 		if entry == "" {
 			return fmt.Errorf("没有生成 LFS 索引条目：%s", name)
 		}
-		object := strings.Fields(strings.SplitN(entry, "\t", 2)[0])[1]
-		size, err := repo.lfsGit(ctx, index, "", "cat-file", "-s", object)
-		if err != nil {
-			return err
-		}
-		// 指针很小；只读取小对象，避免失效 filter 导致大文件进入内存。
-		objectSize, sizeErr := strconv.ParseInt(strings.TrimSpace(size), 10, 64)
-		if sizeErr != nil || objectSize < 0 || objectSize > 1024 {
-			return fmt.Errorf("文件 %s 未转换为 LFS 指针", name)
-		}
-		content, err := repo.lfsGit(ctx, index, "", "cat-file", "blob", object)
-		if err != nil || !validLFSPointer(content) {
-			return fmt.Errorf("文件 %s 未转换为 LFS 指针：%w", name, errors.Join(err, errors.New("请检查 LFS filter 配置")))
-		}
+		objects = append(objects, strings.Fields(strings.SplitN(entry, "\t", 2)[0])[1])
+	}
+	if err := repo.verifyLFSPointers(ctx, index, names, objects); err != nil {
+		return err
 	}
 	indexPath, indexLock, err := repo.lockLFSIndex(ctx)
 	if err != nil {
@@ -1294,4 +1394,48 @@ func (repo *Repository) lockLFSIndex(ctx context.Context) (string, *os.File, err
 		return "", nil, err
 	}
 	return path, file, nil
+}
+
+// verifyLFSPointers 用两个批处理进程代替每文件两次 cat-file：先只读大小，
+// 全部不超过 1024 字节才读取内容，避免失效 filter 导致大文件进入内存。
+func (repo *Repository) verifyLFSPointers(ctx context.Context, index string, names, objects []string) error {
+	input := strings.Join(objects, "\n") + "\n"
+	output, err := repo.lfsGit(ctx, index, input, "cat-file", "--batch-check=%(objectname) %(objecttype) %(objectsize)")
+	if err != nil {
+		return err
+	}
+	lines := strings.Split(strings.TrimSuffix(output, "\n"), "\n")
+	if len(lines) != len(objects) {
+		return errors.New("无法读取 LFS 指针对象")
+	}
+	for position, line := range lines {
+		fields := strings.Fields(line)
+		if len(fields) != 3 || fields[0] != objects[position] || fields[1] != "blob" {
+			return fmt.Errorf("文件 %s 未转换为 LFS 指针", names[position])
+		}
+		size, err := strconv.ParseInt(fields[2], 10, 64)
+		if err != nil || size < 0 || size > 1024 {
+			return fmt.Errorf("文件 %s 未转换为 LFS 指针", names[position])
+		}
+	}
+	output, err = repo.lfsGit(ctx, index, input, "cat-file", "--batch")
+	if err != nil {
+		return fmt.Errorf("无法读取 LFS 指针：%w", errors.Join(err, errors.New("请检查 LFS filter 配置")))
+	}
+	for position, object := range objects {
+		header, rest, ok := strings.Cut(output, "\n")
+		fields := strings.Fields(header)
+		size := int64(-1)
+		if ok && len(fields) == 3 && fields[0] == object && fields[1] == "blob" {
+			size, err = strconv.ParseInt(fields[2], 10, 64)
+		}
+		if size < 0 || err != nil || int64(len(rest)) < size+1 || rest[size] != '\n' {
+			return errors.New("无法解析 LFS 指针对象")
+		}
+		if !validLFSPointer(rest[:size]) {
+			return fmt.Errorf("文件 %s 未转换为 LFS 指针：请检查 LFS filter 配置", names[position])
+		}
+		output = rest[size+1:]
+	}
+	return nil
 }

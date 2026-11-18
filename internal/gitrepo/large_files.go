@@ -194,25 +194,25 @@ func (repo *Repository) inspectionAttributes(ctx context.Context, paths []string
 	return result, nil
 }
 
-func (repo *Repository) inspectionBinary(ctx context.Context, attribute string, sample []byte, drivers map[string]*bool) (bool, error) {
+func (repo *Repository) inspectionBinary(ctx context.Context, attribute string, sampleBinary bool, drivers map[string]*bool) (bool, error) {
 	switch attribute {
 	case "unset":
 		return true, nil
 	case "set":
 		return false, nil
 	case "", "unspecified":
-		return bytes.IndexByte(sample, 0) >= 0, nil
+		return sampleBinary, nil
 	}
 	if binary, exists := drivers[attribute]; exists {
 		if binary != nil {
 			return *binary, nil
 		}
-		return bytes.IndexByte(sample, 0) >= 0, nil
+		return sampleBinary, nil
 	}
 	output, err := repo.git(ctx, "config", "--type=bool", "--get", "diff."+attribute+".binary")
 	if exitCode(err, 1) {
 		drivers[attribute] = nil
-		return bytes.IndexByte(sample, 0) >= 0, nil
+		return sampleBinary, nil
 	}
 	if err != nil {
 		return false, err
@@ -237,11 +237,13 @@ func (repo *Repository) inspectWorktreeFiles(ctx context.Context, paths []string
 	defer root.Close()
 	files := make([]FileInspection, 0, len(paths))
 	drivers := make(map[string]*bool)
+	// 所有路径共用一次元数据目录解析，避免逐个路径启动 rev-parse。
+	guard := repo.newAncestorGuard()
 	for _, path := range paths {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		if err := repo.checkConflictAncestors(ctx, root, path); err != nil {
+		if err := guard.check(ctx, root, path); err != nil {
 			if errors.Is(err, errUnsupportedAncestor) {
 				continue
 			}
@@ -279,7 +281,7 @@ func (repo *Repository) inspectWorktreeFiles(ctx context.Context, paths []string
 			return nil, fmt.Errorf("读取时文件已变化，请刷新：%s", path)
 		}
 		attribute := attributes[path]
-		binary, err := repo.inspectionBinary(ctx, attribute.diff, sample, drivers)
+		binary, err := repo.inspectionBinary(ctx, attribute.diff, bytes.IndexByte(sample, 0) >= 0, drivers)
 		if err != nil {
 			return nil, err
 		}
@@ -329,48 +331,48 @@ func (repo *Repository) inspectStagedFiles(ctx context.Context) (FileInspectionR
 		return FileInspectionReport{}, err
 	}
 	head, _, _ := strings.Cut(token, "\n")
-	args := []string{"diff", "--cached", "--name-only", "-z", "--no-renames", "--no-ext-diff", "--no-textconv", "--diff-filter=ACMT"}
+	// 一次 raw diff 同时给出待提交路径及其索引模式和对象，代替 name-only 加整份 ls-files：
+	// 后者在大仓库会超过输出上限。commitToken 的 write-tree 已保证索引没有冲突阶段，
+	// 因此新端模式与对象就是该路径唯一的暂存版本。
+	// 固定 orderFile 使顺序与索引一致，不受用户配置影响。
+	args := []string{"-c", "diff.orderFile=" + os.DevNull, "diff", "--cached", "--raw", "-z", "--no-abbrev", "--no-renames",
+		"--no-relative", "--no-ext-diff", "--no-textconv", "--diff-filter=ACMT"}
 	if head != "" {
 		args = append(args, head)
 	}
-	output, err := repo.git(ctx, append(args, "--")...)
+	entries := []inspectionIndexEntry{}
+	paths := []string{}
+	var pending *inspectionIndexEntry
+	err = runRecords(ctx, repo.Path, 30*time.Second, func(record string) error {
+		if pending == nil {
+			if record == "" {
+				return nil
+			}
+			entry, err := parseInspectionRaw(record)
+			if err != nil {
+				return err
+			}
+			pending = &entry
+			return nil
+		}
+		entry := *pending
+		pending = nil
+		entry.path = record
+		if entry.mode != "100644" && entry.mode != "100755" && entry.mode != "120000" {
+			return nil
+		}
+		if err := validPath(entry.path); err != nil {
+			return err
+		}
+		entries = append(entries, entry)
+		paths = append(paths, entry.path)
+		return nil
+	}, append(args, "--")...)
 	if err != nil {
 		return FileInspectionReport{}, err
 	}
-	selected := make(map[string]bool)
-	for _, path := range strings.Split(output, "\x00") {
-		if path != "" {
-			selected[path] = true
-		}
-	}
-	entries := []inspectionIndexEntry{}
-	paths := []string{}
-	if len(selected) != 0 {
-		output, err = repo.git(ctx, "ls-files", "--stage", "-z")
-		if err != nil {
-			return FileInspectionReport{}, err
-		}
-		for _, record := range strings.Split(output, "\x00") {
-			metadata, path, ok := strings.Cut(record, "\t")
-			if !ok || !selected[path] {
-				continue
-			}
-			fields := strings.Fields(metadata)
-			if len(fields) != 3 || fields[2] != "0" {
-				return FileInspectionReport{}, errors.New("索引文件没有唯一暂存版本")
-			}
-			if fields[0] != "100644" && fields[0] != "100755" && fields[0] != "120000" {
-				continue
-			}
-			if err := validPath(path); err != nil {
-				return FileInspectionReport{}, err
-			}
-			if err := validCommitHash(fields[1]); err != nil {
-				return FileInspectionReport{}, err
-			}
-			entries = append(entries, inspectionIndexEntry{path: path, mode: fields[0], oid: fields[1]})
-			paths = append(paths, path)
-		}
+	if pending != nil {
+		return FileInspectionReport{}, errors.New("无法解析暂存文件列表")
 	}
 	sizes, err := repo.inspectionBlobSizes(ctx, entries)
 	if err != nil {
@@ -380,22 +382,22 @@ func (repo *Repository) inspectStagedFiles(ctx context.Context) (FileInspectionR
 	if err != nil {
 		return FileInspectionReport{}, err
 	}
+	contents, err := repo.inspectionBlobContents(ctx, entries, sizes)
+	if err != nil {
+		return FileInspectionReport{}, err
+	}
 	files := make([]FileInspection, 0, len(entries))
 	drivers := make(map[string]*bool)
 	for _, entry := range entries {
-		size := sizes[entry.oid]
-		sample, err := repo.inspectionBlobSample(ctx, entry.oid, size)
-		if err != nil {
-			return FileInspectionReport{}, err
-		}
+		content := contents[entry.oid]
 		attribute := attributes[entry.path]
-		binary, err := repo.inspectionBinary(ctx, attribute.diff, sample, drivers)
+		binary, err := repo.inspectionBinary(ctx, attribute.diff, content.binary, drivers)
 		if err != nil {
 			return FileInspectionReport{}, err
 		}
 		files = append(files, FileInspection{
-			Path: entry.path, Size: size, Binary: binary, LFS: attribute.filter == "lfs",
-			Pointer:     entry.mode != "120000" && size == int64(len(sample)) && isLFSPointer(sample),
+			Path: entry.path, Size: sizes[entry.oid], Binary: binary, LFS: attribute.filter == "lfs",
+			Pointer:     entry.mode != "120000" && content.pointer,
 			Fingerprint: entry.oid,
 		})
 	}
@@ -407,6 +409,20 @@ func (repo *Repository) inspectStagedFiles(ctx context.Context) (FileInspectionR
 		return FileInspectionReport{}, errors.New("暂存区已变化，请重新检查")
 	}
 	return FileInspectionReport{Files: files, Token: token}, nil
+}
+
+// parseInspectionRaw 解析 raw diff 的元数据记录 ":旧模式 新模式 旧对象 新对象 状态"，返回新端（索引）版本。
+func parseInspectionRaw(record string) (inspectionIndexEntry, error) {
+	invalid := errors.New("无法解析暂存文件列表")
+	metadata, ok := strings.CutPrefix(record, ":")
+	fields := strings.Fields(metadata)
+	if !ok || len(fields) != 5 || fields[4] == "" || !strings.ContainsRune("ACMT", rune(fields[4][0])) {
+		return inspectionIndexEntry{}, invalid
+	}
+	if err := validCommitHash(fields[3]); err != nil {
+		return inspectionIndexEntry{}, err
+	}
+	return inspectionIndexEntry{mode: fields[1], oid: fields[3]}, nil
 }
 
 func (repo *Repository) inspectionBlobSizes(ctx context.Context, entries []inspectionIndexEntry) (map[string]int64, error) {
@@ -457,6 +473,156 @@ func (writer *inspectionSampleWriter) Write(data []byte) (int, error) {
 		writer.cancel()
 	}
 	return count, nil
+}
+
+// inspectionBatchLimit 以内的 blob 由一次 cat-file --batch 顺序读取样本；更大的对象经由 batch
+// 会把全部内容灌进管道，仍单独读取并在取足样本后结束进程。
+const inspectionBatchLimit = 1 << 20
+
+type inspectionBlobContent struct {
+	binary  bool
+	pointer bool
+}
+
+func classifyInspectionBlob(sample []byte, size int64) inspectionBlobContent {
+	return inspectionBlobContent{
+		binary:  bytes.IndexByte(sample, 0) >= 0,
+		pointer: size == int64(len(sample)) && isLFSPointer(sample),
+	}
+}
+
+// inspectionBlobContents 只缓存按对象得出的样本分类，路径属性在生成报告时单独应用。
+func (repo *Repository) inspectionBlobContents(ctx context.Context, entries []inspectionIndexEntry, sizes map[string]int64) (map[string]inspectionBlobContent, error) {
+	contents := make(map[string]inspectionBlobContent, len(entries))
+	batch := blobBatchWriter{contents: contents}
+	for _, entry := range entries {
+		if _, seen := contents[entry.oid]; seen {
+			continue
+		}
+		contents[entry.oid] = inspectionBlobContent{}
+		size := sizes[entry.oid]
+		switch {
+		case size == 0:
+			continue
+		case size > inspectionBatchLimit:
+			sample, err := repo.inspectionBlobSample(ctx, entry.oid, size)
+			if err != nil {
+				return nil, err
+			}
+			contents[entry.oid] = classifyInspectionBlob(sample, size)
+		default:
+			batch.oids = append(batch.oids, entry.oid)
+			batch.sizes = append(batch.sizes, size)
+		}
+	}
+	if len(batch.oids) == 0 {
+		return contents, nil
+	}
+	processCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	batch.cancel = cancel
+	err := runTo(processCtx, repo.Path, strings.Join(batch.oids, "\n")+"\n", 2*time.Minute, &batch,
+		func() string { return "" }, "cat-file", "--batch")
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	if batch.err != nil {
+		return nil, batch.err
+	}
+	if err != nil {
+		return nil, err
+	}
+	if batch.index != len(batch.oids) || batch.body || len(batch.header) != 0 {
+		return nil, errors.New("暂存文件对象内容不完整")
+	}
+	return contents, nil
+}
+
+// blobBatchWriter 解析 cat-file --batch 的 "<对象> blob <大小>\n<内容>\n" 序列，
+// 逐个分类并复用同一采样缓冲区，避免样本内存随对象数增长。
+type blobBatchWriter struct {
+	oids     []string
+	sizes    []int64
+	contents map[string]inspectionBlobContent
+	cancel   context.CancelFunc
+	index    int
+	header   []byte
+	body     bool
+	// remaining 是当前对象尚未读取的内容字节数，加上结尾换行。
+	remaining int64
+	sample    []byte
+	err       error
+}
+
+func (writer *blobBatchWriter) Write(data []byte) (int, error) {
+	if writer.err != nil {
+		return 0, writer.err
+	}
+	size := len(data)
+	for len(data) > 0 {
+		if !writer.body {
+			end := bytes.IndexByte(data, '\n')
+			length := end
+			if end < 0 {
+				length = len(data)
+			}
+			if len(writer.header)+length > 256 {
+				return 0, writer.fail(errors.New("无法解析暂存文件对象"))
+			}
+			writer.header = append(writer.header, data[:length]...)
+			if end < 0 {
+				break
+			}
+			data = data[end+1:]
+			if err := writer.begin(string(writer.header)); err != nil {
+				return 0, writer.fail(err)
+			}
+			writer.header = writer.header[:0]
+			continue
+		}
+		count := int64(len(data))
+		if count > writer.remaining {
+			count = writer.remaining
+		}
+		content := data[:count]
+		writer.remaining -= count
+		data = data[count:]
+		if writer.remaining == 0 {
+			// 最后一个字节是对象之后的换行，不属于内容。
+			if content[len(content)-1] != '\n' {
+				return 0, writer.fail(errors.New("无法解析暂存文件对象"))
+			}
+			content = content[:len(content)-1]
+		}
+		if room := inspectionSampleLimit - len(writer.sample); room > 0 {
+			writer.sample = append(writer.sample, content[:min(room, len(content))]...)
+		}
+		if writer.remaining == 0 {
+			writer.contents[writer.oids[writer.index]] = classifyInspectionBlob(writer.sample, writer.sizes[writer.index])
+			writer.index++
+			writer.body, writer.sample = false, writer.sample[:0]
+		}
+	}
+	return size, nil
+}
+
+func (writer *blobBatchWriter) begin(header string) error {
+	fields := strings.Fields(header)
+	if writer.index >= len(writer.oids) || len(fields) != 3 || fields[0] != writer.oids[writer.index] || fields[1] != "blob" {
+		return errors.New("暂存文件对象无效")
+	}
+	size, err := strconv.ParseInt(fields[2], 10, 64)
+	if err != nil || size != writer.sizes[writer.index] {
+		return errors.New("暂存文件对象内容不完整")
+	}
+	writer.body, writer.remaining = true, size+1
+	return nil
+}
+
+func (writer *blobBatchWriter) fail(err error) error {
+	writer.err = err
+	writer.cancel()
+	return err
 }
 
 func (repo *Repository) inspectionBlobSample(ctx context.Context, oid string, size int64) ([]byte, error) {

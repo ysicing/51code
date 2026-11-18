@@ -22,16 +22,29 @@ type Recent struct {
 }
 
 type Manager struct {
-	mu      sync.Mutex
+	// mu 保护内存状态，持有期间不做磁盘 I/O，主线程的 Library() 不会等待 fsync。
+	mu sync.Mutex
+	// writeMu 串行化所有修改：在其内基于最新已保存状态计算并落盘，成功后才替换内存，
+	// 因此后写的不会被先写的覆盖，落盘失败时内存仍与磁盘一致。获取顺序固定为 writeMu → mu。
+	writeMu sync.Mutex
 	file    string
 	library Library
 	open    map[string]*gitrepo.Repository
+	// Remember 的写入标记与库状态一起提交，分组移动不会改变标记。
+	// 写入同时持有 writeMu 和 mu，读取刷新起点用 mu，合并时用 writeMu。
+	rememberVersion uint64
+	rememberedAt    map[string]uint64
 	// loadProblem 记录启动时已备份并跳过的损坏记录，供界面提示。
 	loadProblem error
 }
 
 func New(file string) (*Manager, error) {
-	manager := &Manager{file: file, library: emptyLibrary(), open: map[string]*gitrepo.Repository{}}
+	manager := &Manager{
+		file:         file,
+		library:      emptyLibrary(),
+		open:         map[string]*gitrepo.Repository{},
+		rememberedAt: map[string]uint64{},
+	}
 	data, err := os.ReadFile(file)
 	if errors.Is(err, os.ErrNotExist) {
 		return manager, nil
@@ -111,13 +124,9 @@ func (manager *Manager) Open(ctx context.Context, path string) (gitrepo.Snapshot
 	if err != nil {
 		return state, err
 	}
-	manager.mu.Lock()
-	defer manager.mu.Unlock()
-	next := copyLibrary(manager.library)
-	updateEntry(&next, state)
-	if err := manager.saveLocked(next); err != nil {
-		return state, err
-	}
-	manager.open[repo.Path] = repo
-	return state, nil
+	_, err = manager.update(func(next *Library) error {
+		updateEntry(next, state)
+		return nil
+	}, func() { manager.open[repo.Path] = repo })
+	return state, err
 }

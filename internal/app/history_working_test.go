@@ -6,6 +6,7 @@ package app
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -528,7 +529,10 @@ func TestNativeHistoryWorkingWriteGuards(t *testing.T) {
 		}
 		app.readTask, app.busy, app.writable = nil, false, true
 	}
-	app.repository.snapshot.Files[0].Conflict = true
+	// 快照文件视为不可变（界面缓存按切片标识失效），按刷新路径整体替换。
+	files := slices.Clone(app.repository.snapshot.Files)
+	files[0].Conflict = true
+	app.repository.snapshot.Files = files
 	app.selectedFile = ""
 	tester := ui.NewTester(app.view, 1024, 680)
 	if err := tester.Click("hello.txt"); err != nil {

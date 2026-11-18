@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 )
 
 const commitContextLimit = 96 << 10
@@ -53,16 +54,18 @@ func (repo *Repository) CommitContext(ctx context.Context) (CommitContext, error
 		head = strings.TrimSpace(head)
 	}
 	// 固定树对象保证发送的是同一份暂存快照，不执行仓库自定义 diff 或 textconv。
-	diff, err := repo.git(ctx, "diff", "--no-ext-diff", "--no-textconv", "--no-renames",
+	// 只读取到上限即结束 Git：超大差异不必完整生成，也不会因超过通用输出上限而丢失 ErrCommitContextTooLarge。
+	diff, tooLarge, err := runCapped(ctx, repo.Path, "", 30*time.Second, commitContextLimit,
+		"diff", "--no-ext-diff", "--no-textconv", "--no-renames",
 		"--no-color", "--submodule=short", "--unified=3", head, tree, "--")
 	if err != nil {
 		return CommitContext{}, err
 	}
+	if tooLarge {
+		return CommitContext{Token: token}, ErrCommitContextTooLarge
+	}
 	if strings.TrimSpace(diff) == "" {
 		return CommitContext{}, errors.New("没有已暂存的变更")
-	}
-	if len(diff) > commitContextLimit {
-		return CommitContext{Token: token}, ErrCommitContextTooLarge
 	}
 	current, err := repo.commitToken(ctx)
 	if err != nil {

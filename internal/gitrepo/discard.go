@@ -35,7 +35,9 @@ type discardState struct {
 
 // DiscardPreview 绑定工作区原始内容、索引和 HEAD；不支持目录、链接、冲突和超过 4 MiB 的文件。
 func (repo *Repository) DiscardPreview(ctx context.Context, path string) (DiscardPreview, error) {
-	repo.mu.Lock()
+	if err := repo.lockHistory(ctx); err != nil {
+		return DiscardPreview{}, err
+	}
 	defer repo.mu.Unlock()
 	state, err := repo.discardState(ctx, path)
 	return state.view, err
@@ -152,7 +154,9 @@ func (repo *Repository) discardState(ctx context.Context, path string) (discardS
 // Discard 只修改工作区。recoveryDir 由桌面层提供，核心不依赖平台数据目录。
 // 恢复副本持久化成功且版本仍匹配后才写文件；外部编辑器不参与此进程的锁。
 func (repo *Repository) Discard(ctx context.Context, path, token, recoveryDir string) (backup string, err error) {
-	repo.mu.Lock()
+	if err := repo.lockHistory(ctx); err != nil {
+		return "", err
+	}
 	defer repo.mu.Unlock()
 	state, err := repo.discardState(ctx, path)
 	if err != nil {

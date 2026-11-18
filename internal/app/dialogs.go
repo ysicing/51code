@@ -5,6 +5,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -431,7 +432,7 @@ func (app *nativeApp) chooseScan() {
 	}
 	app.scanning = true
 	app.runTask(locales.ScanningFolders(), true, func(ctx context.Context) (func(), error) {
-		result, err := app.service.Scan(ctx, paths[0])
+		result, err := keepPartialScan(app.service.Scan(ctx, paths[0]))
 		return func() {
 			app.scanning = false
 			if err == nil {
@@ -441,6 +442,18 @@ func (app *nativeApp) chooseScan() {
 			}
 		}, err
 	})
+}
+
+// keepPartialScan 处理扫描超时或中途出错：已找到部分仓库时仍让用户先添加，
+// 标记为未扫描完整并把原因放在提示首行，而不是丢弃结果只显示错误。
+// 用户主动取消仍按取消处理，不弹出结果。
+func keepPartialScan(result workspace.ScanResult, err error) (workspace.ScanResult, error) {
+	if err == nil || errors.Is(err, context.Canceled) || len(result.Repositories) == 0 {
+		return result, err
+	}
+	result.Truncated = true
+	result.Warnings = append([]string{err.Error()}, result.Warnings...)
+	return result, nil
 }
 
 func (app *nativeApp) scanDialog() {

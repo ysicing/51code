@@ -123,6 +123,9 @@ func (app *nativeApp) readSelection(ctx context.Context, path, file string, stag
 	if err != nil {
 		return nil, err
 	}
+	if result.diff.Truncated {
+		return result, nil
+	}
 	result.patch, err = app.service.Patch(ctx, path, file, staged)
 	return result, err
 }
@@ -206,7 +209,9 @@ func (app *nativeApp) setDiff(diff gitrepo.Diff) {
 	app.diffViews, app.diffNames = nil, nil
 	app.hunkOffsets = nil
 	patches, err := editor.ParsePatch(diff.Text)
-	if err == nil && !diff.Truncated {
+	// 多文件差异的每个 DiffView 都按全文高度排进同一个滚动区，无法虚拟化；
+	// 文件过多时退回可虚拟化的原始差异文本。
+	if err == nil && !diff.Truncated && len(patches) <= nativeMaxDiffViews {
 		for _, patch := range patches {
 			if patch.Binary || len(patch.Hunks) == 0 {
 				// 混合提交保留完整原始差异，避免隐藏二进制、重命名或权限变更。
@@ -234,11 +239,18 @@ func (app *nativeApp) setDiff(diff gitrepo.Diff) {
 			}
 		}
 	}
-	app.rawDiff = editor.State{
-		Buffer: editor.NewBuffer(diff.Text), ReadOnly: true, SoftWrap: app.prefs.Wrap,
-		Label: locales.DiffText(), NoScrollPastEnd: true,
+	// 原始差异只在没有结构化差异视图时显示（见 fileDiffPanel），其余情况不建 Buffer。
+	app.rawDiff = editor.State{}
+	if len(app.diffViews) == 0 {
+		app.rawDiff = editor.State{
+			Buffer: editor.NewBuffer(diff.Text), ReadOnly: true, SoftWrap: app.prefs.Wrap,
+			Label: locales.DiffText(), NoScrollPastEnd: true,
+		}
 	}
 }
+
+// nativeMaxDiffViews 是多文件差异逐文件渲染的上限。
+const nativeMaxDiffViews = 32
 
 func patchHunkOffsets(patch editor.FilePatch) []int {
 	var offsets []int

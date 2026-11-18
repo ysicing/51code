@@ -12,10 +12,13 @@ import (
 )
 
 type nativeFileViewer struct {
-	full           bool
-	side           int
-	sources        [2]*gitrepo.FileContent
-	states         [2]editor.State
+	full    bool
+	side    int
+	sources [2]*gitrepo.FileContent
+	states  [2]editor.State
+	// built 标记 states[i] 是否已按 sources[i] 构建。全文视图首次显示某个版本时才建 Buffer
+	// （含语法识别），只看差异时不再为两个版本各建一份；版本内容变化时由 setSources 清除。
+	built          [2]bool
 	contextChanged bool
 }
 
@@ -46,14 +49,7 @@ func (viewer *nativeFileViewer) setSources(diff gitrepo.Diff) {
 		if source != nil && previous != nil && *source == *previous {
 			continue
 		}
-		viewer.states[index] = editor.State{}
-		if source != nil && source.Present && !source.Binary && !source.Truncated && !source.Unsupported {
-			buffer := editor.NewBuffer(source.Text)
-			buffer.SetLanguage(editor.LanguageForText(source.Path, source.Text))
-			viewer.states[index] = editor.State{
-				Buffer: buffer, ReadOnly: true, Label: locales.FileContentLabel(), NoScrollPastEnd: true,
-			}
-		}
+		viewer.states[index], viewer.built[index] = editor.State{}, false
 	}
 	viewer.sources = sources
 	if !sameFile {
@@ -63,6 +59,22 @@ func (viewer *nativeFileViewer) setSources(diff gitrepo.Diff) {
 		}
 	}
 	viewer.contextChanged = false
+}
+
+// state 返回某个版本的全文编辑器状态，首次访问时构建。内容相同的版本保留原状态（含查找与滚动）。
+func (viewer *nativeFileViewer) state(index int) *editor.State {
+	if !viewer.built[index] {
+		viewer.built[index] = true
+		source := viewer.sources[index]
+		if source != nil && source.Present && !source.Binary && !source.Truncated && !source.Unsupported {
+			buffer := editor.NewBuffer(source.Text)
+			buffer.SetLanguage(editor.LanguageForText(source.Path, source.Text))
+			viewer.states[index] = editor.State{
+				Buffer: buffer, ReadOnly: true, Label: locales.FileContentLabel(), NoScrollPastEnd: true,
+			}
+		}
+	}
+	return &viewer.states[index]
 }
 
 func fileVersionLabel(source *gitrepo.FileContent) string {
@@ -242,7 +254,7 @@ func (app *nativeApp) fileDiffPanel(c *ui.Context) {
 func (app *nativeApp) fullFilePanel(c *ui.Context) {
 	viewer := &app.fileViewer
 	source := viewer.sources[viewer.side]
-	state := &viewer.states[viewer.side]
+	state := viewer.state(viewer.side)
 	ui.Row(c).FillWidth().Padding(0, 12, 6).Gap(8).AlignItems(ui.Center).Children(func() {
 		ui.MenuButton(c, fileVersionLabel(source), app.fileVersionMenu).Label(locales.FileVersion())
 		ui.Button(c, locales.FileHistory()).OnClick(app.fileHistoryAction)

@@ -5,7 +5,6 @@ package app
 
 import (
 	"fmt"
-	"slices"
 	"strings"
 	"time"
 
@@ -32,65 +31,10 @@ type historyGraphRow struct {
 	Edges                  []historyEdge
 }
 
-// 轨道颜色随父提交传递，不随列压缩改变；筛选掉的提交不能被画成直接相连。
+// commitGraph 一次性计算提交图，算法见 historyGraphBuilder。
 func commitGraph(commits []gitrepo.Commit) []historyGraphRow {
-	positions := make(map[string]int, len(commits))
-	for index, commit := range commits {
-		positions[commit.Hash] = index
-	}
-	var lanes []historyLane
-	nextColor := 0
-	result := make([]historyGraphRow, len(commits))
-	for index, commit := range commits {
-		row := &result[index]
-		for _, lane := range lanes {
-			row.Incoming = append(row.Incoming, lane.Color)
-		}
-		column := slices.IndexFunc(lanes, func(lane historyLane) bool { return lane.Hash == commit.Hash })
-		if column < 0 {
-			column = len(lanes)
-			lanes = append(lanes, historyLane{Hash: commit.Hash, Color: nextColor})
-			nextColor++
-		}
-		row.Column, row.Color = column, lanes[column].Color
-		after := slices.Clone(lanes)
-		after = slices.Delete(after, column, column+1)
-		for parentIndex, parent := range commit.Parents {
-			if position, ok := positions[parent]; !ok || position <= index {
-				continue
-			}
-			target := slices.IndexFunc(after, func(lane historyLane) bool { return lane.Hash == parent })
-			if target >= 0 {
-				if parentIndex == 0 {
-					after[target].Color = row.Color
-				}
-				continue
-			}
-			lane := historyLane{Hash: parent, Color: row.Color}
-			if parentIndex == 0 {
-				after = slices.Insert(after, min(column, len(after)), lane)
-			} else {
-				lane.Color = nextColor
-				nextColor++
-				after = append(after, lane)
-			}
-		}
-		for from, lane := range lanes {
-			targets := []string{lane.Hash}
-			if from == column {
-				targets = commit.Parents
-			}
-			for _, hash := range targets {
-				to := slices.IndexFunc(after, func(lane historyLane) bool { return lane.Hash == hash })
-				if to >= 0 {
-					row.Edges = append(row.Edges, historyEdge{From: from, To: to, Color: after[to].Color})
-				}
-			}
-		}
-		row.Columns = max(len(lanes), len(after))
-		lanes = after
-	}
-	return result
+	rows, _ := newHistoryGraphBuilder().append(commits)
+	return rows
 }
 
 func historyColor(theme *ui.Theme, index int) ui.Color {
@@ -236,7 +180,7 @@ func (app *nativeApp) historyPanel(c *ui.Context) {
 	ui.Divider(c)
 	workingOffset := app.historyWorkingOffset()
 	if len(app.history) == 0 && workingOffset == 0 {
-		app.historyGraph, app.historyGraphSource = nil, nil
+		app.historyGraph, app.historyGraphSource, app.historyGraphCache = nil, nil, nil
 		ui.Column(c).Key("empty-history").Grow(1).FillWidth().Center().Children(func() {
 			message := locales.NoMatchingCommits()
 			if app.screen == "search" && !app.historyLoaded {
@@ -246,29 +190,14 @@ func (app *nativeApp) historyPanel(c *ui.Context) {
 		})
 		return
 	}
-	// 搜索和分页会替换切片或改变长度；图谱与引用宽度一起缓存，避免拖动分隔线时反复扫描历史。
-	var source *gitrepo.Commit
-	if len(app.history) > 0 {
-		source = &app.history[0]
+	// 图谱、图谱列宽与引用列宽一起缓存，失效条件见 historyGraphCache；翻页时只续算新增部分。
+	if app.historyGraphCache == nil {
+		app.historyGraphCache = &historyGraphCache{}
 	}
-	head := app.repository.snapshot.Head
-	if app.historyGraphSource != source || len(app.historyGraph) != len(app.history)+workingOffset ||
-		app.historyGraphWorking != (workingOffset != 0) || app.historyGraphHead != head {
-		app.historyGraph = historyGraphWithWorking(app.history, head, workingOffset != 0)
-		app.historyGraphSource, app.historyGraphHead = source, head
-		app.historyGraphWorking = workingOffset != 0
-		app.historyRefsWidth = 0
-		for _, commit := range app.history {
-			if commit.Refs != "" {
-				width, _ := c.MeasureText(0, historyRefs(commit.Refs, c.Theme())...)
-				app.historyRefsWidth = max(app.historyRefsWidth, width)
-			}
-		}
-	}
-	graphWidth := float32(80)
-	for _, row := range app.historyGraph {
-		graphWidth = max(graphWidth, 24+float32(row.Columns)*16)
-	}
+	cache := app.historyGraphCache
+	app.historyGraph = cache.update(c, app.history, app.repository.snapshot.Head, workingOffset != 0)
+	app.historyGraphSource = firstCommit(app.history)
+	graphWidth := cache.width
 	app.historyTableSelected = -1
 	if app.historyWorking && workingOffset != 0 {
 		app.historyTableSelected = 0
@@ -314,8 +243,8 @@ func (app *nativeApp) historyPanel(c *ui.Context) {
 	tableTheme.InactiveAccent, tableTheme.AccentText = tableTheme.Accent, theme.Text
 	ui.Themed(c, &tableTheme).Key(app.historyList).FillWidth().Grow(1).MinHeight(0).Children(func() {
 		messageWidth := float32(200)
-		if app.historyRefsWidth > 0 {
-			messageWidth += app.historyRefsWidth + 4 + tableTheme.Space(5)
+		if cache.refsWidth > 0 {
+			messageWidth += cache.refsWidth + 4 + tableTheme.Space(5)
 		}
 		columns := []ui.TableColumn{
 			{Title: locales.Graph(), Width: graphWidth, Fixed: true},
@@ -407,11 +336,8 @@ func (app *nativeApp) historyDetails(c *ui.Context) {
 		if app.viewedCommit.Hash == app.commitHash {
 			selected = &app.viewedCommit
 		}
-		for index := range app.history {
-			if app.history[index].Hash == app.commitHash {
-				selected = &app.history[index]
-				break
-			}
+		if commit := app.historyGraphCache.commit(app.history, app.commitHash); commit != nil {
+			selected = commit
 		}
 		if selected != nil {
 			ui.Text(c, selected.Subject).Bold().FontSize(15).MaxLines(1).Selectable().Tooltip(selected.Subject)
@@ -452,6 +378,8 @@ func (app *nativeApp) revisionFileList(c *ui.Context, files []gitrepo.CommitFile
 	theme.InactiveAccent, theme.AccentText = theme.Accent, theme.Text
 	panel := ui.Themed(c, &theme).Key(list).Fill().MinWidth(0)
 	collapsed := ui.Local(panel, "revision-directories", func() map[string]bool { return make(map[string]bool) })
+	cache := *ui.Local(panel, "revision-files", func() *nativeRevisionFiles { return &nativeRevisionFiles{} })
+	outline := *ui.Local(panel, "revision-outline", newNativeFileOutline)
 	panel.Children(func() {
 		ui.Column(c).FillWidth().Padding(6, 8).Gap(2).Children(func() {
 			ui.Text(c, locales.ChangedFiles(fmt.Sprint(len(files)))).FontSize(12).Bold()
@@ -473,32 +401,16 @@ func (app *nativeApp) revisionFileList(c *ui.Context, files []gitrepo.CommitFile
 			path = files[*selected].Path
 		}
 		// 选择索引与异步 Diff 回填共用原切片，排序时必须按路径恢复，避免索引指向其他文件。
-		slices.SortFunc(files, func(first, second gitrepo.CommitFile) int {
-			return compareNativeFiles(
-				gitrepo.File{Path: first.Path, Index: first.Status},
-				gitrepo.File{Path: second.Path, Index: second.Status},
-				app.prefs.FileSort, app.prefs.FileDescending, true,
-			)
-		})
-		*selected = slices.IndexFunc(files, func(file gitrepo.CommitFile) bool { return file.Path == path })
+		cache.sort(files, app.prefs.FileSort, app.prefs.FileDescending)
+		*selected = -1
+		if index, found := cache.indices[path]; found && path != "" {
+			*selected = index
+		} else {
+			path = ""
+		}
 		disabled := app.readTask != nil && app.readTask.kind != nativeReadDiff
 		if app.prefs.FileTree {
-			entries := make([]gitrepo.File, len(files))
-			indices := make(map[string]int, len(files))
-			for index, file := range files {
-				entries[index] = gitrepo.File{Path: file.Path, Index: file.Status}
-				indices[file.Path] = index
-			}
-			nodes := nativeFileNodes(entries, app.prefs.FileSort, app.prefs.FileDescending, true)
-			scroll := nativeFileScroll(ui.ScrollBoth(c).FillWidth().Grow(1).MinHeight(0))
-			scroll.Children(func() {
-				ui.Column(c).FillWidth().MinWidth(scroll.LayoutBounds().W).Children(func() {
-					tree := ui.TreeBase(c)
-					tree.Root.Label(label).Disabled(disabled).FillWidth().Children(func() {
-						app.revisionFileTree(c, tree, nodes, *collapsed, indices, selected, choose, 0)
-					})
-				})
-			})
+			app.revisionFileTree(c, cache.fileTree(files), outline, *collapsed, cache.indices, selected, path, label, disabled, choose)
 			return
 		}
 		list.Selected = selected

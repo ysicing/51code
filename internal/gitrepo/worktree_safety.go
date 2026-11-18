@@ -4,13 +4,17 @@
 package gitrepo
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // worktreePath 只移除 Git 输出的一次换行由调用方完成，路径本身的换行必须保留。
@@ -102,7 +106,39 @@ func parseWorktrees(output string) ([]Worktree, error) {
 	return result, nil
 }
 
+// worktrees 完整检查全部工作树，供列表展示；破坏性操作只需相关条目，
+// 应使用 worktreeEntries 加 inspectWorktrees 缩小范围。
 func (repo *Repository) worktrees(ctx context.Context, common string) ([]worktreeState, error) {
+	states, err := repo.worktreeEntries(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := inspectWorktrees(ctx, common, states, func(Worktree) bool { return true }); err != nil {
+		return nil, err
+	}
+	return states, nil
+}
+
+// inspectWorktrees 只完整检查 selected 选中的条目，每个约需 5 个 Git 进程并扫描整个工作区。
+// 未选中的条目只有列表信息（Dirty、Operation 等未读取），不能用于授权破坏性操作，
+// 也不应写入复核凭据。路径已有 Problem 的条目不再检查。
+func inspectWorktrees(ctx context.Context, common string, states []worktreeState, selected func(Worktree) bool) error {
+	for index := range states {
+		state := &states[index]
+		if state.Worktree.Problem == "" && selected(state.Worktree) {
+			if err := state.inspect(ctx, common); err != nil {
+				state.Worktree.Problem = err.Error()
+			}
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// worktreeEntries 只读取工作树列表并规范化路径，不为各工作树启动 Git 进程。
+func (repo *Repository) worktreeEntries(ctx context.Context) ([]worktreeState, error) {
 	output, err := repo.git(ctx, "worktree", "list", "--porcelain", "-z")
 	if err != nil {
 		return nil, err
@@ -127,12 +163,7 @@ func (repo *Repository) worktrees(ctx context.Context, common string) ([]worktre
 			info, linkErr := os.Lstat(worktree.Path)
 			if linkErr == nil && info.Mode()&os.ModeSymlink != 0 {
 				state.Worktree.Problem = "工作树目录已被符号链接替换，请先修复"
-			} else if err := state.inspect(ctx, common); err != nil {
-				state.Worktree.Problem = err.Error()
 			}
-		}
-		if err := ctx.Err(); err != nil {
-			return nil, err
 		}
 		result = append(result, state)
 	}
@@ -224,44 +255,107 @@ func (state *worktreeState) inspect(ctx context.Context, common string) error {
 	}
 	state.Worktree.Operation, state.OperationToken = operation.Kind, operation.Token
 	// 禁用可选索引写入及状态缓存，读取不得刷新索引或漏掉未跟踪、忽略文件。
-	state.Status, err = source.git(ctx, "--no-optional-locks", "-c", "core.fsmonitor=false",
+	// --ignored=matching 会逐个列出 node_modules 等目录下的文件，输出可远超 4 MiB；
+	// 流式解析并只保留摘要，复核凭据仍随任一文件状态变化而改变。
+	digest := sha256.New()
+	statusRecords := &nulRecords{}
+	pendingOriginal := false
+	statusRecords.handle = func(prefix []byte, length int) error {
+		if pendingOriginal {
+			pendingOriginal = false
+			if length == 0 {
+				return errors.New("工作树重命名状态不完整")
+			}
+			return nil
+		}
+		if length == 0 {
+			return nil
+		}
+		if length < 4 || prefix[2] != ' ' {
+			return errors.New("无法解析工作树文件状态")
+		}
+		if string(prefix[:2]) == "!!" {
+			state.Worktree.Ignored = true
+		} else {
+			state.Worktree.Dirty = true
+		}
+		pendingOriginal = bytes.ContainsAny(prefix[:2], "RC")
+		return nil
+	}
+	err = runTo(ctx, root, "", 30*time.Second, io.MultiWriter(digest, statusRecords), func() string { return "" },
+		"--no-optional-locks", "-c", "core.fsmonitor=false",
 		"-c", "core.untrackedCache=false", "-c", "core.ignoreStat=false", "status",
 		"--porcelain=v1", "-z", "--untracked-files=all", "--ignored=matching", "--ignore-submodules=none")
 	if err != nil {
 		return err
 	}
-	records := strings.Split(state.Status, "\x00")
-	for index := 0; index < len(records); index++ {
-		record := records[index]
-		if record == "" {
-			continue
-		}
-		if len(record) < 4 || record[2] != ' ' {
-			return errors.New("无法解析工作树文件状态")
-		}
-		if record[:2] == "!!" {
-			state.Worktree.Ignored = true
-		} else {
-			state.Worktree.Dirty = true
-		}
-		if strings.ContainsAny(record[:2], "RC") {
-			index++
-			if index >= len(records) || records[index] == "" {
-				return errors.New("工作树重命名状态不完整")
-			}
-		}
-	}
-	flags, err := source.git(ctx, "ls-files", "-v", "-z")
-	if err != nil {
+	if err := statusRecords.finish(); err != nil {
 		return err
 	}
-	for _, record := range strings.Split(flags, "\x00") {
+	if pendingOriginal {
+		return errors.New("工作树重命名状态不完整")
+	}
+	state.Status = hex.EncodeToString(digest.Sum(nil))
+	// 约 8 万个文件时输出即超过 4 MiB，因此逐条只检查首字节标记，不保留全文。
+	flagged := false
+	flags := &nulRecords{handle: func(prefix []byte, length int) error {
 		// Git status 会隐藏这些索引条目的本地编辑，不能据此授权删除数据。
-		if record != "" && (record[0] == 'S' || record[0] >= 'a' && record[0] <= 'z') {
-			return errors.New("索引含有 assume-unchanged 或 skip-worktree 条目，无法确认工作树数据已保存")
+		if length > 0 && (prefix[0] == 'S' || prefix[0] >= 'a' && prefix[0] <= 'z') {
+			flagged = true
 		}
+		return nil
+	}}
+	if err := runTo(ctx, root, "", 30*time.Second, flags, func() string { return "" }, "ls-files", "-v", "-z"); err != nil {
+		return err
+	}
+	if err := flags.finish(); err != nil {
+		return err
+	}
+	if flagged {
+		return errors.New("索引含有 assume-unchanged 或 skip-worktree 条目，无法确认工作树数据已保存")
 	}
 	return nil
+}
+
+// nulRecords 流式切分以 NUL 结尾的记录，每条只保留前 4 字节和长度，输出再大也只占常量内存。
+// Write 从不返回错误：exec 的复制协程遇到写错误会停止读取，子进程可能阻塞在满管道上直到超时；
+// 首个解析错误被记录下来，由调用方在命令结束后通过 finish 取得。
+type nulRecords struct {
+	handle func(prefix []byte, length int) error
+	prefix []byte
+	length int
+	err    error
+}
+
+func (records *nulRecords) Write(data []byte) (int, error) {
+	size := len(data)
+	for len(data) > 0 && records.err == nil {
+		end := bytes.IndexByte(data, 0)
+		chunk := data
+		if end >= 0 {
+			chunk = data[:end]
+		}
+		if room := 4 - len(records.prefix); room > 0 {
+			records.prefix = append(records.prefix, chunk[:min(room, len(chunk))]...)
+		}
+		records.length += len(chunk)
+		if end < 0 {
+			break
+		}
+		records.err = records.handle(records.prefix, records.length)
+		records.prefix, records.length = records.prefix[:0], 0
+		data = data[end+1:]
+	}
+	return size, nil
+}
+
+// finish 处理末尾缺少 NUL 的残余记录，并返回解析期间的首个错误。
+func (records *nulRecords) finish() error {
+	if records.err == nil && records.length > 0 {
+		records.err = records.handle(records.prefix, records.length)
+		records.prefix, records.length = records.prefix[:0], 0
+	}
+	return records.err
 }
 
 func (state *worktreeState) inspectLink(common string) error {

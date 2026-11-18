@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -245,6 +246,40 @@ func TestGitDirectoryMatchesRevParse(t *testing.T) {
 		if !worktreeSamePath(got, want) {
 			t.Fatalf("%s: git dir = %q, want %q", target.Path, got, want)
 		}
+	}
+}
+
+func TestGitfileParentComponentDetectsMergeThroughSymlink(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fixture requires POSIX symlink/.. resolution")
+	}
+	repo, dir := fixture(t)
+	git(t, dir, "commit", "--allow-empty", "-m", "base")
+	head := git(t, dir, "rev-parse", "HEAD")
+	actual := t.TempDir()
+	child := filepath.Join(actual, "child")
+	if err := os.Mkdir(child, 0700); err != nil {
+		t.Fatal(err)
+	}
+	metadata := filepath.Join(actual, "metadata")
+	if err := os.Rename(filepath.Join(dir, ".git"), metadata); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(dir, "metadata"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	testSymlink(t, child, filepath.Join(dir, "hop"))
+	write(t, dir, ".git", "gitdir: hop/../metadata\n")
+	write(t, metadata, "MERGE_HEAD", head+"\n")
+	if resolved := git(t, dir, "rev-parse", "--absolute-git-dir"); !worktreeSamePath(resolved, metadata) {
+		t.Fatalf("Git resolved gitfile to %q, want %q", resolved, metadata)
+	}
+	operation, err := repo.operation(context.Background())
+	if err != nil || operation.Kind != "merge" || operation.Token == "" {
+		t.Fatalf("merge not detected: %+v, %v", operation, err)
+	}
+	if directory, ok := localGitDirectory(dir); ok {
+		t.Fatalf("gitfile with parent path component accepted by fast path: %q", directory)
 	}
 }
 

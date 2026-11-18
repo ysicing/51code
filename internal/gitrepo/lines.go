@@ -51,7 +51,7 @@ func (repo *Repository) ApplyLines(ctx context.Context, path string, staged bool
 			return errors.New("所选行不存在，请刷新后重试")
 		}
 	}
-	before, err := repo.git(ctx, "cat-file", "blob", patch.indexHash)
+	before, err := repo.blobText(ctx, patch.indexHash)
 	if err != nil {
 		return err
 	}

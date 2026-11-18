@@ -19,7 +19,9 @@ type Stash struct {
 }
 
 func (repo *Repository) Stashes(ctx context.Context) ([]Stash, error) {
-	repo.mu.Lock()
+	if err := repo.lockHistory(ctx); err != nil {
+		return nil, err
+	}
 	defer repo.mu.Unlock()
 	return repo.stashes(ctx)
 }
@@ -73,7 +75,9 @@ func (repo *Repository) stashIndex(ctx context.Context, hash string) (int, error
 }
 
 func (repo *Repository) StashDiff(ctx context.Context, hash string) (Diff, error) {
-	repo.mu.Lock()
+	if err := repo.lockHistory(ctx); err != nil {
+		return Diff{}, err
+	}
 	defer repo.mu.Unlock()
 	if _, err := repo.stashIndex(ctx, hash); err != nil {
 		return Diff{}, err
@@ -83,7 +87,9 @@ func (repo *Repository) StashDiff(ctx context.Context, hash string) (Diff, error
 }
 
 func (repo *Repository) CreateStash(ctx context.Context, message string, includeUntracked bool) error {
-	repo.mu.Lock()
+	if err := repo.lockHistory(ctx); err != nil {
+		return err
+	}
 	defer repo.mu.Unlock()
 	if strings.ContainsRune(message, 0) || len(message) > 64<<10 {
 		return errors.New("贮藏说明无效或过长")
@@ -124,7 +130,8 @@ func (repo *Repository) CreateStash(ctx context.Context, message string, include
 		args = append(args, "--message", message)
 	}
 	args = append(args, "--")
-	if _, err := repo.git(ctx, args...); err != nil {
+	// stash push 会改写索引和工作区（含 LFS 文件），被 30 秒限制杀掉会留下 index.lock 和半还原的工作区。
+	if _, err := run(ctx, repo.Path, "", checkoutTimeout, args...); err != nil {
 		return err
 	}
 	after, err := repo.stashes(ctx)
@@ -138,7 +145,9 @@ func (repo *Repository) CreateStash(ctx context.Context, message string, include
 }
 
 func (repo *Repository) ApplyStash(ctx context.Context, hash string, pop bool) error {
-	repo.mu.Lock()
+	if err := repo.lockHistory(ctx); err != nil {
+		return err
+	}
 	defer repo.mu.Unlock()
 	operation, err := repo.operation(ctx)
 	if err != nil {
@@ -150,7 +159,8 @@ func (repo *Repository) ApplyStash(ctx context.Context, hash string, pop bool) e
 	if _, err := repo.stashIndex(ctx, hash); err != nil {
 		return err
 	}
-	if _, err := repo.git(ctx, "stash", "apply", hash); err != nil {
+	// 与 stash push 相同，应用贮藏会写工作区，不能沿用只读命令的 30 秒限制。
+	if _, err := run(ctx, repo.Path, "", checkoutTimeout, "stash", "apply", hash); err != nil {
 		return err
 	}
 	if pop {
@@ -162,7 +172,9 @@ func (repo *Repository) ApplyStash(ctx context.Context, hash string, pop bool) e
 }
 
 func (repo *Repository) DropStash(ctx context.Context, hash string) error {
-	repo.mu.Lock()
+	if err := repo.lockHistory(ctx); err != nil {
+		return err
+	}
 	defer repo.mu.Unlock()
 	return repo.dropStash(ctx, hash)
 }

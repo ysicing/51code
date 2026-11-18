@@ -27,6 +27,26 @@ func remoteBranchParts(reference string, remotes []gitrepo.RemoteConfig) (string
 }
 
 func (app *nativeApp) remoteSidebar(c *ui.Context) {
+	app.referenceSidebar(c, "远端", "远端分支树", nativeIcons["cloud"], app.remoteNodes, func(_ *nativeRefTree, reference string, item ui.Element) {
+		_, name := remoteBranchParts(reference, app.repository.remotes)
+		if name == "HEAD" {
+			item.Tooltip(reference + " · " + locales.RemoteHead())
+		} else {
+			item.ContextMenu(func(menu *ui.Menu) {
+				if menu.Item(locales.MergeBranchInto(reference, app.repository.snapshot.Branch)).
+					Disabled(!app.canMerge() || app.dialog != nil).Chosen() {
+					app.mergeDialogFrom("refs/remotes/" + reference)
+				}
+			})
+			if item.Clicked() && app.writable {
+				app.checkoutDialog(reference)
+			}
+		}
+	})
+}
+
+// remoteNodes 按远端分组构建远端分支节点，远端没有分支时也保留分组。
+func (app *nativeApp) remoteNodes(refs *nativeRefTree) {
 	groups := map[string][]string{}
 	defaults := map[string]string{}
 	for _, remote := range app.repository.remotes {
@@ -46,27 +66,11 @@ func (app *nativeApp) remoteSidebar(c *ui.Context) {
 		names = append(names, name)
 	}
 	slices.Sort(names)
-	var nodes []*nativeRefNode
+	refs.nodes = nil
 	for _, remote := range names {
-		nodes = append(nodes, &nativeRefNode{
+		refs.nodes = append(refs.nodes, &nativeRefNode{
 			name: remote, reference: remote, remote: true,
 			children: nativeReferenceNodes(groups[remote], remote+"/", "", defaults[remote]),
 		})
 	}
-	app.referenceSidebar(c, "远端", "远端分支树", nativeIcons["cloud"], nodes, func(reference string, item ui.Element) {
-		_, name := remoteBranchParts(reference, app.repository.remotes)
-		if name == "HEAD" {
-			item.Tooltip(reference + " · " + locales.RemoteHead())
-		} else {
-			item.ContextMenu(func(menu *ui.Menu) {
-				if menu.Item(locales.MergeBranchInto(reference, app.repository.snapshot.Branch)).
-					Disabled(!app.canMerge() || app.dialog != nil).Chosen() {
-					app.mergeDialogFrom("refs/remotes/" + reference)
-				}
-			})
-			if item.Clicked() && app.writable {
-				app.checkoutDialog(reference)
-			}
-		}
-	})
 }

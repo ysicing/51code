@@ -18,9 +18,9 @@ import (
 type Repository struct {
 	Path string
 	mu   sync.Mutex
-	// 以下读取缓存只在持有 mu 时访问，内容均由不可变的对象 ID 决定。
+	// 文件列表缓存只在持有 mu 时访问；blob 缓存见 read_cache.go，跨仓库共享总量上限。
+	// 内容均由不可变的对象 ID 决定。
 	changes changeCache
-	blobs   []cachedBlob
 }
 
 type File struct {
@@ -114,11 +114,7 @@ func (repo *Repository) pathFiles(ctx context.Context, paths []string) ([]File, 
 	if len(paths) == 0 || len(paths) > 64 {
 		return repo.files(ctx)
 	}
-	output, err := repo.git(ctx, append([]string{"status", "--porcelain=v2", "-z", "--untracked-files=all", "--"}, paths...)...)
-	if err != nil {
-		return nil, err
-	}
-	_, files, err := parseStatus(output)
+	_, files, err := repo.streamStatus(ctx, append([]string{"status", "--porcelain=v2", "-z", "--untracked-files=all", "--"}, paths...))
 	if err != nil {
 		return nil, err
 	}
@@ -148,88 +144,118 @@ func (repo *Repository) status(ctx context.Context, withBranch bool) (statusBran
 		// 显式要求精确计数，忽略用户的 status.aheadBehind=false。
 		args = append(args, "--branch", "--ahead-behind")
 	}
-	output, err := repo.git(ctx, args...)
-	if err != nil {
+	return repo.streamStatus(ctx, args)
+}
+
+// streamStatus 边读边解析 status 输出：大仓库（大量未跟踪文件）的完整输出可能超过 4 MiB，
+// 整段读入会使 Snapshot 失败、仓库无法打开。
+func (repo *Repository) streamStatus(ctx context.Context, args []string) (statusBranch, []File, error) {
+	parser := statusParser{files: []File{}}
+	if err := runRecords(ctx, repo.Path, 30*time.Second, parser.record, args...); err != nil {
 		return statusBranch{}, nil, err
 	}
-	return parseStatus(output)
+	return parser.finish()
 }
 
 func parseStatus(output string) (statusBranch, []File, error) {
-	var branch statusBranch
-	files := []File{}
-	invalid := errors.New("无法解析 Git 文件状态")
+	parser := statusParser{files: []File{}}
+	for _, record := range strings.Split(output, "\x00") {
+		if err := parser.record(record); err != nil {
+			return parser.branch, nil, err
+		}
+	}
+	return parser.finish()
+}
+
+var errInvalidStatus = errors.New("无法解析 Git 文件状态")
+
+// statusParser 逐条解析 porcelain v2 -z 记录；重命名记录的原路径是紧随其后的下一条记录。
+type statusParser struct {
+	branch   statusBranch
+	files    []File
+	upstream string
+	counted  bool
+	// renamed 为真时下一条记录是最后一个文件的原路径。
+	renamed bool
+}
+
+func (parser *statusParser) record(record string) error {
+	if parser.renamed {
+		parser.renamed = false
+		if record == "" {
+			return errors.New("Git 重命名记录不完整")
+		}
+		parser.files[len(parser.files)-1].OriginalPath = record
+		return nil
+	}
+	if record == "" {
+		return nil
+	}
 	// v2 用 "." 表示未变化，转换为 v1 的空格以保持 File 的既有取值。
 	state := func(code string) (string, string) {
 		return strings.ReplaceAll(code[:1], ".", " "), strings.ReplaceAll(code[1:2], ".", " ")
 	}
-	upstream, counted := "", false
-	records := strings.Split(output, "\x00")
-	for index := 0; index < len(records); index++ {
-		record := records[index]
-		if record == "" {
-			continue
+	branch := &parser.branch
+	switch record[0] {
+	case '#':
+		key, value, _ := strings.Cut(strings.TrimPrefix(record, "# "), " ")
+		switch key {
+		case "branch.oid":
+			if value != "(initial)" {
+				branch.head = value
+			}
+		case "branch.head":
+			if value == "(detached)" {
+				branch.detached = true
+			} else {
+				branch.branch = value
+			}
+		case "branch.upstream":
+			parser.upstream = value
+		case "branch.ab":
+			fields := strings.Fields(value)
+			if len(fields) != 2 {
+				return errInvalidStatus
+			}
+			ahead, aheadErr := strconv.Atoi(strings.TrimPrefix(fields[0], "+"))
+			behind, behindErr := strconv.Atoi(strings.TrimPrefix(fields[1], "-"))
+			if aheadErr != nil || behindErr != nil {
+				return errInvalidStatus
+			}
+			branch.ahead, branch.behind, parser.counted = ahead, behind, true
 		}
-		switch record[0] {
-		case '#':
-			key, value, _ := strings.Cut(strings.TrimPrefix(record, "# "), " ")
-			switch key {
-			case "branch.oid":
-				if value != "(initial)" {
-					branch.head = value
-				}
-			case "branch.head":
-				if value == "(detached)" {
-					branch.detached = true
-				} else {
-					branch.branch = value
-				}
-			case "branch.upstream":
-				upstream = value
-			case "branch.ab":
-				fields := strings.Fields(value)
-				if len(fields) != 2 {
-					return branch, nil, invalid
-				}
-				ahead, aheadErr := strconv.Atoi(strings.TrimPrefix(fields[0], "+"))
-				behind, behindErr := strconv.Atoi(strings.TrimPrefix(fields[1], "-"))
-				if aheadErr != nil || behindErr != nil {
-					return branch, nil, invalid
-				}
-				branch.ahead, branch.behind, counted = ahead, behind, true
-			}
-		case '1', '2', 'u':
-			// 字段数：普通 8、重命名 9、冲突 10，之后是可含空格的路径。
-			count := map[byte]int{'1': 9, '2': 10, 'u': 11}[record[0]]
-			fields := strings.SplitN(record, " ", count)
-			if len(fields) != count || len(fields[1]) != 2 {
-				return branch, nil, invalid
-			}
-			file := File{Path: fields[count-1], Conflict: record[0] == 'u'}
-			file.Index, file.Working = state(fields[1])
-			if record[0] == '2' {
-				index++
-				if index >= len(records) || records[index] == "" {
-					return branch, nil, errors.New("Git 重命名记录不完整")
-				}
-				file.OriginalPath = records[index]
-			}
-			files = append(files, file)
-		case '?':
-			if len(record) < 3 {
-				return branch, nil, invalid
-			}
-			files = append(files, File{Path: record[2:], Index: "?", Working: "?"})
-		case '!':
-		default:
-			return branch, nil, invalid
+	case '1', '2', 'u':
+		// 字段数：普通 8、重命名 9、冲突 10，之后是可含空格的路径。
+		count := map[byte]int{'1': 9, '2': 10, 'u': 11}[record[0]]
+		fields := strings.SplitN(record, " ", count)
+		if len(fields) != count || len(fields[1]) != 2 {
+			return errInvalidStatus
 		}
+		file := File{Path: fields[count-1], Conflict: record[0] == 'u'}
+		file.Index, file.Working = state(fields[1])
+		parser.files = append(parser.files, file)
+		parser.renamed = record[0] == '2'
+	case '?':
+		if len(record) < 3 {
+			return errInvalidStatus
+		}
+		parser.files = append(parser.files, File{Path: record[2:], Index: "?", Working: "?"})
+	case '!':
+	default:
+		return errInvalidStatus
+	}
+	return nil
+}
+
+func (parser *statusParser) finish() (statusBranch, []File, error) {
+	if parser.renamed {
+		return parser.branch, nil, errors.New("Git 重命名记录不完整")
 	}
 	// 上游已配置但远程分支不存在时没有 branch.ab，与 rev-parse @{upstream} 失败时一致地视为无上游。
-	if counted {
-		branch.upstream = upstream
+	if parser.counted {
+		parser.branch.upstream = parser.upstream
 	}
-	return branch, files, nil
+	return parser.branch, parser.files, nil
 }
 
 func (repo *Repository) Snapshot(ctx context.Context) (Snapshot, error) {
@@ -248,7 +274,12 @@ func (repo *Repository) Snapshot(ctx context.Context) (Snapshot, error) {
 	if !state.Unborn && !state.Detached {
 		state.Upstream, state.Ahead, state.Behind = branch.upstream, branch.ahead, branch.behind
 	}
-	state.Operation, err = repo.operation(ctx)
+	directory, err := repo.gitDirectory(ctx)
+	if err != nil {
+		return state, err
+	}
+	// status 头部已给出 HEAD，进行中操作的令牌直接复用，不再单独读取。
+	state.Operation, err = repo.operationAt(ctx, directory, &branch.head)
 	return state, err
 }
 

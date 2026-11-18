@@ -24,6 +24,7 @@ type nativeComparison struct {
 	selected        int
 	list            *ui.ListState
 	diff            gitrepo.Diff
+	references      nativeComparisonReferences
 }
 
 func (state *nativeComparison) restoreSelection() {
@@ -100,8 +101,14 @@ func (app *nativeApp) selectComparisonFile(file string) {
 	})
 }
 
+// comparisonReferences 返回比较页候选引用，按引用快照缓存在比较状态上，结果只读。
 func (app *nativeApp) comparisonReferences() []string {
-	references := []string{"HEAD"}
+	cache, source := &app.comparison.references, app.refSource()
+	if cache.valid && cache.source == source {
+		return cache.references
+	}
+	references := make([]string, 0, 1+len(app.repository.branches)+len(app.repository.tags))
+	references = append(references, "HEAD")
 	for _, branch := range app.repository.branches {
 		prefix := "refs/heads/"
 		if branch.Remote {
@@ -112,6 +119,7 @@ func (app *nativeApp) comparisonReferences() []string {
 	for _, tag := range app.repository.tags {
 		references = append(references, "refs/tags/"+tag.Name)
 	}
+	*cache = nativeComparisonReferences{valid: true, source: source, references: references}
 	return references
 }
 

@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
@@ -59,11 +60,21 @@ func (repo *Repository) Diff(ctx context.Context, path string, staged bool) (Dif
 	if selected.OriginalPath != "" {
 		args = append(args, selected.OriginalPath)
 	}
-	output, err := repo.git(ctx, args...)
+	output, truncated, err := repo.gitPreview(ctx, args...)
 	if err != nil {
 		return Diff{}, err
 	}
-	return repo.diffFileContents(ctx, Diff{Text: output, Binary: strings.Contains(output, "Binary files ")}, *selected, staged)
+	return repo.diffFileContents(ctx, Diff{Text: output, Binary: strings.Contains(output, "Binary files "), Truncated: truncated}, *selected, staged)
+}
+
+// gitPreview 读取用于展示的单文件差异：超过输出上限时结束 Git 并返回截断到整行的部分，
+// 由界面提示预览已截断，而不是整个请求失败。
+func (repo *Repository) gitPreview(ctx context.Context, args ...string) (string, bool, error) {
+	output, truncated, err := runCapped(ctx, repo.Path, "", 30*time.Second, outputLimit, args...)
+	if truncated {
+		output = trimPartialLine(output)
+	}
+	return output, truncated, err
 }
 
 func (repo *Repository) untrackedDiff(path string) (Diff, error) {

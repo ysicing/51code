@@ -12,7 +12,18 @@ import (
 	"github.com/ysicing/51code/internal/gitrepo"
 )
 
+// refreshOnFocus 在窗口获得焦点时复查仓库；用户回到窗口说明可能在外部改过文件，
+// 因此同时把文件监听的退避延迟复位。
 func (app *nativeApp) refreshOnFocus() {
+	if state := app.background; state != nil {
+		state.refreshDelay = 0
+	}
+	app.refreshRepositoryView(false)
+}
+
+// refreshRepositoryView 在后台复查当前仓库，结果有变化时才局部更新界面。
+// watch 表示由文件监听触发，其结果用于调整监听刷新的退避延迟。
+func (app *nativeApp) refreshRepositoryView(watch bool) {
 	if app.desktop != nil && !app.closed {
 		app.reconcileSidebar()
 	}
@@ -24,9 +35,13 @@ func (app *nativeApp) refreshOnFocus() {
 		app.dialog != nil || app.conflictDirty() || app.repository == nil || app.screen == "library" {
 		return
 	}
+	// 不打断正在进行的自动 fetch：取消会强杀 git 进程组，可能残留 tmp_pack 或 .lock，
+	// 先排队，避免前台操作取消 fetch 后丢失这次聚焦刷新。
 	if app.autoFetch != nil {
-		app.autoFetch.cancel()
-		app.autoFetch = nil
+		if state := app.background; state != nil {
+			app.queueRepositoryRefresh(state, time.Now())
+		}
+		return
 	}
 	repository, screen := app.repository, app.screen
 	path, file, staged := repository.snapshot.Path, app.selectedFile, app.staged
@@ -44,6 +59,7 @@ func (app *nativeApp) refreshOnFocus() {
 		if previous != nil {
 			<-previous
 		}
+		started := time.Now()
 		result, err := app.readRepository(ctx, path, false)
 		var commits []gitrepo.Commit
 		reloadHistory := err == nil && history.historyLoaded && (screen == "history" || screen == "search") &&
@@ -95,10 +111,12 @@ func (app *nativeApp) refreshOnFocus() {
 				app.problem = ""
 			}
 			app.focusError, app.writable = "", true
+			changed := !reflect.DeepEqual(repository, result)
+			app.noteRepositoryRead(path, started)
 			if app.ai == blockedAI && refreshedToken != "" && refreshedToken != blockedToken {
 				app.stopCommitAI()
 			}
-			if !reflect.DeepEqual(repository, result) {
+			if changed {
 				app.historyList.HoldPlace()
 				app.repository = result
 				app.library = app.service.Library()
@@ -129,7 +147,7 @@ func (app *nativeApp) refreshOnFocus() {
 				app.historySelected = slices.IndexFunc(commits, func(commit gitrepo.Commit) bool { return commit.Hash == app.commitHash })
 			}
 			if selection != nil {
-				app.refreshFileSelection(selection)
+				changed = app.refreshFileSelection(selection) || changed
 			} else if screen == "changes" && app.selectedFile != "" || history.historyWorking {
 				app.selectedFile = ""
 				app.clearDiff()
@@ -147,7 +165,9 @@ func (app *nativeApp) refreshOnFocus() {
 			}
 			if screen == "worktrees" && app.worktrees != nil && !reflect.DeepEqual(app.worktrees.items, worktrees) {
 				app.worktrees.setItems(worktrees)
+				changed = true
 			}
+			app.settleRepositoryRefresh(watch, changed)
 			if screen == "insights" && app.insights != nil {
 				// 引用变化（切分支、新提交）时跳过 60 秒节流，否则仅按节流间隔复查。
 				if historyReferencesChanged(repository, result) {
@@ -173,10 +193,12 @@ func (app *nativeApp) readFocusHistory(ctx context.Context, path string, state n
 }
 
 // readHistoryRange 重读已加载的全部历史，刷新后保留分页进度与选中位置。
+// 尽量一次 git log 读完：按页 --skip 重读时每页都要从头遍历前面的提交，
+// 已加载 N 条时总代价约为 O(N²)。超过单次上限时才分块。
 func (app *nativeApp) readHistoryRange(ctx context.Context, path string, request nativeHistoryRequest, offset, count int) ([]gitrepo.Commit, error) {
-	commits := make([]gitrepo.Commit, 0, count)
+	commits := make([]gitrepo.Commit, 0, min(count, gitrepo.MaxHistoryReloadSize))
 	for len(commits) < count {
-		limit := min(count-len(commits), gitrepo.MaxHistoryPageSize)
+		limit := min(count-len(commits), gitrepo.MaxHistoryReloadSize)
 		page, err := app.service.SearchHistory(ctx, path, request.query, request.file,
 			offset+len(commits), request.filter, limit)
 		if err != nil {
@@ -190,7 +212,8 @@ func (app *nativeApp) readHistoryRange(ctx context.Context, path string, request
 	return commits, nil
 }
 
-func (app *nativeApp) refreshFileSelection(selection *nativeSelection) {
+// refreshFileSelection 只在差异内容变化时重建选中文件视图，返回是否有变化。
+func (app *nativeApp) refreshFileSelection(selection *nativeSelection) bool {
 	if selection.patch.Supported {
 		selection.diff.Text = selection.patch.Text
 	}
@@ -198,7 +221,8 @@ func (app *nativeApp) refreshFileSelection(selection *nativeSelection) {
 		reflect.DeepEqual(app.diff, selection.diff) && reflect.DeepEqual(app.conflict, selection.conflict) &&
 		app.patch.Supported == selection.patch.Supported {
 		app.patch = selection.patch
-		return
+		return false
 	}
 	app.setSelection(selection)
+	return true
 }

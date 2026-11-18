@@ -40,6 +40,9 @@ type nativeLanguageRequest struct {
 type repositoryLanguageCache struct {
 	Version string                  `json:"version"`
 	Summary gitrepo.LanguageSummary `json:"summary"`
+	// Commit 是统计时 HEAD 指向的提交；HEAD 未变时直接复用，无需启动 Git 进程。
+	// 旧缓存没有该字段，首次读取后补齐。
+	Commit string `json:"commit,omitempty"`
 }
 
 func (app *nativeApp) startRepositoryLanguages(cacheDir string) {
@@ -124,6 +127,13 @@ func (app *nativeApp) refreshRepositoryLanguages(force bool) {
 			if ctx.Err() != nil {
 				return
 			}
+			// 手动刷新交给 Git 校验实际的树；replace 引用可能让树在 HEAD ID 不变时改变。
+			if !force {
+				if summary, ok := unchangedRepositoryLanguages(entry.Path, state.cacheDir); ok {
+					publish(entry.Path, summary, false)
+					continue
+				}
+			}
 			if state.waitForResources != nil {
 				if err := state.waitForResources(ctx); err != nil {
 					return
@@ -141,7 +151,10 @@ func (app *nativeApp) refreshRepositoryLanguages(force bool) {
 }
 
 func readRepositoryLanguages(ctx context.Context, path, cacheDir string) (gitrepo.LanguageSummary, error) {
-	stored, found := loadRepositoryLanguageCache(cacheDir, path)
+	entry, found := loadRepositoryLanguageEntry(cacheDir, path)
+	stored := entry.Summary
+	// 在 Git 读取前后各解析一次 HEAD，两次一致才把提交记入缓存，避免与读到的 tree 错配。
+	commit, _ := readHeadCommit(path)
 	repo, err := gitrepo.Open(ctx, path)
 	if err != nil {
 		return gitrepo.LanguageSummary{}, err
@@ -152,6 +165,12 @@ func readRepositoryLanguages(ctx context.Context, path, cacheDir string) (gitrep
 			return gitrepo.LanguageSummary{}, err
 		}
 		if found && stored.Tree == tree {
+			// tree 相同但提交变了（如空提交）时只更新缓存里的提交，下次即可免进程命中。
+			if commit != "" && commit != entry.Commit {
+				if current, ok := readHeadCommit(path); ok && current == commit {
+					_ = saveRepositoryLanguageCache(cacheDir, path, stored, commit)
+				}
+			}
 			return stored, nil
 		}
 		summary := gitrepo.LanguageSummary{Complete: true}
@@ -171,7 +190,10 @@ func readRepositoryLanguages(ctx context.Context, path, cacheDir string) (gitrep
 		if err := ctx.Err(); err != nil {
 			return summary, err
 		}
-		_ = saveRepositoryLanguageCache(cacheDir, path, summary)
+		if current, ok := readHeadCommit(path); !ok || current != commit {
+			commit = ""
+		}
+		_ = saveRepositoryLanguageCache(cacheDir, path, summary, commit)
 		return summary, nil
 	}
 	return gitrepo.LanguageSummary{}, errors.New("语言分析期间仓库内容已变化")
@@ -212,9 +234,14 @@ func pruneRepositoryLanguageCache(ctx context.Context, cacheDir string, paths []
 }
 
 func loadRepositoryLanguageCache(cacheDir, path string) (gitrepo.LanguageSummary, bool) {
+	entry, found := loadRepositoryLanguageEntry(cacheDir, path)
+	return entry.Summary, found
+}
+
+func loadRepositoryLanguageEntry(cacheDir, path string) (repositoryLanguageCache, bool) {
 	file, err := os.Open(repositoryLanguageCachePath(cacheDir, path))
 	if err != nil {
-		return gitrepo.LanguageSummary{}, false
+		return repositoryLanguageCache{}, false
 	}
 	defer file.Close()
 	const limit = 128 << 10
@@ -222,9 +249,25 @@ func loadRepositoryLanguageCache(cacheDir, path string) (gitrepo.LanguageSummary
 	var stored repositoryLanguageCache
 	if err != nil || len(data) > limit || json.Unmarshal(data, &stored) != nil ||
 		stored.Version != gitrepo.LanguageAnalysisVersion || !validRepositoryLanguageSummary(stored.Summary) {
+		return repositoryLanguageCache{}, false
+	}
+	if !validObjectID(stored.Commit) {
+		stored.Commit = ""
+	}
+	return stored, true
+}
+
+// unchangedRepositoryLanguages 在缓存记录的提交仍是当前 HEAD 时返回缓存，全程不启动 Git 进程。
+func unchangedRepositoryLanguages(path, cacheDir string) (gitrepo.LanguageSummary, bool) {
+	entry, found := loadRepositoryLanguageEntry(cacheDir, path)
+	if !found || entry.Commit == "" {
 		return gitrepo.LanguageSummary{}, false
 	}
-	return stored.Summary, true
+	commit, ok := readHeadCommit(path)
+	if !ok || commit != entry.Commit {
+		return gitrepo.LanguageSummary{}, false
+	}
+	return entry.Summary, true
 }
 
 func validRepositoryLanguageSummary(summary gitrepo.LanguageSummary) bool {
@@ -254,11 +297,11 @@ func validRepositoryLanguageSummary(summary gitrepo.LanguageSummary) bool {
 	return true
 }
 
-func saveRepositoryLanguageCache(cacheDir, path string, summary gitrepo.LanguageSummary) error {
+func saveRepositoryLanguageCache(cacheDir, path string, summary gitrepo.LanguageSummary, commit string) error {
 	if cacheDir == "" {
 		return nil
 	}
-	data, err := json.Marshal(repositoryLanguageCache{Version: gitrepo.LanguageAnalysisVersion, Summary: summary})
+	data, err := json.Marshal(repositoryLanguageCache{Version: gitrepo.LanguageAnalysisVersion, Summary: summary, Commit: commit})
 	if err != nil {
 		return err
 	}

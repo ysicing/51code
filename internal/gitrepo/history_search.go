@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 )
@@ -29,6 +30,9 @@ type HistoryFilter struct {
 const (
 	DefaultHistoryPageSize = 100
 	MaxHistoryPageSize     = 500
+	// MaxHistoryReloadSize 用于刷新时一次性重读已加载的历史；按页 --skip 重读
+	// 会让 git 反复遍历前面的提交，总代价随已加载数量平方增长。
+	MaxHistoryReloadSize = 50000
 )
 
 func (filter HistoryFilter) validate() error {
@@ -58,7 +62,7 @@ func (repo *Repository) SearchHistory(ctx context.Context, query string, path st
 	if len(pageSize) == 1 {
 		limit = pageSize[0]
 	}
-	if limit < 1 || limit > MaxHistoryPageSize {
+	if limit < 1 || limit > MaxHistoryReloadSize {
 		return nil, errors.New("历史分页无效")
 	}
 	if err := filter.validate(); err != nil {
@@ -139,28 +143,49 @@ func (repo *Repository) CommitFiles(ctx context.Context, hash string) ([]CommitF
 		return nil, err
 	}
 	defer repo.mu.Unlock()
-	files, err := repo.commitFiles(ctx, hash)
+	files, parents, err := repo.commitFiles(ctx, hash)
 	if err != nil {
 		return nil, err
 	}
-	repo.rememberChanges(commitChangesKey(hash), files)
+	repo.rememberCommitChanges(commitChangesKey(hash), files, parents)
 	return files, nil
 }
 
-func (repo *Repository) commitFiles(ctx context.Context, hash string) ([]CommitFile, error) {
-	kind, err := repo.git(ctx, "cat-file", "-t", hash)
+// commitFiles 用一次 git log 同时取得提交校验、父提交和文件列表，代替 cat-file -t、
+// diff-tree 与 rev-list 三个进程。parents 与 rev-list --parents 相同，首项是提交自身。
+//
+// 与 diff-tree 等价的约束：标签对象会被 log 剥离为所指提交，tree/blob 输入输出为空且退出码为 0，
+// 因此必须核对输出的 %H 与输入一致（与原先 cat-file -t 只接受 commit 的语义相同）；
+// 入口已由 validCommitHash 限定为完整十六进制 ID，不会出现缩写或引用名。
+// log 属于 porcelain，显式固定签名、装饰、颜色、注释、改名检测、子模块、相对路径与输出顺序，
+// 避免 log.showSignature、log.decorate、diff.renames、color.* 等用户配置改变结果。
+func (repo *Repository) commitFiles(ctx context.Context, hash string) ([]CommitFile, []string, error) {
+	output, err := repo.git(ctx, "-c", "diff.orderFile="+os.DevNull, "log", "--no-walk", "--no-show-signature",
+		"--no-decorate", "--no-color", "--no-notes", "--format=%H%x00%P", "--root", "--diff-merges=first-parent", "--name-status", "-r", "-z",
+		"--no-ext-diff", "--no-textconv", "--find-renames", "--no-relative", "--ignore-submodules=none", hash, "--")
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	if strings.TrimSpace(kind) != "commit" {
-		return nil, errors.New("提交 ID 未指向提交对象")
+	commit, rest, ok := strings.Cut(output, "\x00")
+	if !ok || !strings.EqualFold(commit, hash) {
+		return nil, nil, errors.New("提交 ID 未指向提交对象")
 	}
-	output, err := repo.git(ctx, "diff-tree", "--root", "--diff-merges=first-parent", "--no-commit-id",
-		"--name-status", "-r", "-z", "--no-ext-diff", "--no-textconv", "--find-renames", hash, "--")
+	parents, rest, ok := strings.Cut(rest, "\x00")
+	if !ok {
+		return nil, nil, errors.New("无法解析提交文件")
+	}
+	// 有文件变更时，提交信息与文件列表之间以一个换行分隔；空提交没有后续内容。
+	if rest != "" {
+		if rest[0] != '\n' {
+			return nil, nil, errors.New("无法解析提交文件")
+		}
+		rest = rest[1:]
+	}
+	files, err := parseCommitFiles(rest)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return parseCommitFiles(output)
+	return files, append([]string{commit}, strings.Fields(parents)...), nil
 }
 
 func parseCommitFiles(output string) ([]CommitFile, error) {
@@ -243,15 +268,28 @@ func (repo *Repository) CommitFileDiff(ctx context.Context, hash string, path st
 	if selected.OriginalPath != "" {
 		args = append(args, selected.OriginalPath)
 	}
-	output, err := repo.git(ctx, args...)
+	diff, err := repo.selectedPatchPreview(ctx, args, *selected)
 	if err != nil {
 		return Diff{}, err
 	}
-	output, err = selectedCommitPatch(output, *selected)
+	return repo.commitFileContents(ctx, diff, *selected, hash)
+}
+
+// selectedPatchPreview 读取并筛选单个文件的补丁；输出超过上限时截断展示。截断后若已读部分
+// 中找不到该文件的补丁头，返回空的截断预览，而不是报告“无法定位”。
+func (repo *Repository) selectedPatchPreview(ctx context.Context, args []string, file CommitFile) (Diff, error) {
+	output, truncated, err := repo.gitPreview(ctx, args...)
 	if err != nil {
 		return Diff{}, err
 	}
-	return repo.commitFileContents(ctx, Diff{Text: output, Binary: strings.Contains(output, "Binary files ")}, *selected, hash)
+	output, err = selectedCommitPatch(output, file)
+	if err != nil {
+		if !truncated {
+			return Diff{}, err
+		}
+		output = ""
+	}
+	return Diff{Text: output, Binary: strings.Contains(output, "Binary files "), Truncated: truncated}, nil
 }
 
 func selectedCommitPatch(output string, file CommitFile) (string, error) {
