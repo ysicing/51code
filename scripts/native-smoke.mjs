@@ -441,9 +441,8 @@ try {
   assert(stashNode, "未显示贮藏记录");
   await press(stashNode.label);
   await capture("native-stash.png");
-  await press("应用并移除");
-  await shown("应用并移除贮藏？");
-  await press("应用并移除");
+  git("stash", "pop");
+  await press("刷新");
   assert.equal(readFileSync(join(fixture, "hello.txt"), "utf8"), "贮藏修改\n");
   assert.equal(git("stash", "list"), "");
   await press("文件变更");

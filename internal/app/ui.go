@@ -638,7 +638,20 @@ func (app *nativeApp) stashPanel(c *ui.Context) {
 		}
 		for _, stash := range app.repository.stashes {
 			stash := stash
-			if listRow(c, stash.Message, app.stashHash == stash.Hash).Children(func() {
+			row := listRow(c, stash.Message, app.stashHash == stash.Hash).ContextMenu(func(menu *ui.Menu) {
+				actionsDisabled := app.busy || !app.writable || app.readTask != nil || app.dialog != nil
+				if menu.Item(locales.Apply() + "…").Disabled(actionsDisabled).Chosen() {
+					app.applyStash(stash.Hash, false)
+				}
+				if menu.Item(locales.ApplyAndDrop() + "…").Disabled(actionsDisabled).Chosen() {
+					app.applyStash(stash.Hash, true)
+				}
+				menu.Separator()
+				if menu.Item(locales.Delete() + "…").Disabled(actionsDisabled).Chosen() {
+					app.dropStash(stash.Hash)
+				}
+			})
+			if row.Children(func() {
 				ui.Icon(c, nativeIcons["stash"]).TextColor(c.Theme().TextMuted)
 				ui.Text(c, stash.Message).Grow(1).MinWidth(0).MaxLines(2)
 			}).Clicked() && (app.stashHash != stash.Hash || app.readTask != nil || app.problem != "") {
@@ -646,19 +659,6 @@ func (app *nativeApp) stashPanel(c *ui.Context) {
 			}
 		}
 	})
-	if app.stashHash != "" {
-		ui.Row(c).Padding(12).Gap(6).Disabled(!app.writable || app.readTask != nil).Children(func() {
-			if ui.Button(c, locales.Apply()).Clicked() {
-				app.applyStash(false)
-			}
-			if ui.Button(c, locales.ApplyAndDrop()).Clicked() {
-				app.applyStash(true)
-			}
-			if ui.Button(c, locales.Delete()).Clicked() {
-				app.dropStash()
-			}
-		})
-	}
 }
 
 func (app *nativeApp) diffPanel(c *ui.Context) {

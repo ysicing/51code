@@ -203,11 +203,10 @@ func (app *nativeApp) stashDialog() {
 	}
 }
 
-func (app *nativeApp) applyStash(pop bool) {
-	if app.repository == nil || app.busy || !app.writable || app.readTask != nil || app.stashHash == "" {
+func (app *nativeApp) applyStash(hash string, pop bool) {
+	if app.repository == nil || app.busy || !app.writable || app.readTask != nil || app.dialog != nil || hash == "" {
 		return
 	}
-	hash := app.stashHash
 	title, detail, action := locales.ApplyStashTitle(), locales.ApplyStashDetail(app.repository.snapshot.Path), locales.Apply()
 	if pop {
 		title, detail, action = locales.PopStashTitle(), locales.PopStashDetail(app.repository.snapshot.Path), locales.ApplyAndDrop()
@@ -220,11 +219,10 @@ func (app *nativeApp) applyStash(pop bool) {
 	app.dialog.danger = pop
 }
 
-func (app *nativeApp) dropStash() {
-	if app.repository == nil || app.busy || !app.writable || app.readTask != nil || app.stashHash == "" {
+func (app *nativeApp) dropStash(hash string) {
+	if app.repository == nil || app.busy || !app.writable || app.readTask != nil || app.dialog != nil || hash == "" {
 		return
 	}
-	hash := app.stashHash
 	app.confirm(locales.DeleteStashTitle(), shortHash(hash)+"\n"+locales.CannotUndo(), locales.Delete(), func() {
 		app.mutate(locales.DeletingStash(), func(ctx context.Context, path string) error {
 			return app.service.DropStash(ctx, path, hash)

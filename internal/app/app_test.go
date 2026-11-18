@@ -632,14 +632,15 @@ func TestNativeLoadingProtectsSelectedActions(t *testing.T) {
 			}
 			defer finish()
 			tester := ui.NewTester(app.view, 1024, 680)
-			var labels []string
 			if screen == "stash" {
-				labels = []string{"应用", "应用并移除", "删除"}
-			}
-			for _, label := range labels {
-				control, found := tester.AccessByRole(ui.RoleButton, label)
-				if !found || !control.Disabled {
-					t.Errorf("加载期间应禁用 %s", label)
+				for _, label := range []string{locales.Apply(), locales.ApplyAndDrop(), locales.Delete()} {
+					if err := tester.RightClick(app.repository.stashes[0].Message); err != nil {
+						t.Fatal(err)
+					}
+					if err := tester.ChooseMenuItem(label + "…"); err == nil || !strings.Contains(err.Error(), "disabled") {
+						t.Errorf("加载期间应禁用 %s: %v", label, err)
+					}
+					tester.CloseMenu()
 				}
 			}
 			if err := tester.Click("更多"); err != nil {
@@ -651,14 +652,100 @@ func TestNativeLoadingProtectsSelectedActions(t *testing.T) {
 			tester.CloseMenu()
 			app.tagDialog()
 			if screen == "stash" {
-				app.applyStash(false)
-				app.applyStash(true)
-				app.dropStash()
+				app.applyStash(app.stashHash, false)
+				app.applyStash(app.stashHash, true)
+				app.dropStash(app.stashHash)
 			}
 			if app.dialog != nil || app.busy {
 				t.Fatal("加载期间直接调用仍允许操作旧选择")
 			}
 		})
+	}
+}
+
+func TestNativeStashContextMenuTargetsEntry(t *testing.T) {
+	app, path, finish := nativeFixture(t)
+	for _, message := range []string{"保留贮藏", "删除目标"} {
+		writeNativeFile(t, path, "hello.txt", message+"\n")
+		nativeGit(t, path, "stash", "push", "-m", message)
+	}
+	app.refresh()
+	finish()
+	app.screen = "stash"
+	target, retained := app.repository.stashes[0], app.repository.stashes[1]
+	app.selectStash(retained.Hash)
+	finish()
+	tester := ui.NewTester(app.view, 1024, 680)
+	if err := tester.Click(retained.Message); err != nil {
+		t.Fatal(err)
+	}
+	tester.Key(ui.Shift, ui.KeyF10)
+	if err := tester.ChooseMenuItem(locales.ApplyAndDrop() + "…"); err != nil {
+		t.Fatal(err)
+	}
+	if app.dialog == nil || !app.dialog.danger || app.dialog.action != locales.ApplyAndDrop() {
+		t.Fatal("键盘菜单未打开应用并移除的确认")
+	}
+	if err := tester.Click(locales.Cancel()); err != nil {
+		t.Fatal(err)
+	}
+	if err := tester.RightClick(target.Message); err != nil {
+		t.Fatal(err)
+	}
+	if err := tester.ChooseMenuItem(locales.Apply() + "…"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tester.Click(locales.Apply()); err != nil {
+		t.Fatal(err)
+	}
+	finish()
+	content, err := os.ReadFile(filepath.Join(path, "hello.txt"))
+	if err != nil || strings.TrimSpace(string(content)) != "删除目标" || len(app.repository.stashes) != 2 || app.problem != "" {
+		t.Fatalf("未正确应用右键目标: %q, %v, %s", content, err, app.problem)
+	}
+	tester.Frame()
+	openDelete := func() {
+		t.Helper()
+		if err := tester.RightClick(target.Message); err != nil {
+			t.Fatal(err)
+		}
+		if err := tester.ChooseMenuItem(locales.Delete() + "…"); err != nil {
+			t.Fatal(err)
+		}
+		if app.dialog == nil || !app.dialog.danger || !strings.Contains(app.dialog.detail, shortHash(target.Hash)) {
+			t.Fatal("未确认删除右键点击的贮藏")
+		}
+	}
+	openDelete()
+	if err := tester.Click(locales.Cancel()); err != nil {
+		t.Fatal(err)
+	}
+	if app.busy || app.dialog != nil || nativeGit(t, path, "rev-parse", "refs/stash") != target.Hash {
+		t.Fatal("取消确认后仍删除了贮藏")
+	}
+	openDelete()
+	if err := tester.Click(locales.Delete()); err != nil {
+		t.Fatal(err)
+	}
+	finish()
+	if len(app.repository.stashes) != 1 || app.repository.stashes[0].Hash != retained.Hash || app.problem != "" {
+		t.Fatalf("未保留另一条贮藏: %+v, %s", app.repository.stashes, app.problem)
+	}
+	nativeGit(t, path, "restore", "--", "hello.txt")
+	tester.Frame()
+	if err := tester.RightClick(retained.Message); err != nil {
+		t.Fatal(err)
+	}
+	if err := tester.ChooseMenuItem(locales.ApplyAndDrop() + "…"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tester.Click(locales.ApplyAndDrop()); err != nil {
+		t.Fatal(err)
+	}
+	finish()
+	content, err = os.ReadFile(filepath.Join(path, "hello.txt"))
+	if err != nil || strings.TrimSpace(string(content)) != "保留贮藏" || len(app.repository.stashes) != 0 || app.problem != "" {
+		t.Fatalf("应用并移除没有完成: %q, %v, %s", content, err, app.problem)
 	}
 }
 

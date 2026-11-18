@@ -282,11 +282,13 @@ func TestNativeRemoteAndConfirmationCopy(t *testing.T) {
 		t.Fatal("已有远程名称未设为只读")
 	}
 	app.stashHash = "test-stash"
-	app.applyStash(false)
+	app.dialog = nil
+	app.applyStash(app.stashHash, false)
 	if app.dialog.danger || app.dialog.action != "应用" {
 		t.Fatal("普通应用贮藏被标记为危险操作")
 	}
-	app.applyStash(true)
+	app.dialog = nil
+	app.applyStash(app.stashHash, true)
 	if !app.dialog.danger || app.dialog.action != "应用并移除" || !strings.Contains(app.dialog.detail, "成功") {
 		t.Fatal("应用并移除未说明移除时机")
 	}
