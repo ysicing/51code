@@ -493,6 +493,8 @@ func (app *nativeApp) generalPreferences(c *ui.Context) {
 		})
 	})
 	ui.Divider(c)
+	app.trashPreferences(c)
+	ui.Divider(c)
 	app.memoryDiagnosticsPreferences(c)
 }
 

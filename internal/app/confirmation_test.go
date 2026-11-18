@@ -8,11 +8,65 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/ysicing/51code/internal/gitrepo"
 	"github.com/ysicing/51code/locales"
 
 	"github.com/egoist/mygo/ui"
 )
+
+func TestNativeTrashFirstPromptAndPermanentConfirmation(t *testing.T) {
+	app := &nativeApp{prefs: &nativePreferences{}}
+	preview := gitrepo.DiscardPreview{Supported: true, Untracked: true, Present: true}
+	app.confirmTrashDiscard("scratch.txt", preview)
+	tester := ui.NewTester(app.dialogView, 480, 600)
+	for _, label := range []string{locales.TrashFirstDelete(), locales.TrashRetention(), locales.TrashRetentionDays("30")} {
+		if _, found := tester.Find(label); !found {
+			t.Fatalf("missing first-use control %q", label)
+		}
+	}
+	if directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); directory != "" {
+		saveNativeScreenshot(t, tester, directory, "trash-first-use.png")
+	}
+	tester.Key(0, ui.KeyEscape)
+	if app.dialog != nil || app.prefs.Trash.Configured {
+		t.Fatal("canceling first use changed the global setting")
+	}
+	app.prefs.Trash.Disabled = true
+	app.confirmTrashDiscard("scratch.txt", preview)
+	tester.Frame()
+	if _, found := tester.Find(locales.TrashDeletePermanentlyTitle()); !found {
+		t.Fatal("disabled Trash did not show a permanent-delete confirmation")
+	}
+	if _, found := tester.Find(locales.TrashRetention()); found {
+		t.Fatal("permanent-delete confirmation still shows retention settings")
+	}
+}
+
+func TestNativeTrashListAndSettings(t *testing.T) {
+	app := &nativeApp{prefs: &nativePreferences{}}
+	app.trashDialog([]gitrepo.DiscardBackup{
+		{ID: "discard-example", Repository: "/tmp/51Code", Path: "internal/app/actions.go", Present: true, Created: time.Now()},
+	}, "")
+	tester := ui.NewTester(app.dialogView, 820, 600)
+	if _, found := tester.Access(locales.TrashRestore()); !found {
+		t.Fatal("回收站列表缺少恢复按钮")
+	}
+	if _, found := tester.Find("actions.go"); !found {
+		t.Fatal("回收站列表缺少文件名")
+	}
+	if directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); directory != "" {
+		saveNativeScreenshot(t, tester, directory, "trash-list.png")
+	}
+	settings := ui.NewTester(app.trashPreferences, 460, 220)
+	if err := settings.Click(locales.TrashEnabled()); err != nil {
+		t.Fatal(err)
+	}
+	if !app.prefs.Trash.Disabled || !app.prefs.Trash.Configured {
+		t.Fatal("设置开关未关闭回收站")
+	}
+}
 
 func TestNativeBranchConfirmationLayout(t *testing.T) {
 	app, path, finish := nativeFixture(t)

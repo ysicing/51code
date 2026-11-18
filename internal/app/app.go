@@ -130,6 +130,8 @@ func Run(info BuildInfo) {
 				{ID: shortcutScan, Label: locales.ScanFoldersMenu(), Accelerator: shortcutAccelerator(defaultNativeShortcuts().Scan), Click: libraryCommand(func(desktop *nativeApp) { desktop.chooseScan() })},
 				{Label: locales.NewGroupMenu(), Click: libraryCommand(func(desktop *nativeApp) { desktop.groupDialog("") })},
 				mygo.Separator(),
+				{Label: locales.TrashMenu(), Click: command(func(window *nativeApp) { window.showTrash("") })},
+				mygo.Separator(),
 				{Role: mygo.RoleClose},
 			}},
 			{Role: mygo.RoleEditMenu},
@@ -146,6 +148,7 @@ func Run(info BuildInfo) {
 	}
 	app.WhenReady(func() {
 		setMenu()
+		desktop.startTrashCleanup()
 		app.OnLocaleChanged(func(_ string) { setMenu() })
 		open()
 		desktop.library.restoreStartupRepository()

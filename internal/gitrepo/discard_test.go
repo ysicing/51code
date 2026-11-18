@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestDiscardPreservesIndexAndBacksUpWorkingFile(t *testing.T) {
@@ -39,6 +40,87 @@ func TestDiscardPreservesIndexAndBacksUpWorkingFile(t *testing.T) {
 				t.Fatal(err)
 			}
 		})
+	}
+}
+
+func TestTrashRestoresWorkingCopyAndPreservesLaterEdits(t *testing.T) {
+	repo, dir := fixture(t)
+	ctx := context.Background()
+	trash := t.TempDir()
+	write(t, dir, "file", "staged\n")
+	git(t, dir, "add", "file")
+	git(t, dir, "commit", "-m", "base")
+	write(t, dir, "file", "work in progress\n")
+	view, err := repo.DiscardPreview(ctx, "file")
+	if err != nil || !view.Supported {
+		t.Fatalf("preview = %+v, %v", view, err)
+	}
+	backup, err := repo.Discard(ctx, "file", view.Token, trash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	item, content, err := ReadDiscardBackup(trash, filepath.Base(backup))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.RestoreDiscardBackup(ctx, item, content); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(dir, "file")
+	got, err := os.ReadFile(target)
+	if err != nil || string(got) != "work in progress\n" || git(t, dir, "show", ":file") != "staged" {
+		t.Fatalf("working=%q, %v", got, err)
+	}
+	write(t, dir, "file", "later work\n")
+	if err := repo.RestoreDiscardBackup(ctx, item, content); err != ErrDiscardRestoreConflict {
+		t.Fatalf("restore with newer content: %v", err)
+	}
+	got, err = os.ReadFile(target)
+	if err != nil || string(got) != "later work\n" {
+		t.Fatalf("working=%q, %v", got, err)
+	}
+	items, err := DiscardBackups(ctx, trash, item.Created)
+	if err != nil || len(items) != 0 {
+		t.Fatalf("expired entries = %+v, %v", items, err)
+	}
+	if _, err := os.Stat(backup); !os.IsNotExist(err) {
+		t.Fatalf("expired backup still exists: %v", err)
+	}
+}
+
+func TestTrashRestoresUntrackedFileAndSupportsPermanentDeletion(t *testing.T) {
+	repo, dir := fixture(t)
+	ctx := context.Background()
+	trash := t.TempDir()
+	write(t, dir, "new file", "untracked\n")
+	view, err := repo.DiscardPreview(ctx, "new file")
+	if err != nil || !view.Untracked {
+		t.Fatalf("preview = %+v, %v", view, err)
+	}
+	backup, err := repo.Discard(ctx, "new file", view.Token, trash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	item, content, err := ReadDiscardBackup(trash, filepath.Base(backup))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.RestoreDiscardBackup(ctx, item, content); err != nil {
+		t.Fatal(err)
+	}
+	view, err = repo.DiscardPreview(ctx, "new file")
+	if err != nil || !view.Untracked {
+		t.Fatalf("preview = %+v, %v", view, err)
+	}
+	if err := repo.DiscardPermanently(ctx, "new file", view.Token); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "new file")); !os.IsNotExist(err) {
+		t.Fatalf("permanently deleted file still exists: %v", err)
+	}
+	items, err := DiscardBackups(ctx, trash, time.Time{})
+	if err != nil || len(items) != 1 || items[0].ID != item.ID {
+		t.Fatalf("retained entries = %+v, %v", items, err)
 	}
 }
 

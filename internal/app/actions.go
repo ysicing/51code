@@ -242,12 +242,7 @@ func (app *nativeApp) discardFile() {
 				app.problem = preview.Reason
 				return
 			}
-			app.confirm(locales.DiscardFileTitle(), file+"\n"+locales.DiscardFileDetail(), locales.DiscardChanges(), func() {
-				app.mutate(locales.DiscardingWithBackup(), func(ctx context.Context, path string) error {
-					_, err := app.service.Discard(ctx, path, file, preview.Token)
-					return err
-				})
-			})
+			app.confirmTrashDiscard(file, preview)
 		}, err
 	})
 }
@@ -473,11 +468,6 @@ func (app *nativeApp) repositoryActions(menu *ui.Menu) {
 	}
 	if menu.Item(revealRepositoryLabel()).Disabled(unavailable).Chosen() {
 		if err := app.service.RevealRepository(app.repository.snapshot.Path); err != nil {
-			app.problem = err.Error()
-		}
-	}
-	if menu.Item(locales.OpenBackupFolder()).Disabled(unavailable).Chosen() {
-		if err := app.service.RevealDiscardBackups(); err != nil {
 			app.problem = err.Error()
 		}
 	}

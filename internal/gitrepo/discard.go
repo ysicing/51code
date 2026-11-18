@@ -21,6 +21,7 @@ type DiscardPreview struct {
 	Token     string `json:"token"`
 	Supported bool   `json:"supported"`
 	Untracked bool   `json:"untracked"`
+	Present   bool   `json:"present"`
 	Reason    string `json:"reason"`
 }
 
@@ -147,6 +148,7 @@ func (repo *Repository) discardState(ctx context.Context, path string) (discardS
 	fmt.Fprintf(digest, "%q\x00%q\x00%q\x00%q\x00%t\x00%d\x00%t\x00", repo.Path, path, head, index, state.present, state.mode, state.view.Untracked)
 	digest.Write(state.content)
 	state.view.Token = hex.EncodeToString(digest.Sum(nil))
+	state.view.Present = state.present
 	state.view.Supported, state.view.Reason = true, ""
 	return state, nil
 }
@@ -154,6 +156,15 @@ func (repo *Repository) discardState(ctx context.Context, path string) (discardS
 // Discard 只修改工作区。recoveryDir 由桌面层提供，核心不依赖平台数据目录。
 // 恢复副本持久化成功且版本仍匹配后才写文件；外部编辑器不参与此进程的锁。
 func (repo *Repository) Discard(ctx context.Context, path, token, recoveryDir string) (backup string, err error) {
+	return repo.discard(ctx, path, token, recoveryDir, true)
+}
+
+func (repo *Repository) DiscardPermanently(ctx context.Context, path, token string) error {
+	_, err := repo.discard(ctx, path, token, "", false)
+	return err
+}
+
+func (repo *Repository) discard(ctx context.Context, path, token, recoveryDir string, keepBackup bool) (backup string, err error) {
 	if err := repo.lockHistory(ctx); err != nil {
 		return "", err
 	}
@@ -173,12 +184,22 @@ func (repo *Repository) Discard(ctx context.Context, path, token, recoveryDir st
 			return "", err
 		}
 	}
-	backup, err = saveDiscardBackup(recoveryDir, repo.Path, path, state)
-	if err != nil {
-		return "", fmt.Errorf("无法保存恢复副本，已取消丢弃：%w", err)
+	mode := state.mode
+	if !state.present {
+		mode = 0644
+	}
+	mode &^= 0111
+	if state.indexMode == "100755" {
+		mode |= 0111
+	}
+	if keepBackup {
+		backup, err = saveDiscardBackup(recoveryDir, repo.Path, path, state, discardFingerprint([]byte(restored), mode))
+		if err != nil {
+			return "", fmt.Errorf("无法保存恢复副本，已取消丢弃：%w", err)
+		}
 	}
 	defer func() {
-		if err != nil {
+		if err != nil && backup != "" {
 			err = fmt.Errorf("%w；恢复副本：%s", err, backup)
 		}
 	}()
@@ -202,14 +223,6 @@ func (repo *Repository) Discard(ctx context.Context, path, token, recoveryDir st
 	defer parent.Close()
 	temp := ".xsourcetree-discard-" + rand.Text()
 	if !state.view.Untracked {
-		mode := state.mode
-		if !state.present {
-			mode = 0644
-		}
-		mode &^= 0111
-		if state.indexMode == "100755" {
-			mode |= 0111
-		}
 		file, err := parent.OpenFile(temp, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 		if err != nil {
 			return backup, err
@@ -250,14 +263,14 @@ func (repo *Repository) Discard(ctx context.Context, path, token, recoveryDir st
 	return backup, err
 }
 
-func saveDiscardBackup(directory, repository, path string, state discardState) (string, error) {
+func saveDiscardBackup(directory, repository, path string, state discardState, after string) (string, error) {
 	if !filepath.IsAbs(directory) {
 		return "", errors.New("恢复目录必须是绝对路径")
 	}
 	if err := os.MkdirAll(directory, 0700); err != nil {
 		return "", err
 	}
-	backup, err := os.MkdirTemp(directory, "discard-")
+	backup, err := os.MkdirTemp(directory, ".pending-")
 	if err != nil {
 		return "", err
 	}
@@ -267,14 +280,13 @@ func saveDiscardBackup(directory, repository, path string, state discardState) (
 			os.RemoveAll(backup)
 		}
 	}()
-	metadata, err := json.MarshalIndent(struct {
-		Repository string      `json:"repository"`
-		Path       string      `json:"path"`
-		Created    time.Time   `json:"created"`
-		Present    bool        `json:"present"`
-		Mode       os.FileMode `json:"mode"`
-		Untracked  bool        `json:"untracked"`
-	}{repository, path, time.Now().UTC(), state.present, state.mode, state.view.Untracked}, "", "  ")
+	if state.view.Untracked {
+		after = ""
+	}
+	metadata, err := json.MarshalIndent(DiscardBackup{
+		Repository: repository, Path: path, Created: time.Now().UTC(), Present: state.present,
+		Mode: state.mode, Untracked: state.view.Untracked, After: after, Version: 1,
+	}, "", "  ")
 	if err != nil {
 		return "", err
 	}
@@ -292,8 +304,12 @@ func saveDiscardBackup(directory, repository, path string, state discardState) (
 			return "", closeErr
 		}
 	}
+	published := filepath.Join(directory, "discard-"+rand.Text())
+	if err := os.Rename(backup, published); err != nil {
+		return "", err
+	}
 	complete = true
-	return backup, nil
+	return published, nil
 }
 
 func writeDiscardFile(file *os.File, content []byte, mode os.FileMode) error {

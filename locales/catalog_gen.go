@@ -4254,6 +4254,316 @@ func (msgs Messages) OpenBackupFolder() string {
 	return Catalog.Format(msgs.locale, "openBackupFolder", nil)
 }
 
+// Trash says "回收站"
+// in the language the app shows.
+func Trash() string { return In(i18n.Locale()).Trash() }
+
+// Trash says "回收站"
+// in the language of msgs.
+func (msgs Messages) Trash() string {
+	return Catalog.Format(msgs.locale, "trash", nil)
+}
+
+// TrashMenu says "回收站…"
+// in the language the app shows.
+func TrashMenu() string { return In(i18n.Locale()).TrashMenu() }
+
+// TrashMenu says "回收站…"
+// in the language of msgs.
+func (msgs Messages) TrashMenu() string {
+	return Catalog.Format(msgs.locale, "trashMenu", nil)
+}
+
+// TrashEnabled says "启用回收站"
+// in the language the app shows.
+func TrashEnabled() string { return In(i18n.Locale()).TrashEnabled() }
+
+// TrashEnabled says "启用回收站"
+// in the language of msgs.
+func (msgs Messages) TrashEnabled() string {
+	return Catalog.Format(msgs.locale, "trashEnabled", nil)
+}
+
+// TrashRetention says "自动清理"
+// in the language the app shows.
+func TrashRetention() string { return In(i18n.Locale()).TrashRetention() }
+
+// TrashRetention says "自动清理"
+// in the language of msgs.
+func (msgs Messages) TrashRetention() string {
+	return Catalog.Format(msgs.locale, "trashRetention", nil)
+}
+
+// TrashRetentionDays says "{days} 天后"
+// in the language the app shows.
+func TrashRetentionDays(days string) string { return In(i18n.Locale()).TrashRetentionDays(days) }
+
+// TrashRetentionDays says "{days} 天后"
+// in the language of msgs.
+func (msgs Messages) TrashRetentionDays(days string) string {
+	return Catalog.Format(msgs.locale, "trashRetentionDays", map[string]any{"days": days})
+}
+
+// TrashRetentionNever says "从不"
+// in the language the app shows.
+func TrashRetentionNever() string { return In(i18n.Locale()).TrashRetentionNever() }
+
+// TrashRetentionNever says "从不"
+// in the language of msgs.
+func (msgs Messages) TrashRetentionNever() string {
+	return Catalog.Format(msgs.locale, "trashRetentionNever", nil)
+}
+
+// TrashFirstDelete says "将文件移到回收站？"
+// in the language the app shows.
+func TrashFirstDelete() string { return In(i18n.Locale()).TrashFirstDelete() }
+
+// TrashFirstDelete says "将文件移到回收站？"
+// in the language of msgs.
+func (msgs Messages) TrashFirstDelete() string {
+	return Catalog.Format(msgs.locale, "trashFirstDelete", nil)
+}
+
+// TrashFirstChanges says "丢弃文件修改？"
+// in the language the app shows.
+func TrashFirstChanges() string { return In(i18n.Locale()).TrashFirstChanges() }
+
+// TrashFirstChanges says "丢弃文件修改？"
+// in the language of msgs.
+func (msgs Messages) TrashFirstChanges() string {
+	return Catalog.Format(msgs.locale, "trashFirstChanges", nil)
+}
+
+// TrashFirstDetail says "可以在「文件 → 回收站」里找回。自动清理时间可在设置中修改。"
+// in the language the app shows.
+func TrashFirstDetail() string { return In(i18n.Locale()).TrashFirstDetail() }
+
+// TrashFirstDetail says "可以在「文件 → 回收站」里找回。自动清理时间可在设置中修改。"
+// in the language of msgs.
+func (msgs Messages) TrashFirstDetail() string {
+	return Catalog.Format(msgs.locale, "trashFirstDetail", nil)
+}
+
+// TrashMove says "移到回收站"
+// in the language the app shows.
+func TrashMove() string { return In(i18n.Locale()).TrashMove() }
+
+// TrashMove says "移到回收站"
+// in the language of msgs.
+func (msgs Messages) TrashMove() string {
+	return Catalog.Format(msgs.locale, "trashMove", nil)
+}
+
+// TrashMoveMenu says "移到回收站…"
+// in the language the app shows.
+func TrashMoveMenu() string { return In(i18n.Locale()).TrashMoveMenu() }
+
+// TrashMoveMenu says "移到回收站…"
+// in the language of msgs.
+func (msgs Messages) TrashMoveMenu() string {
+	return Catalog.Format(msgs.locale, "trashMoveMenu", nil)
+}
+
+// TrashDeletePermanently says "永久删除"
+// in the language the app shows.
+func TrashDeletePermanently() string { return In(i18n.Locale()).TrashDeletePermanently() }
+
+// TrashDeletePermanently says "永久删除"
+// in the language of msgs.
+func (msgs Messages) TrashDeletePermanently() string {
+	return Catalog.Format(msgs.locale, "trashDeletePermanently", nil)
+}
+
+// TrashDeletePermanentlyMenu says "永久删除…"
+// in the language the app shows.
+func TrashDeletePermanentlyMenu() string { return In(i18n.Locale()).TrashDeletePermanentlyMenu() }
+
+// TrashDeletePermanentlyMenu says "永久删除…"
+// in the language of msgs.
+func (msgs Messages) TrashDeletePermanentlyMenu() string {
+	return Catalog.Format(msgs.locale, "trashDeletePermanentlyMenu", nil)
+}
+
+// TrashDeletePermanentlyTitle says "永久删除这个文件？"
+// in the language the app shows.
+func TrashDeletePermanentlyTitle() string { return In(i18n.Locale()).TrashDeletePermanentlyTitle() }
+
+// TrashDeletePermanentlyTitle says "永久删除这个文件？"
+// in the language of msgs.
+func (msgs Messages) TrashDeletePermanentlyTitle() string {
+	return Catalog.Format(msgs.locale, "trashDeletePermanentlyTitle", nil)
+}
+
+// TrashPermanentDetail says "回收站已关闭。此操作完成后无法通过 51Code 恢复。"
+// in the language the app shows.
+func TrashPermanentDetail() string { return In(i18n.Locale()).TrashPermanentDetail() }
+
+// TrashPermanentDetail says "回收站已关闭。此操作完成后无法通过 51Code 恢复。"
+// in the language of msgs.
+func (msgs Messages) TrashPermanentDetail() string {
+	return Catalog.Format(msgs.locale, "trashPermanentDetail", nil)
+}
+
+// TrashDiscarding says "正在丢弃修改…"
+// in the language the app shows.
+func TrashDiscarding() string { return In(i18n.Locale()).TrashDiscarding() }
+
+// TrashDiscarding says "正在丢弃修改…"
+// in the language of msgs.
+func (msgs Messages) TrashDiscarding() string {
+	return Catalog.Format(msgs.locale, "trashDiscarding", nil)
+}
+
+// TrashFileSaved says "已移到回收站"
+// in the language the app shows.
+func TrashFileSaved() string { return In(i18n.Locale()).TrashFileSaved() }
+
+// TrashFileSaved says "已移到回收站"
+// in the language of msgs.
+func (msgs Messages) TrashFileSaved() string {
+	return Catalog.Format(msgs.locale, "trashFileSaved", nil)
+}
+
+// TrashChangesSaved says "已将修改存入回收站"
+// in the language the app shows.
+func TrashChangesSaved() string { return In(i18n.Locale()).TrashChangesSaved() }
+
+// TrashChangesSaved says "已将修改存入回收站"
+// in the language of msgs.
+func (msgs Messages) TrashChangesSaved() string {
+	return Catalog.Format(msgs.locale, "trashChangesSaved", nil)
+}
+
+// TrashUndo says "撤销"
+// in the language the app shows.
+func TrashUndo() string { return In(i18n.Locale()).TrashUndo() }
+
+// TrashUndo says "撤销"
+// in the language of msgs.
+func (msgs Messages) TrashUndo() string {
+	return Catalog.Format(msgs.locale, "trashUndo", nil)
+}
+
+// TrashLoading says "正在读取回收站…"
+// in the language the app shows.
+func TrashLoading() string { return In(i18n.Locale()).TrashLoading() }
+
+// TrashLoading says "正在读取回收站…"
+// in the language of msgs.
+func (msgs Messages) TrashLoading() string {
+	return Catalog.Format(msgs.locale, "trashLoading", nil)
+}
+
+// TrashSearch says "搜索文件或仓库"
+// in the language the app shows.
+func TrashSearch() string { return In(i18n.Locale()).TrashSearch() }
+
+// TrashSearch says "搜索文件或仓库"
+// in the language of msgs.
+func (msgs Messages) TrashSearch() string {
+	return Catalog.Format(msgs.locale, "trashSearch", nil)
+}
+
+// TrashEmpty says "回收站为空"
+// in the language the app shows.
+func TrashEmpty() string { return In(i18n.Locale()).TrashEmpty() }
+
+// TrashEmpty says "回收站为空"
+// in the language of msgs.
+func (msgs Messages) TrashEmpty() string {
+	return Catalog.Format(msgs.locale, "trashEmpty", nil)
+}
+
+// TrashNoMatches says "没有匹配的文件"
+// in the language the app shows.
+func TrashNoMatches() string { return In(i18n.Locale()).TrashNoMatches() }
+
+// TrashNoMatches says "没有匹配的文件"
+// in the language of msgs.
+func (msgs Messages) TrashNoMatches() string {
+	return Catalog.Format(msgs.locale, "trashNoMatches", nil)
+}
+
+// TrashWasDeleted says "{name}（原状态为已删除）"
+// in the language the app shows.
+func TrashWasDeleted(name string) string { return In(i18n.Locale()).TrashWasDeleted(name) }
+
+// TrashWasDeleted says "{name}（原状态为已删除）"
+// in the language of msgs.
+func (msgs Messages) TrashWasDeleted(name string) string {
+	return Catalog.Format(msgs.locale, "trashWasDeleted", map[string]any{"name": name})
+}
+
+// TrashRestore says "恢复"
+// in the language the app shows.
+func TrashRestore() string { return In(i18n.Locale()).TrashRestore() }
+
+// TrashRestore says "恢复"
+// in the language of msgs.
+func (msgs Messages) TrashRestore() string {
+	return Catalog.Format(msgs.locale, "trashRestore", nil)
+}
+
+// TrashRestoring says "正在恢复…"
+// in the language the app shows.
+func TrashRestoring() string { return In(i18n.Locale()).TrashRestoring() }
+
+// TrashRestoring says "正在恢复…"
+// in the language of msgs.
+func (msgs Messages) TrashRestoring() string {
+	return Catalog.Format(msgs.locale, "trashRestoring", nil)
+}
+
+// TrashRestored says "已恢复"
+// in the language the app shows.
+func TrashRestored() string { return In(i18n.Locale()).TrashRestored() }
+
+// TrashRestored says "已恢复"
+// in the language of msgs.
+func (msgs Messages) TrashRestored() string {
+	return Catalog.Format(msgs.locale, "trashRestored", nil)
+}
+
+// TrashConflictTitle says "无法恢复到原位置"
+// in the language the app shows.
+func TrashConflictTitle() string { return In(i18n.Locale()).TrashConflictTitle() }
+
+// TrashConflictTitle says "无法恢复到原位置"
+// in the language of msgs.
+func (msgs Messages) TrashConflictTitle() string {
+	return Catalog.Format(msgs.locale, "trashConflictTitle", nil)
+}
+
+// TrashConflictDetail says "原位置已有其他内容，或原仓库已移动。可以将回收站中的文件另存为副本。"
+// in the language the app shows.
+func TrashConflictDetail() string { return In(i18n.Locale()).TrashConflictDetail() }
+
+// TrashConflictDetail says "原位置已有其他内容，或原仓库已移动。可以将回收站中的文件另存为副本。"
+// in the language of msgs.
+func (msgs Messages) TrashConflictDetail() string {
+	return Catalog.Format(msgs.locale, "trashConflictDetail", nil)
+}
+
+// TrashConflictWithoutContent says "原位置的文件已变化，或原仓库已移动。当前文件保持原样。"
+// in the language the app shows.
+func TrashConflictWithoutContent() string { return In(i18n.Locale()).TrashConflictWithoutContent() }
+
+// TrashConflictWithoutContent says "原位置的文件已变化，或原仓库已移动。当前文件保持原样。"
+// in the language of msgs.
+func (msgs Messages) TrashConflictWithoutContent() string {
+	return Catalog.Format(msgs.locale, "trashConflictWithoutContent", nil)
+}
+
+// TrashSaveAs says "另存为…"
+// in the language the app shows.
+func TrashSaveAs() string { return In(i18n.Locale()).TrashSaveAs() }
+
+// TrashSaveAs says "另存为…"
+// in the language of msgs.
+func (msgs Messages) TrashSaveAs() string {
+	return Catalog.Format(msgs.locale, "trashSaveAs", nil)
+}
+
 // ReadingGitConfig says "正在读取 Git 配置…"
 // in the language the app shows.
 func ReadingGitConfig() string { return In(i18n.Locale()).ReadingGitConfig() }

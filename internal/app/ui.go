@@ -175,6 +175,8 @@ func (app *nativeApp) view(c *ui.Context) {
 						app.operationCancel()
 					}
 				}
+			} else if app.trashUndo.id != "" {
+				app.trashUndoNotice(c)
 			} else if app.repository != nil && app.screen != "library" {
 				ui.Text(c, app.repository.snapshot.Path).FontSize(12).TextColor(c.Theme().TextMuted).MinWidth(0).MaxLines(1).Shrink(1).Selectable()
 			} else {
@@ -687,7 +689,7 @@ func (app *nativeApp) patchToolbar(c *ui.Context) {
 		}
 		app.lfsFileMenu(c)
 		if !app.staged {
-			if ui.Button(c, locales.DiscardChangesMenu()).Disabled(!app.writable).Clicked() {
+			if ui.Button(c, app.discardFileLabel()).Disabled(!app.writable).Clicked() {
 				app.discardFile()
 			}
 		}

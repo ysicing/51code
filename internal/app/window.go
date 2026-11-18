@@ -54,6 +54,7 @@ type nativePreferences struct {
 	AutoRefreshFiles     bool                         `json:"autoRefreshFiles"`
 	AutoFetchRemotes     bool                         `json:"autoFetchRemotes"`
 	AutoFetchMinutes     int                          `json:"autoFetchMinutes,omitempty"`
+	Trash                nativeTrashPreferences       `json:"trash,omitempty"`
 	SidebarItems         nativeSidebarItems           `json:"sidebarItems"`
 	Shortcuts            nativeShortcuts              `json:"shortcuts"`
 	UpdateCheckFrequency string                       `json:"updateCheckFrequency"`
@@ -141,6 +142,7 @@ type nativeApp struct {
 	conflictBase          [3]editor.State
 	hunk                  int
 	dialog                *nativeDialog
+	trashUndo             nativeTrashUndo
 	scanResult            *workspace.ScanResult
 	scanSelected          map[string]bool
 	prefs                 *nativePreferences
