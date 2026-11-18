@@ -17,6 +17,39 @@ import (
 	"time"
 )
 
+func TestCommitHistoryExcludesStashAndItsParents(t *testing.T) {
+	repo, dir := fixture(t)
+	ctx := context.Background()
+	write(t, dir, "tracked.txt", "original\n")
+	git(t, dir, "add", ".")
+	git(t, dir, "commit", "-m", "original commit")
+	base := git(t, dir, "rev-parse", "HEAD")
+	git(t, dir, "tag", "v1.0.0")
+	write(t, dir, "tracked.txt", "staged change\n")
+	git(t, dir, "add", "tracked.txt")
+	write(t, dir, "untracked.txt", "untracked change\n")
+	git(t, dir, "stash", "push", "--include-untracked", "-m", "sync backup")
+	git(t, dir, "commit", "--allow-empty", "-m", "latest commit")
+	head := git(t, dir, "rev-parse", "HEAD")
+
+	history, err := repo.History(ctx, 0)
+	if err != nil || len(history) != 2 || history[0].Hash != head || history[1].Hash != base {
+		t.Fatalf("unexpected commit history: %+v, %v", history, err)
+	}
+	page, err := repo.SearchHistory(ctx, "", "", 1, HistoryFilter{}, 1)
+	if err != nil || len(page) != 1 || page[0].Hash != base || !strings.Contains(page[0].Refs, "tag: v1.0.0") {
+		t.Fatalf("unexpected history page: %+v, %v", page, err)
+	}
+	matches, err := repo.SearchHistory(ctx, "sync backup", "", 0, HistoryFilter{})
+	if err != nil || len(matches) != 0 {
+		t.Fatalf("stash leaked into search: %+v, %v", matches, err)
+	}
+	stashes, err := repo.Stashes(ctx)
+	if err != nil || len(stashes) != 1 || stashes[0].Hash != git(t, dir, "rev-parse", "refs/stash") {
+		t.Fatalf("stash unavailable: %+v, %v", stashes, err)
+	}
+}
+
 func TestSearchHistoryBeyondLoadedPage(t *testing.T) {
 	repo, dir := fixture(t)
 	ctx := context.Background()

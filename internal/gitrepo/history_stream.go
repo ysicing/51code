@@ -177,7 +177,7 @@ func (repo *Repository) readHistory(ctx context.Context, path string, filter His
 	defer cancel()
 	stdout.cancel = cancel
 	args := []string{"--no-pager", "--literal-pathspecs", "-C", repo.Path, "-c", "color.ui=false",
-		"log", "--no-show-signature", "--decorate=short", "--topo-order", "-z",
+		"log", "--no-show-signature", "--decorate=short", "--decorate-refs-exclude=refs/stash", "--topo-order", "-z",
 		historyFormat}
 	if filter.HideRemotes {
 		args = append(args, "--decorate-refs-exclude=refs/remotes/*")
@@ -213,6 +213,7 @@ func (repo *Repository) readHistory(ctx context.Context, path string, filter His
 	} else if filter.CurrentBranch {
 		args = append(args, "HEAD")
 	} else {
+		args = append(args, "--exclude=refs/stash")
 		if filter.HideRemotes {
 			args = append(args, "--exclude=refs/remotes/*")
 		}

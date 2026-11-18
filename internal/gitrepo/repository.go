@@ -400,7 +400,8 @@ func (repo *Repository) History(ctx context.Context, skip int) ([]Commit, error)
 	if head == "" {
 		return commits, nil
 	}
-	output, err := repo.git(ctx, "log", "--no-show-signature", "--all", "--topo-order", "-n", "100", "--skip="+strconv.Itoa(skip), "-z", "--format=%H%x00%P%x00%s%x00%an%x00%aI%x00%D%x00%cI")
+	output, err := repo.git(ctx, "log", "--no-show-signature", "--exclude=refs/stash", "--all", "--decorate-refs-exclude=refs/stash",
+		"--topo-order", "-n", "100", "--skip="+strconv.Itoa(skip), "-z", "--format=%H%x00%P%x00%s%x00%an%x00%aI%x00%D%x00%cI")
 	if err != nil {
 		return nil, err
 	}
