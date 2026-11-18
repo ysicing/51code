@@ -247,3 +247,7 @@ GitHub Release 验收后，脚本继续发布 Gemfury。`release.config.json` �
 正式安装入口为 `brew install --cask ysicing/tap/51code`。发布完成后，在 `ysicing/homebrew-tap` 更新 `Casks/51code.rb` 的版本、双架构 DMG URL 和 SHA-256；使用 `app "51Code.app"`，保留 `com.ysicing.xsourcetree` 等旧身份。
 
 tap 根目录的 `cask_renames.json` 保留 `"xsourcetree": "51code"`，兼容旧名称及已有安装的迁移。只维护 `51code` cask，不保留同名旧 cask 文件，也不添加 `deprecate!`。检查新旧名称均解析为 `51code`，运行 `brew style --cask ysicing/tap/51code` 和 `brew audit --cask --online --arch=all ysicing/tap/51code`；验证已有安装迁移时使用 `brew migrate --cask --dry-run ysicing/tap/51code`，避免改动用户应用。
+
+### 清理发布产物
+
+CDN、GitHub Release、Gemfury 和 Homebrew tap 均验收通过后，按构建时记录的路径删除本次 `build/release-*` 目录，并确认清理结果。预演或发布中断时保留原目录供续发。每次清理仅限本次发布目录。

@@ -135,3 +135,5 @@ brew migrate --cask --dry-run ysicing/tap/51code
 - 首次启用自动更新前安装的旧应用需要手动安装一次新版本；未上传首个清单时检查更新失败不代表升级成功。
 
 完整正式发布须满足：源码提交及 `v<version>` tag 已推送且与产物对应；双架构 Apple 签名、公证与 Gatekeeper 检查通过；对象/CDN 与固定更新清单验收通过；GitHub Release 已公开且安装包附件 SHA-256 校验一致；Gemfury 的 `ysicing` 组织中 deb/rpm 均公开且 4 个安装包 SHA-256 校验一致；tap 更新已验证并推送。最终用简体中文报告版本、模式、源码提交与 tag、签名公证状态、GitHub Release、Gemfury、对象和清单状态、tap 提交及验证缺口。未实际运行的跨版本安装和 Intel 桌面行为明确列为未验证。
+
+全部验收通过后，核对构建时记录的本次 `build/release-*` 实际路径，删除该目录并确认已清理，将结果纳入发布报告。按单次构建目录清理，保留 `build/` 内的其他产物。预演或发布中断时保留原目录供续发。
