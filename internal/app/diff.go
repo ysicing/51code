@@ -220,16 +220,13 @@ func (app *nativeApp) fileDiffPanel(c *ui.Context) {
 		}
 		switch {
 		case len(app.diffViews) == 1:
-			app.configureDiff(app.diffViews[0])
-			editor.DiffView(c, app.diffViews[0]).Grow(1).FillWidth().MinHeight(0)
+			app.codeDiffView(c, 0, false).Grow(1).FillWidth().MinHeight(0)
 		case len(app.diffViews) > 1:
 			ui.Scroll(c).Grow(1).MinHeight(0).FillWidth().Children(func() {
-				for index, state := range app.diffViews {
+				for index := range app.diffViews {
 					ui.Column(c).Key(index).FillWidth().Children(func() {
 						ui.Text(c, app.diffNames[index]).Bold().Padding(10, 14)
-						app.configureDiff(state)
-						state.FitContent = true
-						editor.DiffView(c, state).FillWidth()
+						app.codeDiffView(c, index, true).FillWidth()
 					})
 				}
 			})
@@ -249,6 +246,17 @@ func (app *nativeApp) fileDiffPanel(c *ui.Context) {
 			})
 		}
 	})
+}
+
+func (app *nativeApp) codeDiffView(c *ui.Context, index int, fit bool) ui.Element {
+	diff := app.diffViews[index]
+	app.configureDiff(diff)
+	diff.FitContent = fit
+	c.Key(diff.Layout)
+	if diff.Layout == editor.DiffSplit {
+		return editor.DiffView(c, diff)
+	}
+	return app.unifiedDiffs[index].view(c, app.diffNames[index], diff.Wrap, fit)
 }
 
 func (app *nativeApp) fullFilePanel(c *ui.Context) {

@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/ysicing/51code/internal/gitrepo"
+	"github.com/ysicing/51code/locales"
 
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
@@ -35,6 +36,84 @@ func TestNativeDiffKeepsWholeFileContext(t *testing.T) {
 	app.diffViews[0].ExpandAll()
 	if app.diffViews[0].Old.LineCount() != 62 {
 		t.Fatal("展开上下文缺少补丁之外的内容")
+	}
+}
+
+func TestNativeUnifiedDiffDragCopiesDeletedAndAddedCode(t *testing.T) {
+	app, _, _ := nativeFixture(t)
+	app.prefs.DiffLayout = "unified"
+	app.setDiff(gitrepo.Diff{Text: "diff --git a/hello.go b/hello.go\n--- a/hello.go\n+++ b/hello.go\n" +
+		"@@ -1,3 +1,2 @@\n-\told value\n-  return\n+\tnew value\n context\n"})
+	tester := ui.NewTester(app.fileDiffPanel, 460, 400)
+	field, found := tester.AccessByRole(ui.RoleTextField, locales.DiffText())
+	if !found || !field.ReadOnly {
+		t.Fatal("差异正文必须是可选择的只读文本")
+	}
+	state := &app.unifiedDiffs[0].state
+	left, right := field.Bounds.X+8, field.Bounds.X+180
+	row := func(line int) float32 {
+		return field.Bounds.Y + float32(state.LineTop(line)-state.ScrollY()) + 8
+	}
+	tester.Press(left, row(0))
+	tester.Move(right, row(2))
+	tester.Release(right, row(2))
+	tester.Key(ui.Cmd, ui.KeyC)
+	if got := tester.Clipboard(); got != "\told value\n  return\n\tnew value" {
+		t.Fatalf("跨删除行与新增行复制内容为 %q，选区 %+v，编辑器范围 %+v", got, state.Selection(), field.Bounds)
+	}
+	if directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); directory != "" {
+		saveNativeScreenshot(t, tester, directory, "unified-selection-light.png")
+		tester.SetDark(true)
+		saveNativeScreenshot(t, tester, directory, "unified-selection-dark.png")
+	}
+
+	tester.ClickAt(left, row(0))
+	tester.Key(0, ui.KeyLeft)
+	for range 4 {
+		tester.Key(ui.Shift, ui.KeyRight)
+	}
+	tester.Key(ui.Cmd, ui.KeyC)
+	if got := tester.Clipboard(); got != "\told" {
+		t.Fatalf("删除行内选区复制内容为 %q", got)
+	}
+	tester.SetLocale("en")
+	tester.SetClipboard("")
+	tester.RightClickAt(left, row(0))
+	if err := tester.ChooseMenuItem("Copy"); err != nil {
+		t.Fatal(err)
+	}
+	if got := tester.Clipboard(); got != "\told" {
+		t.Fatalf("右键复制内容为 %q", got)
+	}
+}
+
+func TestNativeUnifiedDiffExpandsContextInPlace(t *testing.T) {
+	app, _, _ := nativeFixture(t)
+	app.prefs.DiffLayout = "unified"
+	before := "one\ntwo\nthree\nold\nfive\n\n"
+	after := strings.Replace(before, "old", "new", 1)
+	app.setDiff(gitrepo.Diff{
+		Text: "diff --git a/hello.txt b/hello.txt\n--- a/hello.txt\n+++ b/hello.txt\n@@ -4 +4 @@\n-old\n+new\n",
+		Old:  &gitrepo.FileContent{Present: true, Text: before},
+		New:  &gitrepo.FileContent{Present: true, Text: after},
+	})
+	tester := ui.NewTester(app.fileDiffPanel, 420, 400)
+	field, found := tester.AccessByRole(ui.RoleTextField, locales.DiffText())
+	if !found {
+		t.Fatal("差异正文不可见")
+	}
+	diff := &app.unifiedDiffs[0]
+	if got := diff.state.Buffer.String(); got != "\nold\nnew\n" {
+		t.Fatalf("初始折叠内容为 %q", got)
+	}
+	tester.ClickAt(field.Bounds.X-55, field.Bounds.Y+8)
+	if got := diff.state.Buffer.String(); got != "one\ntwo\nthree\nold\nnew\n" {
+		t.Fatalf("展开后内容为 %q", got)
+	}
+	diff.goToHunk(0)
+	tester.Frame()
+	if got := diff.state.CursorPos().Line; got != 3 {
+		t.Fatalf("展开后区块定位到第 %d 行", got)
 	}
 }
 

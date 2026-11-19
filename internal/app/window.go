@@ -128,6 +128,7 @@ type nativeApp struct {
 	patch                 gitrepo.Patch
 	diffViews             []*editor.DiffState
 	diffNames             []string
+	unifiedDiffs          []nativeUnifiedDiff
 	hunkOffsets           []int
 	rawDiff               editor.State
 	fileViewer            nativeFileViewer

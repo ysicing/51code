@@ -27,7 +27,7 @@ var (
 
 func buildVersionLabel() string {
 	version := mygo.App.Version()
-	if version == "" {
+	if mygo.IsDev() || version == "" {
 		return locales.DevelopmentBuild()
 	}
 	label := "v" + version
@@ -38,8 +38,12 @@ func buildVersionLabel() string {
 }
 
 func showNativeAbout() {
+	version := mygo.App.Version()
+	if mygo.IsDev() {
+		version = locales.DevelopmentBuild()
+	}
 	mygo.App.ShowAboutPanel(mygo.AboutPanelOptions{
-		ApplicationVersion: mygo.App.Version(),
+		ApplicationVersion: version,
 		Version:            buildNumber,
 		Credits:            buildDetails(),
 	})

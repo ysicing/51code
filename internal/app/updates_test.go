@@ -8,6 +8,9 @@ import (
 	"os"
 	"testing"
 
+	"github.com/ysicing/51code/locales"
+
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -78,6 +81,21 @@ func TestNativeVersionUpdateEntry(t *testing.T) {
 	}
 	if info, found := tester.AccessByRole(ui.RoleButton, "检查更新"); !found || info.Disabled {
 		t.Fatal("清除更新提示后应仍可手动检查")
+	}
+}
+
+func TestNativeVersionLabelUsesDevelopmentMode(t *testing.T) {
+	previous := mygo.App.Version()
+	mygo.App.SetVersion("0.3.2")
+	t.Cleanup(func() { mygo.App.SetVersion(previous) })
+
+	t.Setenv("MYGO_ENV", "")
+	if label := buildVersionLabel(); label != locales.DevelopmentBuild() {
+		t.Fatalf("开发包版本显示为 %q", label)
+	}
+	t.Setenv("MYGO_ENV", "production")
+	if label := buildVersionLabel(); label != "v0.3.2" {
+		t.Fatalf("正式包版本显示为 %q", label)
 	}
 }
 

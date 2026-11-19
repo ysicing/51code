@@ -153,6 +153,7 @@ func (app *nativeApp) selectFile(file string, staged bool) {
 func (app *nativeApp) clearDiff() {
 	app.diff, app.patch = gitrepo.Diff{}, gitrepo.Patch{}
 	app.diffViews, app.diffNames, app.lineChoices = nil, nil, nil
+	app.unifiedDiffs = nil
 	app.hunkOffsets = nil
 	app.rawDiff = editor.State{}
 	app.conflict = nil
@@ -207,6 +208,7 @@ func (app *nativeApp) setDiff(diff gitrepo.Diff) {
 	app.diff = diff
 	app.fileViewer.setSources(diff)
 	app.diffViews, app.diffNames = nil, nil
+	app.unifiedDiffs = nil
 	app.hunkOffsets = nil
 	patches, err := editor.ParsePatch(diff.Text)
 	// 多文件差异的每个 DiffView 都按全文高度排进同一个滚动区，无法虚拟化；
@@ -216,19 +218,24 @@ func (app *nativeApp) setDiff(diff gitrepo.Diff) {
 			if patch.Binary || len(patch.Hunks) == 0 {
 				// 混合提交保留完整原始差异，避免隐藏二进制、重命名或权限变更。
 				app.diffViews, app.diffNames, app.hunkOffsets = nil, nil, nil
+				app.unifiedDiffs = nil
 				break
 			}
 			state := &editor.DiffState{Wrap: app.prefs.Wrap, Indicators: editor.DiffClassic}
 			state.SetPatch(patch)
+			unified := nativeUnifiedDiff{patch: patch}
 			if len(patches) == 1 && diff.Old != nil && diff.New != nil &&
 				!diff.Old.Binary && !diff.New.Binary && !diff.Old.Truncated && !diff.New.Truncated &&
 				!diff.Old.Unsupported && !diff.New.Unsupported {
 				// 保留 Git 生成的增删段，不能因补齐上下文而改变逐行暂存的坐标。
 				if err := state.SetPatchFiles(patch, diff.Old.Text, diff.New.Text); err != nil {
 					app.fileViewer.contextChanged = true
+				} else {
+					unified.context = state.Old
 				}
 			}
 			app.diffViews = append(app.diffViews, state)
+			app.unifiedDiffs = append(app.unifiedDiffs, unified)
 			name := patch.NewName
 			if name == "" {
 				name = patch.OldName
@@ -276,6 +283,9 @@ func (app *nativeApp) goToPatchHunk() {
 	if len(app.diffViews) == 1 && app.hunk < len(app.hunkOffsets) {
 		// Native Diff 按连续增删段导航，Git 区块可能包含多段增删。
 		app.diffViews[0].GoToHunk(app.hunkOffsets[app.hunk])
+		if app.diffViews[0].Layout == editor.DiffUnified {
+			app.unifiedDiffs[0].goToHunk(app.hunk)
+		}
 	}
 }
 
