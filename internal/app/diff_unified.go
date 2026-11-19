@@ -172,38 +172,41 @@ func (diff *nativeUnifiedDiff) view(c *ui.Context, name string, wrap, fit bool) 
 		}
 	})
 	root.DrawOver(func(p *ui.Painter, bounds ui.Rect) {
-		scroll := state.ScrollY()
-		visible := p.Visible()
-		start := sort.Search(len(diff.rows), func(index int) bool {
-			return state.LineTop(index+1)-scroll >= float64(visible.Y-bounds.Y)
+		// DrawOver 在容器自身的裁剪解除后执行，行号与注记须显式限制在差异视口内。
+		p.Clip(bounds, 0, func() {
+			scroll := state.ScrollY()
+			visible := p.Visible()
+			start := sort.Search(len(diff.rows), func(index int) bool {
+				return state.LineTop(index+1)-scroll >= float64(visible.Y-bounds.Y)
+			})
+			for line := start; line < len(diff.rows); line++ {
+				top := bounds.Y + float32(state.LineTop(line)-scroll)
+				if top >= visible.Y+visible.H {
+					break
+				}
+				row := diff.rows[line]
+				if row.gap > 0 {
+					p.Text(bounds.X+8, top+2, fmt.Sprintf("↕ %d", row.gap), 12, theme.LineNumber)
+					continue
+				}
+				if row.note != "" {
+					p.Text(bounds.X+80, top+2, row.note, 12, theme.LineNumber)
+					continue
+				}
+				if row.old > 0 {
+					p.Text(bounds.X+4, top+2, strconv.Itoa(row.old), 12, theme.LineNumber)
+				}
+				if row.new > 0 {
+					p.Text(bounds.X+31, top+2, strconv.Itoa(row.new), 12, theme.LineNumber)
+				}
+				switch row.kind {
+				case '-':
+					p.Text(bounds.X+58, top+2, "−", 13, theme.Deleted)
+				case '+':
+					p.Text(bounds.X+58, top+2, "+", 13, theme.Added)
+				}
+			}
 		})
-		for line := start; line < len(diff.rows); line++ {
-			top := bounds.Y + float32(state.LineTop(line)-scroll)
-			if top >= visible.Y+visible.H {
-				break
-			}
-			row := diff.rows[line]
-			if row.gap > 0 {
-				p.Text(bounds.X+8, top+2, fmt.Sprintf("↕ %d", row.gap), 12, theme.LineNumber)
-				continue
-			}
-			if row.note != "" {
-				p.Text(bounds.X+80, top+2, row.note, 12, theme.LineNumber)
-				continue
-			}
-			if row.old > 0 {
-				p.Text(bounds.X+4, top+2, strconv.Itoa(row.old), 12, theme.LineNumber)
-			}
-			if row.new > 0 {
-				p.Text(bounds.X+31, top+2, strconv.Itoa(row.new), 12, theme.LineNumber)
-			}
-			switch row.kind {
-			case '-':
-				p.Text(bounds.X+58, top+2, "−", 13, theme.Deleted)
-			case '+':
-				p.Text(bounds.X+58, top+2, "+", 13, theme.Added)
-			}
-		}
 	})
 	return root
 }

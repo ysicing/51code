@@ -117,6 +117,57 @@ func TestNativeUnifiedDiffExpandsContextInPlace(t *testing.T) {
 	}
 }
 
+func TestNativeUnifiedDiffScrollKeepsGutterInsideViewport(t *testing.T) {
+	for _, width := range []int{360, 760} {
+		for _, dark := range []bool{false, true} {
+			t.Run(fmt.Sprintf("width-%d-dark-%t", width, dark), func(t *testing.T) {
+				app, _, _ := nativeFixture(t)
+				app.prefs.DiffLayout = "unified"
+				app.selectedFile = "constant/proxy.go"
+				app.repository.snapshot.Files = []gitrepo.File{{Path: app.selectedFile, Index: " ", Working: "M"}}
+				app.setDiff(gitrepo.Diff{Text: "diff --git a/constant/proxy.go b/constant/proxy.go\n" +
+					"--- a/constant/proxy.go\n+++ b/constant/proxy.go\n@@ -1,80 +1,80 @@\n" +
+					strings.Repeat(" unchanged context\n", 80)})
+				tester := ui.NewTester(app.fileDiffPanel, width, 260)
+				tester.SetDark(dark)
+				field, found := tester.AccessByRole(ui.RoleTextField, locales.DiffText())
+				if !found || field.Bounds.Y <= 0 {
+					t.Fatal("差异正文或文件标题不可见")
+				}
+				before := tester.Image()
+				state := &app.unifiedDiffs[0].state
+				state.SetScrollY(state.LineTop(20) + 7)
+				tester.Frame()
+				if state.ScrollY() == 0 {
+					t.Fatal("差异正文没有滚动")
+				}
+				after := tester.Image()
+				if directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); directory != "" {
+					saveNativeScreenshot(t, tester, directory, fmt.Sprintf("unified-scroll-%d-dark-%t.png", width, dark))
+				}
+				for row := 0; row < int(field.Bounds.Y); row++ {
+					for column := 0; column < 72; column++ {
+						if before.RGBAAt(column, row) != after.RGBAAt(column, row) {
+							t.Fatalf("滚动后的行号穿透文件标题区域：(%d, %d)，正文范围 %+v", column, row, field.Bounds)
+						}
+					}
+				}
+				gutterChanged := false
+				for row := int(field.Bounds.Y) + 1; row < after.Bounds().Max.Y; row++ {
+					for column := 0; column < 72; column++ {
+						if before.RGBAAt(column, row) != after.RGBAAt(column, row) {
+							gutterChanged = true
+						}
+					}
+				}
+				if !gutterChanged {
+					t.Fatal("滚动后视口内的行号没有更新")
+				}
+			})
+		}
+	}
+}
+
 func TestNativeFullFileUnavailableStates(t *testing.T) {
 	for _, test := range []struct {
 		name, message string
