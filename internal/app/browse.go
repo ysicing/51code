@@ -86,12 +86,6 @@ func (app *nativeApp) readBrowserContent(ctx context.Context, path string, resul
 	if err != nil {
 		return nil, err
 	}
-	if revision == "WORKTREE" || revision == "INDEX" {
-		result.diff.Old, err = app.service.BrowseFileContent(ctx, path, file, "HEAD")
-		if err != nil {
-			return nil, err
-		}
-	}
 	return result, nil
 }
 
@@ -228,13 +222,6 @@ func (app *nativeApp) browserFilePanel(c *ui.Context) {
 		ui.Row(c).FillWidth().Padding(8, 12).Gap(8).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, state.file).Bold().Grow(1).MinWidth(0).MaxLines(1).Tooltip(state.file)
 			if state.file != "" {
-				ui.MenuButton(c, fileVersionLabel(state.viewer.sources[state.viewer.side]), func(menu *ui.Menu) {
-					for index, source := range state.viewer.sources {
-						if source != nil && menu.Item(fileVersionLabel(source)).Radio(state.viewer.side == index).Chosen() {
-							state.viewer.side = index
-						}
-					}
-				}).Label(locales.FileVersion())
 				ui.Button(c, locales.FileHistory()).OnClick(func() {
 					file := state.file
 					app.switchWorkspace("search")

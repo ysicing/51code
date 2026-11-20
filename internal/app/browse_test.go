@@ -122,7 +122,7 @@ func TestNativeBrowserFailurePreservesViewerAndSelection(t *testing.T) {
 	}
 }
 
-func TestNativeBrowserDeletedDefaultsToHEADAndFiltering(t *testing.T) {
+func TestNativeBrowserDeletedFollowsSelectedVersionAndFiltering(t *testing.T) {
 	app, path, finish := nativeFixture(t)
 	if err := os.Remove(filepath.Join(path, "hello.txt")); err != nil {
 		t.Fatal(err)
@@ -131,8 +131,18 @@ func TestNativeBrowserDeletedDefaultsToHEADAndFiltering(t *testing.T) {
 	finish()
 	app.selectBrowserFile("hello.txt")
 	finish()
-	if app.browser.viewer.side != 0 || app.browser.viewer.state(0).Buffer.String() != "原始内容\n" {
-		t.Fatal("deleted file did not show HEAD")
+	tester := ui.NewTester(app.browserWorkspace, 1024, 680)
+	if _, found := tester.Find(locales.AbsentVersion()); !found {
+		t.Fatal("deleted worktree file should show the absent-version state")
+	}
+	if _, found := tester.Access(locales.FileVersion()); found {
+		t.Fatal("browser retained a separate preview version menu")
+	}
+	app.loadBrowser("HEAD", "hello.txt", nil)
+	finish()
+	tester.Frame()
+	if got := app.browser.viewer.state(1).Buffer.String(); got != "原始内容\n" {
+		t.Fatalf("HEAD content = %q", got)
 	}
 	app.browser.query = "HELLO"
 	if got := app.browser.visibleFiles(); len(got) != 1 || got[0].Path != "hello.txt" {
@@ -141,6 +151,45 @@ func TestNativeBrowserDeletedDefaultsToHEADAndFiltering(t *testing.T) {
 	app.browser.query = "absent"
 	if len(app.browser.visibleFiles()) != 0 {
 		t.Fatal("path filter did not hide nonmatching files")
+	}
+}
+
+func TestNativeBrowserPreviewFollowsVersionMenu(t *testing.T) {
+	app, path, finish := nativeFixture(t)
+	writeNativeFile(t, path, "hello.txt", "index content\n")
+	nativeGit(t, path, "add", "hello.txt")
+	writeNativeFile(t, path, "hello.txt", "working content\n")
+	app.switchWorkspace("files")
+	finish()
+	app.selectBrowserFile("hello.txt")
+	finish()
+	tester := ui.NewTester(app.browserWorkspace, 1024, 680)
+	for _, test := range []struct {
+		label, text string
+	}{
+		{"HEAD", "原始内容\n"},
+		{locales.IndexVersion(), "index content\n"},
+		{locales.WorkingVersion(), "working content\n"},
+	} {
+		menu, found := tester.AccessByRole(ui.RoleMenuButton, locales.RepositoryFiles())
+		if !found {
+			t.Fatal("browser version menu is missing")
+		}
+		tester.ClickAt(menu.Bounds.X+menu.Bounds.W/2, menu.Bounds.Y+menu.Bounds.H/2)
+		if err := tester.ChooseMenuItem(test.label); err != nil {
+			t.Fatal(err)
+		}
+		finish()
+		app.selectBrowserFile("hello.txt")
+		finish()
+		tester.Frame()
+		field, found := tester.AccessByRole(ui.RoleTextField, locales.FileContentLabel())
+		if !found || field.Value != test.text || !field.ReadOnly {
+			t.Fatalf("%s preview = %+v", test.label, field)
+		}
+		if _, found := tester.Access(locales.FileVersion()); found {
+			t.Fatal("preview has an independent version selector")
+		}
 	}
 }
 
@@ -300,7 +349,7 @@ func TestNativeBrowserScreenshots(t *testing.T) {
 				field.Bounds.X < 0 || field.Bounds.X+field.Bounds.W > float32(width) {
 				t.Fatalf("browser content missing or clipped at width=%d: %+v", width, field)
 			}
-			for _, label := range []string{locales.FileVersion(), locales.FileHistory(), locales.FindInFile()} {
+			for _, label := range []string{locales.FileHistory(), locales.FindInFile()} {
 				control, found := tester.Access(label)
 				if !found || control.Offscreen || control.Bounds.X+control.Bounds.W > float32(width) {
 					t.Fatalf("browser control clipped at width=%d: %s, %+v", width, label, control)
