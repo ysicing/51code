@@ -207,6 +207,8 @@
   "swapComparison": "交换比较方向",
   "compareSnapshots": "两端快照",
   "compareMergeBase": "共同祖先",
+  "compareSnapshotsHint": "直接比较左侧基准版本与右侧目标版本的文件差异。",
+  "compareMergeBaseHint": "从两个版本最近的共同提交开始，查看右侧目标版本的文件变化。",
   "comparisonMode": "比较方式",
   "comparisonRevisionHint": "提交、分支或标签",
   "readingComparison": "正在比较版本…",

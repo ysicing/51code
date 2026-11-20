@@ -207,6 +207,8 @@
   "swapComparison": "Swap comparison direction",
   "compareSnapshots": "Snapshots",
   "compareMergeBase": "Merge base",
+  "compareSnapshotsHint": "Compare files directly between the base revision on the left and the target on the right.",
+  "compareMergeBaseHint": "See what changed in the target on the right since its most recent common commit with the base.",
   "comparisonMode": "Comparison mode",
   "comparisonRevisionHint": "Commit, branch, or tag",
   "readingComparison": "Comparing revisions…",

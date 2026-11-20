@@ -94,8 +94,18 @@ func TestNativeComparisonModesAndFailure(t *testing.T) {
 	app.switchWorkspace("compare")
 	app.comparison.base, app.comparison.target = "main", "feature"
 	tester := ui.NewTester(app.view, 1024, 680)
+	const snapshotsHint = "直接比较左侧基准版本与右侧目标版本的文件差异。"
+	if _, found := tester.Find(snapshotsHint); !found {
+		t.Fatal("缺少两端快照说明")
+	}
 	if err := tester.Click("共同祖先"); err != nil {
 		t.Fatal(err)
+	}
+	if _, found := tester.Find("从两个版本最近的共同提交开始，查看右侧目标版本的文件变化。"); !found {
+		t.Fatal("切换模式后未显示共同祖先说明")
+	}
+	if _, found := tester.Find(snapshotsHint); found {
+		t.Fatal("切换模式后仍显示两端快照说明")
 	}
 	if err := tester.Click("比较"); err != nil {
 		t.Fatal(err)

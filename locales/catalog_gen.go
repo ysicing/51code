@@ -2120,6 +2120,26 @@ func (msgs Messages) CompareMergeBase() string {
 	return Catalog.Format(msgs.locale, "compareMergeBase", nil)
 }
 
+// CompareSnapshotsHint says "直接比较左侧基准版本与右侧目标版本的文件差异。"
+// in the language the app shows.
+func CompareSnapshotsHint() string { return In(i18n.Locale()).CompareSnapshotsHint() }
+
+// CompareSnapshotsHint says "直接比较左侧基准版本与右侧目标版本的文件差异。"
+// in the language of msgs.
+func (msgs Messages) CompareSnapshotsHint() string {
+	return Catalog.Format(msgs.locale, "compareSnapshotsHint", nil)
+}
+
+// CompareMergeBaseHint says "从两个版本最近的共同提交开始，查看右侧目标版本的文件变化。"
+// in the language the app shows.
+func CompareMergeBaseHint() string { return In(i18n.Locale()).CompareMergeBaseHint() }
+
+// CompareMergeBaseHint says "从两个版本最近的共同提交开始，查看右侧目标版本的文件变化。"
+// in the language of msgs.
+func (msgs Messages) CompareMergeBaseHint() string {
+	return Catalog.Format(msgs.locale, "compareMergeBaseHint", nil)
+}
+
 // ComparisonMode says "比较方式"
 // in the language the app shows.
 func ComparisonMode() string { return In(i18n.Locale()).ComparisonMode() }

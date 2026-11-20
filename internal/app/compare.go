@@ -164,6 +164,11 @@ func (app *nativeApp) comparisonWorkspace(c *ui.Context) {
 					Disabled(strings.TrimSpace(state.base) == "" || strings.TrimSpace(state.target) == "").
 					OnClick(app.startComparison)
 			})
+			modeHint := locales.CompareSnapshotsHint()
+			if state.mergeBase {
+				modeHint = locales.CompareMergeBaseHint()
+			}
+			ui.Text(c, modeHint).FillWidth().MinWidth(0).FontSize(11).TextColor(c.Theme().TextMuted)
 		})
 		ui.Divider(c)
 		if state.result == nil {
