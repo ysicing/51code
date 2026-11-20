@@ -156,14 +156,14 @@ func (msgs Messages) RepositoryRelocationConflict() string {
 	return Catalog.Format(msgs.locale, "repositoryRelocationConflict", nil)
 }
 
-// AllWorktrees says "全部工作树"
+// AttachedWorktrees says "附加"
 // in the language the app shows.
-func AllWorktrees() string { return In(i18n.Locale()).AllWorktrees() }
+func AttachedWorktrees() string { return In(i18n.Locale()).AttachedWorktrees() }
 
-// AllWorktrees says "全部工作树"
+// AttachedWorktrees says "附加"
 // in the language of msgs.
-func (msgs Messages) AllWorktrees() string {
-	return Catalog.Format(msgs.locale, "allWorktrees", nil)
+func (msgs Messages) AttachedWorktrees() string {
+	return Catalog.Format(msgs.locale, "attachedWorktrees", nil)
 }
 
 // WorktreeCleanupCandidates says "可清理"
@@ -188,14 +188,24 @@ func (msgs Messages) EmptyWorktreeCleanupCandidates() string {
 	return Catalog.Format(msgs.locale, "emptyWorktreeCleanupCandidates", nil)
 }
 
-// CleanupWorktreeMenu says "清理工作树…"
+// Cleanup says "清理"
 // in the language the app shows.
-func CleanupWorktreeMenu() string { return In(i18n.Locale()).CleanupWorktreeMenu() }
+func Cleanup() string { return In(i18n.Locale()).Cleanup() }
 
-// CleanupWorktreeMenu says "清理工作树…"
+// Cleanup says "清理"
 // in the language of msgs.
-func (msgs Messages) CleanupWorktreeMenu() string {
-	return Catalog.Format(msgs.locale, "cleanupWorktreeMenu", nil)
+func (msgs Messages) Cleanup() string {
+	return Catalog.Format(msgs.locale, "cleanup", nil)
+}
+
+// CleanupWorktreeTitle says "清理工作树"
+// in the language the app shows.
+func CleanupWorktreeTitle() string { return In(i18n.Locale()).CleanupWorktreeTitle() }
+
+// CleanupWorktreeTitle says "清理工作树"
+// in the language of msgs.
+func (msgs Messages) CleanupWorktreeTitle() string {
+	return Catalog.Format(msgs.locale, "cleanupWorktreeTitle", nil)
 }
 
 // WorktreeContainedIn says "提交已包含在：{branches}"
@@ -1740,11 +1750,11 @@ func (msgs Messages) Worktrees() string {
 	return Catalog.Format(msgs.locale, "worktrees", nil)
 }
 
-// EmptyWorktrees says "没有工作树"
+// EmptyWorktrees says "暂无附加工作树"
 // in the language the app shows.
 func EmptyWorktrees() string { return In(i18n.Locale()).EmptyWorktrees() }
 
-// EmptyWorktrees says "没有工作树"
+// EmptyWorktrees says "暂无附加工作树"
 // in the language of msgs.
 func (msgs Messages) EmptyWorktrees() string {
 	return Catalog.Format(msgs.locale, "emptyWorktrees", nil)
@@ -1790,44 +1800,74 @@ func (msgs Messages) ReadingWorktrees() string {
 	return Catalog.Format(msgs.locale, "readingWorktrees", nil)
 }
 
-// NewWorktreeMenu says "新建工作树…"
+// NewWorktreeTitle says "新建工作树"
 // in the language the app shows.
-func NewWorktreeMenu() string { return In(i18n.Locale()).NewWorktreeMenu() }
+func NewWorktreeTitle() string { return In(i18n.Locale()).NewWorktreeTitle() }
 
-// NewWorktreeMenu says "新建工作树…"
+// NewWorktreeTitle says "新建工作树"
 // in the language of msgs.
-func (msgs Messages) NewWorktreeMenu() string {
-	return Catalog.Format(msgs.locale, "newWorktreeMenu", nil)
+func (msgs Messages) NewWorktreeTitle() string {
+	return Catalog.Format(msgs.locale, "newWorktreeTitle", nil)
 }
 
-// OpenWorktree says "打开工作树"
+// New says "新建"
 // in the language the app shows.
-func OpenWorktree() string { return In(i18n.Locale()).OpenWorktree() }
+func New() string { return In(i18n.Locale()).New() }
 
-// OpenWorktree says "打开工作树"
+// New says "新建"
 // in the language of msgs.
-func (msgs Messages) OpenWorktree() string {
-	return Catalog.Format(msgs.locale, "openWorktree", nil)
+func (msgs Messages) New() string {
+	return Catalog.Format(msgs.locale, "new", nil)
 }
 
-// MergeWorktreeMenu says "合并到当前工作树…"
+// Open says "打开"
 // in the language the app shows.
-func MergeWorktreeMenu() string { return In(i18n.Locale()).MergeWorktreeMenu() }
+func Open() string { return In(i18n.Locale()).Open() }
 
-// MergeWorktreeMenu says "合并到当前工作树…"
+// Open says "打开"
 // in the language of msgs.
-func (msgs Messages) MergeWorktreeMenu() string {
-	return Catalog.Format(msgs.locale, "mergeWorktreeMenu", nil)
+func (msgs Messages) Open() string {
+	return Catalog.Format(msgs.locale, "open", nil)
 }
 
-// RemoveWorktreeMenu says "移除工作树…"
+// OpenMainWorktree says "打开主工作树"
 // in the language the app shows.
-func RemoveWorktreeMenu() string { return In(i18n.Locale()).RemoveWorktreeMenu() }
+func OpenMainWorktree() string { return In(i18n.Locale()).OpenMainWorktree() }
 
-// RemoveWorktreeMenu says "移除工作树…"
+// OpenMainWorktree says "打开主工作树"
 // in the language of msgs.
-func (msgs Messages) RemoveWorktreeMenu() string {
-	return Catalog.Format(msgs.locale, "removeWorktreeMenu", nil)
+func (msgs Messages) OpenMainWorktree() string {
+	return Catalog.Format(msgs.locale, "openMainWorktree", nil)
+}
+
+// WorktreeName says "名称"
+// in the language the app shows.
+func WorktreeName() string { return In(i18n.Locale()).WorktreeName() }
+
+// WorktreeName says "名称"
+// in the language of msgs.
+func (msgs Messages) WorktreeName() string {
+	return Catalog.Format(msgs.locale, "worktreeName", nil)
+}
+
+// CopyWorktreeCommit says "复制完整提交 ID"
+// in the language the app shows.
+func CopyWorktreeCommit() string { return In(i18n.Locale()).CopyWorktreeCommit() }
+
+// CopyWorktreeCommit says "复制完整提交 ID"
+// in the language of msgs.
+func (msgs Messages) CopyWorktreeCommit() string {
+	return Catalog.Format(msgs.locale, "copyWorktreeCommit", nil)
+}
+
+// RemoveWorktreeTitle says "移除工作树"
+// in the language the app shows.
+func RemoveWorktreeTitle() string { return In(i18n.Locale()).RemoveWorktreeTitle() }
+
+// RemoveWorktreeTitle says "移除工作树"
+// in the language of msgs.
+func (msgs Messages) RemoveWorktreeTitle() string {
+	return Catalog.Format(msgs.locale, "removeWorktreeTitle", nil)
 }
 
 // WorktreePath says "工作目录"

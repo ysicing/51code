@@ -19,12 +19,12 @@ import (
 func TestNativeWorktreesCleanupFilterPreservesSelection(t *testing.T) {
 	state := &nativeWorktrees{selected: -1}
 	items := []gitrepo.Worktree{
-		{Path: "/main", Current: true},
+		{Path: "/main", Main: true, Current: true},
 		{Path: "/first", CleanupCandidate: true},
 		{Path: "/second", CleanupCandidate: true},
 	}
 	state.setItems(items)
-	state.selected = 2
+	state.selected = 1
 	state.candidatesOnly = true
 	state.filterItems()
 	if len(state.items) != 2 || state.items[state.selected].Path != "/second" {
@@ -40,8 +40,8 @@ func TestNativeWorktreesCleanupFilterPreservesSelection(t *testing.T) {
 	}
 	state.candidatesOnly = false
 	state.filterItems()
-	if len(state.items) != 1 || state.selected != 0 || !state.items[0].Current {
-		t.Fatal("returning to all worktrees lost the current worktree")
+	if len(state.items) != 0 || state.selected != -1 || len(state.allItems) != 1 {
+		t.Fatal("returning to the default filter exposed the main worktree or lost its record")
 	}
 }
 
@@ -64,7 +64,10 @@ func TestNativeWorktreesCleanupConfirmationAndRemoval(t *testing.T) {
 	if !app.worktrees.candidatesOnly || len(app.worktrees.items) != 1 || app.worktrees.items[0].Path != linked {
 		t.Fatal("candidate filter did not hide main worktree")
 	}
-	if err := tester.Click(locales.CleanupWorktreeMenu()); err != nil {
+	if err := tester.Click(locales.WorktreeActions()); err != nil {
+		t.Fatal(err)
+	}
+	if err := tester.ChooseMenuItem("清理"); err != nil {
 		t.Fatal(err)
 	}
 	finish()
@@ -84,7 +87,10 @@ func TestNativeWorktreesCleanupConfirmationAndRemoval(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(linked, "ignored.txt")); err != nil {
 		t.Fatal("cancel changed source files:", err)
 	}
-	if err := tester.Click(locales.CleanupWorktreeMenu()); err != nil {
+	if err := tester.Click(locales.WorktreeActions()); err != nil {
+		t.Fatal(err)
+	}
+	if err := tester.ChooseMenuItem("清理"); err != nil {
 		t.Fatal(err)
 	}
 	finish()
@@ -106,11 +112,11 @@ func TestNativeWorktreesCleanupConfirmationAndRemoval(t *testing.T) {
 	if _, err := os.Stat(linked); !os.IsNotExist(err) {
 		t.Fatalf("candidate directory not removed: %v", err)
 	}
-	if err := tester.Click(locales.AllWorktrees()); err != nil {
+	if err := tester.Click("附加"); err != nil {
 		t.Fatal(err)
 	}
-	if len(app.worktrees.items) != 1 || !app.worktrees.items[0].Current {
-		t.Fatal("all worktrees unavailable after cleanup")
+	if _, found := tester.Find(locales.EmptyWorktrees()); !found || len(app.worktrees.items) != 0 {
+		t.Fatal("default filter did not show the linked worktree empty state")
 	}
 }
 
@@ -122,7 +128,7 @@ func TestNativeWorktreesCleanupRechecksBeforeConfirmation(t *testing.T) {
 	nativeGit(t, path, "branch", "landed", "topic")
 	app.openWorktrees()
 	finish()
-	if !app.worktrees.items[1].CleanupCandidate {
+	if len(app.worktrees.items) != 1 || !app.worktrees.items[0].CleanupCandidate {
 		t.Fatal("expected a candidate before target removal")
 	}
 	nativeGit(t, path, "branch", "-D", "landed")
@@ -167,6 +173,7 @@ func TestNativeWorktreesCleanupFailureRetainsConfirmation(t *testing.T) {
 
 func TestNativeWorktreesDiscoverAndOpen(t *testing.T) {
 	app, path, finish := nativeFixture(t)
+	mainPath := app.repository.snapshot.Path
 	linked := filepath.Join(t.TempDir(), "中文工作树")
 	nativeGit(t, path, "worktree", "add", "-b", "topic", linked)
 	linked, err := filepath.EvalSymlinks(linked)
@@ -179,19 +186,49 @@ func TestNativeWorktreesDiscoverAndOpen(t *testing.T) {
 	}
 	finish()
 	tester.Frame()
-	if len(app.worktrees.items) != 2 {
+	if len(app.worktrees.items) != 1 || len(app.worktrees.allItems) != 2 {
 		t.Fatal("没有发现同仓库的其他工作树")
 	}
 	if err := tester.Click(linked); err != nil {
 		t.Fatal(err)
 	}
-	if err := tester.Click("打开工作树"); err != nil {
+	for _, copyItem := range []struct{ label, want string }{
+		{locales.CopyFullPath(), linked},
+		{locales.CopyWorktreeCommit(), nativeGit(t, linked, "rev-parse", "HEAD")},
+	} {
+		if err := tester.Click(locales.WorktreeActions()); err != nil {
+			t.Fatal(err)
+		}
+		if err := tester.ChooseMenuItem(copyItem.label); err != nil {
+			t.Fatal(err)
+		}
+		if got := tester.Clipboard(); got != copyItem.want {
+			t.Fatalf("clipboard after %s = %q, want %q", copyItem.label, got, copyItem.want)
+		}
+	}
+	if err := tester.Click("打开"); err != nil {
 		t.Fatal(err)
 	}
 	finish()
 	tester.Frame()
 	if app.repository.snapshot.Path != linked || app.repository.snapshot.Branch != "topic" || app.screen != "changes" {
 		t.Fatal("没有作为独立工作目录打开链接工作树")
+	}
+	app.openWorktrees()
+	finish()
+	tester.Frame()
+	if len(app.worktrees.items) != 1 || !app.worktrees.items[0].Current {
+		t.Fatal("the current linked worktree is missing")
+	}
+	if _, found := tester.Find(locales.CurrentWorktree()); !found {
+		t.Fatal("the current row is missing its status")
+	}
+	if err := tester.Click(locales.OpenMainWorktree()); err != nil {
+		t.Fatal(err)
+	}
+	finish()
+	if app.repository.snapshot.Path != mainPath {
+		t.Fatalf("returned to %q, want main worktree %q", app.repository.snapshot.Path, mainPath)
 	}
 }
 
@@ -261,10 +298,13 @@ func TestNativeWorktreeCreateAndFailurePreservesDraft(t *testing.T) {
 	app.openWorktrees()
 	finish()
 	tester := ui.NewTester(app.view, 1024, 680)
-	if err := tester.Click("新建工作树…"); err != nil {
+	if err := tester.Click("新建"); err != nil {
 		t.Fatal(err)
 	}
 	dialog := app.dialog
+	if dialog == nil || dialog.title != "新建工作树" {
+		t.Fatal("新建弹窗标题应为「新建工作树」")
+	}
 	linked := filepath.Join(t.TempDir(), "linked")
 	dialog.fields[0].value, dialog.fields[1].value, dialog.fields[2].value = linked, "topic", "HEAD"
 	tester.Frame()
@@ -273,7 +313,7 @@ func TestNativeWorktreeCreateAndFailurePreservesDraft(t *testing.T) {
 	}
 	finish()
 	tester.Frame()
-	if app.dialog != nil || len(app.worktrees.items) != 2 ||
+	if app.dialog != nil || len(app.worktrees.items) != 1 ||
 		nativeGit(t, linked, "branch", "--show-current") != "topic" {
 		t.Fatal("创建工作树失败或未刷新列表")
 	}
@@ -311,7 +351,7 @@ func TestNativeWorktreeMergeAndRemove(t *testing.T) {
 	if err := tester.Click("工作树操作"); err != nil {
 		t.Fatal(err)
 	}
-	if err := tester.ChooseMenuItem("合并到当前工作树…"); err != nil {
+	if err := tester.ChooseMenuItem("合并到当前分支"); err != nil {
 		t.Fatal(err)
 	}
 	finish()
@@ -331,7 +371,7 @@ func TestNativeWorktreeMergeAndRemove(t *testing.T) {
 	if err := tester.Click("工作树操作"); err != nil {
 		t.Fatal(err)
 	}
-	if err := tester.ChooseMenuItem("移除工作树…"); err != nil {
+	if err := tester.ChooseMenuItem("移除"); err != nil {
 		t.Fatal(err)
 	}
 	finish()
@@ -344,7 +384,7 @@ func TestNativeWorktreeMergeAndRemove(t *testing.T) {
 		t.Fatal(err)
 	}
 	finish()
-	if app.problem != "" || len(app.worktrees.items) != 1 {
+	if app.problem != "" || len(app.worktrees.items) != 0 {
 		t.Fatal("移除后未刷新工作树", app.problem)
 	}
 	if _, err := os.Stat(linked); !os.IsNotExist(err) {
@@ -402,7 +442,7 @@ func TestNativeWorktreeRemovalReviewsFiles(t *testing.T) {
 			if err := tester.Click("工作树操作"); err != nil {
 				t.Fatal(err)
 			}
-			if err := tester.ChooseMenuItem("移除工作树…"); err != nil {
+			if err := tester.ChooseMenuItem("移除"); err != nil {
 				t.Fatalf("应允许查看移除受阻原因: %v", err)
 			}
 			finish()
@@ -429,7 +469,7 @@ func TestNativeWorktreeRemovalReviewsFiles(t *testing.T) {
 					t.Fatal(err)
 				}
 				finish()
-				if app.problem != "" || app.dialog != nil || len(app.worktrees.items) != 1 {
+				if app.problem != "" || app.dialog != nil || len(app.worktrees.items) != 0 {
 					t.Fatal("未能移除含忽略文件的工作树", app.problem)
 				}
 				if _, err := os.Stat(linked); !os.IsNotExist(err) {
@@ -445,6 +485,7 @@ func TestNativeWorktreeRemovalReviewsFiles(t *testing.T) {
 
 func TestNativeWorktreesAppearanceAndReadOnly(t *testing.T) {
 	app, path, finish := nativeFixture(t)
+	nativeGit(t, path, "worktree", "add", "-b", "docs/guide", filepath.Join(t.TempDir(), "51code-docs"))
 	linked := filepath.Join(t.TempDir(), strings.Repeat("long-worktree-", 8))
 	nativeGit(t, path, "worktree", "add", "-b", "feature/"+strings.Repeat("long-name-", 8), linked)
 	linked, err := filepath.EvalSymlinks(linked)
@@ -454,32 +495,42 @@ func TestNativeWorktreesAppearanceAndReadOnly(t *testing.T) {
 	app.openWorktrees()
 	finish()
 	app.writable = false
-	for _, size := range [][2]int{{1024, 680}, {1320, 860}} {
+	for _, size := range [][2]int{{800, 550}, {1320, 860}} {
 		for _, appearance := range []string{appearanceLight, appearanceDark} {
 			app.prefs.Appearance = appearance
 			tester := ui.NewTester(app.view, size[0], size[1])
-			if create, found := tester.AccessByRole(ui.RoleButton, "新建工作树…"); !found || !create.Disabled {
+			if create, found := tester.AccessByRole(ui.RoleButton, "新建"); !found || !create.Disabled {
 				t.Fatal("仓库不可写时仍允许创建工作树")
 			}
 			if err := tester.Click(linked); err != nil {
 				t.Fatal(err)
 			}
-			if open, found := tester.AccessByRole(ui.RoleButton, "打开工作树"); !found || open.Disabled || open.Offscreen {
+			selected := app.worktrees.items[app.worktrees.selected]
+			if selected.Path != linked {
+				t.Fatalf("selected %q, want %q", selected.Path, linked)
+			}
+			if open, found := tester.AccessByRole(ui.RoleButton, "打开"); !found || open.Disabled || open.Offscreen {
 				t.Fatal("不可写仓库仍应允许打开工作树")
 			}
-			if cleanup, found := tester.AccessByRole(ui.RoleButton, locales.CleanupWorktreeMenu()); !found ||
-				!cleanup.Disabled || cleanup.Offscreen {
-				t.Fatal("不可写仓库的清理按钮应可见但禁用")
+			if more, found := tester.AccessByRole(ui.RoleMenuButton, locales.WorktreeActions()); !found ||
+				more.Offscreen || more.Bounds.X+more.Bounds.W > float32(size[0]) {
+				t.Fatalf("工作树操作未完整显示: %+v", more)
 			}
 			if filter, found := tester.AccessByRole(ui.RoleRadio, locales.WorktreeCleanupCandidates()); !found ||
 				filter.Disabled || filter.Offscreen {
 				t.Fatal("不可写仓库仍应允许筛选清理候选")
 			}
-			if _, found := tester.Find(locales.WorktreeContainedIn("main")); !found {
+			if _, found := tester.Find(locales.WorktreeContainedIn("docs/guide, main")); !found {
 				t.Fatal("没有展示通过祖先关系确认包含 HEAD 的分支")
 			}
 			if directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); directory != "" {
 				saveNativeScreenshot(t, tester, directory, fmt.Sprintf("worktrees-%s-%d.png", appearance, size[0]))
+			}
+			if err := tester.Click(locales.WorktreeActions()); err != nil {
+				t.Fatal(err)
+			}
+			if err := tester.ChooseMenuItem("清理"); err == nil || !strings.Contains(err.Error(), "disabled") {
+				t.Fatalf("不可写仓库的清理菜单项应可见但禁用: %v", err)
 			}
 		}
 	}

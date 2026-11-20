@@ -22,7 +22,6 @@ type nativeWorktrees struct {
 	list           *ui.ListState
 	loaded         bool
 	canceled       bool
-	listWidth      float32
 }
 
 func (state *nativeWorktrees) setItems(items []gitrepo.Worktree) {
@@ -35,13 +34,10 @@ func (state *nativeWorktrees) filterItems() {
 	if state.selected >= 0 && state.selected < len(state.items) {
 		path = state.items[state.selected].Path
 	}
-	items := state.allItems
-	if state.candidatesOnly {
-		items = nil
-		for _, item := range state.allItems {
-			if item.CleanupCandidate {
-				items = append(items, item)
-			}
+	var items []gitrepo.Worktree
+	for _, item := range state.allItems {
+		if !item.Main && (!state.candidatesOnly || item.CleanupCandidate) {
+			items = append(items, item)
 		}
 	}
 	state.items, state.selected = items, -1
@@ -96,7 +92,7 @@ func (app *nativeApp) createWorktreeDialog() {
 	}
 	repository := app.repository.snapshot.Path
 	app.dialog = &nativeDialog{
-		title: locales.NewWorktreeMenu(), action: locales.Create(),
+		title: locales.NewWorktreeTitle(), action: locales.Create(),
 		fields: []nativeField{
 			{
 				label: locales.WorktreePath(),
@@ -149,7 +145,7 @@ func (app *nativeApp) reviewWorktreeAction(path string, remove, cleanup bool) {
 			item := review.Worktree
 			dialog := &nativeDialog{width: 660}
 			if remove {
-				dialog.title = locales.RemoveWorktreeMenu()
+				dialog.title = locales.RemoveWorktreeTitle()
 				dialog.detail = item.Path + "\n" + locales.WorktreeRemoveDetail()
 				if item.Detached {
 					dialog.detail = item.Path + "\n" + locales.RemoveDetachedWorktreeDetail() + "\n" + item.Head
@@ -158,7 +154,7 @@ func (app *nativeApp) reviewWorktreeAction(path string, remove, cleanup bool) {
 					dialog.detail += "\n" + locales.BranchName() + ": " + worktreeBranch(item)
 				}
 				if cleanup {
-					dialog.title = locales.CleanupWorktreeMenu()
+					dialog.title = locales.CleanupWorktreeTitle()
 					if len(item.ContainedIn) > 0 {
 						contained := locales.WorktreeCleanupDetail(worktreeContainedBranches(item))
 						dialog.body = func(c *ui.Context) {
@@ -183,7 +179,7 @@ func (app *nativeApp) reviewWorktreeAction(path string, remove, cleanup bool) {
 					dialog.blocked, dialog.problem = true, review.RemoveProblem
 				}
 			} else {
-				dialog.title = locales.MergeWorktreeMenu()
+				dialog.title = locales.MergeIntoCurrent()
 				dialog.detail = worktreeBranch(item) + " (" + shortHash(item.Head) + ") → " +
 					strings.TrimPrefix(review.TargetBranch, "refs/heads/") + " (" + shortHash(review.TargetHead) + ")"
 				dialog.body = func(c *ui.Context) {
@@ -232,21 +228,27 @@ func worktreeContainedBranches(item gitrepo.Worktree) string {
 	return strings.Join(names, ", ")
 }
 
-func (app *nativeApp) worktreeMenu(menu *ui.Menu, item gitrepo.Worktree) {
-	if menu.Item(locales.OpenWorktree()).Disabled(app.busy || item.Bare || item.Prunable).Chosen() {
+func (app *nativeApp) worktreeMenu(menu *ui.Menu, item gitrepo.Worktree, services ui.Services) {
+	if menu.Item(locales.Open()).Disabled(app.busy || item.Current || item.Bare || item.Prunable).Chosen() {
 		app.openRepository(item.Path)
+	}
+	if menu.Item(locales.CopyFullPath()).Chosen() {
+		services.WriteClipboard(item.Path)
+	}
+	if menu.Item(locales.CopyWorktreeCommit()).Disabled(item.Head == "").Chosen() {
+		services.WriteClipboard(item.Head)
 	}
 	menu.Separator()
 	unavailable := app.repository == nil || app.busy || !app.writable || app.readTask != nil ||
 		app.dialog != nil || item.Current || item.Bare
-	if menu.Item(locales.MergeWorktreeMenu()).Disabled(unavailable || item.Locked ||
+	if menu.Item(locales.MergeIntoCurrent()).Disabled(unavailable || item.Locked ||
 		item.Prunable || item.Problem != "" || item.Operation != "" || item.Dirty || item.Head == "").Chosen() {
 		app.reviewWorktree(item.Path, false)
 	}
-	if menu.Item(locales.RemoveWorktreeMenu()).Danger().Disabled(unavailable || item.Main).Chosen() {
+	if menu.Item(locales.Remove()).Danger().Disabled(unavailable || item.Main).Chosen() {
 		app.reviewWorktree(item.Path, true)
 	}
-	if item.CleanupCandidate && menu.Item(locales.CleanupWorktreeMenu()).Danger().Disabled(unavailable).Chosen() {
+	if item.CleanupCandidate && menu.Item(locales.Cleanup()).Danger().Disabled(unavailable).Chosen() {
 		app.reviewWorktreeCleanup(item.Path)
 	}
 }
@@ -272,20 +274,28 @@ func (app *nativeApp) worktreePanel(c *ui.Context) {
 				iconButton(c, locales.Refresh(), nativeIcons["refresh"]).Disabled(app.busy).
 					OnClick(app.loadWorktrees)
 			}
-			ui.PrimaryButton(c, locales.NewWorktreeMenu()).Label(locales.NewWorktreeMenu()).
+			ui.PrimaryButton(c, locales.New()).
 				Disabled(!app.writable || app.busy || app.readTask != nil || app.dialog != nil).
 				OnClick(app.createWorktreeDialog)
 		})
-		ui.Row(c).FillWidth().Padding(0, 12, 10, 12).Children(func() {
+		ui.Row(c).FillWidth().Padding(0, 12, 10, 12).Gap(8).AlignItems(ui.Center).Children(func() {
 			filter := 0
 			if state.candidatesOnly {
 				filter = 1
 			}
-			ui.Segmented(c, &filter, locales.AllWorktrees(), locales.WorktreeCleanupCandidates()).
+			ui.Segmented(c, &filter, locales.AttachedWorktrees(), locales.WorktreeCleanupCandidates()).
 				Label(locales.Worktrees()).OnChange(func() {
 				state.candidatesOnly = filter == 1
 				state.filterItems()
 			})
+			for _, item := range state.allItems {
+				if item.Main && !item.Current && !item.Bare && !item.Prunable {
+					ui.Spacer(c)
+					ui.Button(c, locales.OpenMainWorktree()).Disabled(app.busy).
+						OnClick(func() { app.openRepository(item.Path) })
+					break
+				}
+			}
 		})
 		ui.Divider(c)
 		if state.canceled {
@@ -313,127 +323,108 @@ func (app *nativeApp) worktreePanel(c *ui.Context) {
 			})
 			return
 		}
-		if state.listWidth == 0 {
-			state.listWidth = 280
+		app.worktreeTable(c, state)
+		if state.selected >= 0 && state.selected < len(state.items) {
+			app.worktreeStatus(c, state.items[state.selected])
 		}
-		ui.Split(c, &state.listWidth, func() {
-			app.worktreeList(c, state)
-		}, func() {
-			app.worktreeDetail(c, state)
-		}).Fill().SplitReset(280)
 	})
 }
 
-func (app *nativeApp) worktreeList(c *ui.Context, state *nativeWorktrees) {
-	ui.Column(c).Fill().MinWidth(0).Children(func() {
-		if state.list == nil {
-			state.list = &ui.ListState{}
+func (app *nativeApp) worktreeTable(c *ui.Context, state *nativeWorktrees) {
+	services := c.Services()
+	state.list.Key = func(index int) any { return state.items[index].Path }
+	state.list.Label = func(index int) string { return state.items[index].Path }
+	state.list.CellMenu = func(menu *ui.Menu, row, _ int) {
+		if row >= 0 && row < len(state.items) {
+			app.worktreeMenu(menu, state.items[row], services)
 		}
-		state.list.Selected = &state.selected
-		state.list.Key = func(index int) any { return state.items[index].Path }
-		state.list.Label = func(index int) string { return state.items[index].Path }
-		ui.List(c, state.list, len(state.items), func(index int) {
+	}
+	theme := *c.Theme()
+	theme.Spacing = 3.5
+	theme.Accent = theme.Accent.Alpha(0.16)
+	theme.InactiveAccent, theme.AccentText = theme.Accent, theme.Text
+	columns := []ui.TableColumn{
+		{Title: locales.WorktreeName(), MinWidth: 142},
+		{Title: locales.Branch(), MinWidth: 76},
+		{Title: locales.WorktreePath(), MinWidth: 100},
+		{Title: locales.CommitID(), Width: 92, Fixed: true},
+		{ID: "actions", Width: 134, Fixed: true},
+	}
+	ui.Themed(c, &theme).FillWidth().Grow(1).MinHeight(0).MinWidth(0).Children(func() {
+		ui.Table(c, state.list, columns, len(state.items), func(index, column int) {
 			item := state.items[index]
-			ui.Row(c).FillWidth().MinWidth(0).Height(48).Padding(0, 12).Gap(8).
-				AlignItems(ui.Center).Tooltip(item.Path).ContextMenu(func(menu *ui.Menu) {
-				app.worktreeMenu(menu, item)
-			}).Children(func() {
-				ui.Icon(c, nativeIcons["folder"]).FontSize(16).Shrink(0)
-				ui.Column(c).Grow(1).MinWidth(0).Gap(3).Children(func() {
-					ui.Text(c, filepath.Base(item.Path)).FontSize(12).FillWidth().SingleLine().
-						Tooltip(item.Path)
-					ui.Text(c, worktreeBranch(item)).FontSize(11).FillWidth().SingleLine().
-						Tooltip(item.Branch)
+			switch column {
+			case 0:
+				ui.Row(c).FillWidth().MinWidth(0).Gap(6).AlignItems(ui.Center).Children(func() {
+					ui.Icon(c, nativeIcons["folder"]).FontSize(14).Shrink(0)
+					ui.Text(c, filepath.Base(item.Path)).Grow(1).MinWidth(0).SingleLine().Tooltip(item.Path)
+					if item.Current {
+						ui.Text(c, locales.CurrentWorktree()).FontSize(10).Shrink(0)
+					} else if item.CleanupCandidate {
+						ui.Text(c, locales.WorktreeCleanupCandidates()).FontSize(10).Shrink(0)
+					}
 				})
-				if item.Current {
-					ui.Text(c, locales.CurrentWorktree()).FontSize(10).Shrink(0)
-				} else if item.CleanupCandidate {
-					ui.Text(c, locales.WorktreeCleanupCandidates()).FontSize(10).Shrink(0)
+			case 1:
+				branch := worktreeBranch(item)
+				ui.Text(c, branch).SingleLine().Tooltip(branch)
+			case 2:
+				ui.Text(c, item.Path).SingleLine().Tooltip(item.Path)
+			case 3:
+				ui.Text(c, shortHash(item.Head)).Font("monospace").FontSize(12).SingleLine().Tooltip(item.Head)
+			case 4:
+				if index != state.selected {
+					return
 				}
-			})
-		}).Label(locales.WorktreeList()).FillWidth().Grow(1).MinHeight(0)
+				ui.Row(c).FillWidth().Gap(6).AlignItems(ui.Center).Justify(ui.End).Children(func() {
+					ui.Button(c, locales.Open()).Disabled(app.busy || item.Current || item.Bare || item.Prunable).
+						OnClick(func() { app.openRepository(item.Path) })
+					iconButton(c, locales.WorktreeActions(), nativeIcons["more"]).Shrink(0).Disabled(app.busy).Menu(func(menu *ui.Menu) {
+						app.worktreeMenu(menu, item, services)
+					})
+				})
+			}
+		}).Label(locales.WorktreeList()).Fill()
 	})
 }
 
-func (app *nativeApp) worktreeDetail(c *ui.Context, state *nativeWorktrees) {
-	ui.Column(c).Fill().MinWidth(0).Children(func() {
-		if state.selected < 0 || state.selected >= len(state.items) {
-			ui.Column(c).Fill().Center().Padding(20).Children(func() {
-				ui.Text(c, locales.SelectWorktree()).TextColor(c.Theme().TextMuted)
-			})
-			return
+func (app *nativeApp) worktreeStatus(c *ui.Context, item gitrepo.Worktree) {
+	var statuses []string
+	if item.Locked {
+		statuses = append(statuses, locales.LockedWorktree())
+	}
+	if item.Prunable {
+		statuses = append(statuses, locales.PrunableWorktree())
+	}
+	if item.Dirty {
+		statuses = append(statuses, locales.DirtyWorktree())
+	}
+	if item.Operation != "" {
+		statuses = append(statuses, locales.OperationInProgress(operationName(item.Operation)))
+	}
+	for _, reason := range []string{item.LockReason, item.PruneReason} {
+		if reason != "" {
+			statuses = append(statuses, reason)
 		}
-		item := state.items[state.selected]
-		ui.Row(c).FillWidth().Padding(10, 12).Gap(8).AlignItems(ui.Center).Children(func() {
-			ui.Button(c, locales.OpenWorktree()).Disabled(app.busy || item.Bare || item.Prunable).
-				OnClick(func() { app.openRepository(item.Path) })
-			ui.Spacer(c)
-			if item.CleanupCandidate {
-				ui.Button(c, locales.CleanupWorktreeMenu()).
-					Disabled(!app.writable || app.busy || app.readTask != nil || app.dialog != nil).
-					OnClick(func() { app.reviewWorktreeCleanup(item.Path) })
-			}
-			ui.MenuButton(c, locales.More(), func(menu *ui.Menu) {
-				app.worktreeMenu(menu, item)
-			}).Label(locales.WorktreeActions()).Disabled(app.busy)
-		})
+	}
+	if len(item.ContainedIn) > 0 {
+		statuses = append(statuses, locales.WorktreeContainedIn(worktreeContainedBranches(item)))
+	}
+	if len(statuses) > 0 {
+		status := strings.Join(statuses, " · ")
 		ui.Divider(c)
-		ui.Scroll(c).FillWidth().Grow(1).MinHeight(0).Children(func() {
-			ui.Column(c).FillWidth().MinWidth(0).Padding(12).Gap(12).Children(func() {
-				ui.Text(c, filepath.Base(item.Path)).Bold().FontSize(15).FillWidth().SingleLine().Tooltip(item.Path)
-				ui.Column(c).FillWidth().MinWidth(0).Gap(4).Children(func() {
-					ui.Text(c, locales.WorktreePath()).FontSize(11).TextColor(c.Theme().TextMuted)
-					ui.Text(c, item.Path).FillWidth().MaxLines(4).Selectable().Tooltip(item.Path)
-				})
-				ui.Column(c).FillWidth().MinWidth(0).Gap(4).Children(func() {
-					ui.Text(c, locales.BranchName()).FontSize(11).TextColor(c.Theme().TextMuted)
-					ui.Text(c, worktreeBranch(item)).FillWidth().MaxLines(3).Selectable().Tooltip(item.Branch)
-					if item.Head != "" {
-						ui.Text(c, item.Head).FontSize(11).FillWidth().Selectable()
-					}
-				})
-				if len(item.ContainedIn) > 0 {
-					contained := locales.WorktreeContainedIn(worktreeContainedBranches(item))
-					ui.Text(c, contained).FontSize(12).FillWidth().Selectable().Tooltip(contained)
-				}
-				if item.ContainmentProblem != "" {
-					app.inlineProblem(c, item.ContainmentProblem)
-				}
-				for index, status := range []struct {
-					show  bool
-					label func() string
-				}{
-					{item.Main, locales.MainWorktree},
-					{item.Current, locales.CurrentWorktree},
-					{item.Locked, locales.LockedWorktree},
-					{item.Prunable, locales.PrunableWorktree},
-					{item.Dirty, locales.DirtyWorktree},
-					{item.Ignored, locales.IgnoredWorktree},
-				} {
-					if status.show {
-						c.Key(index)
-						ui.Text(c, status.label()).FontSize(12).FillWidth()
-					}
-				}
-				for index, reason := range []string{item.LockReason, item.PruneReason} {
-					if reason != "" {
-						c.Key(index + 6)
-						ui.Text(c, reason).FontSize(12).FillWidth().Selectable().Tooltip(reason)
-					}
-				}
-				if item.Operation != "" {
-					ui.Text(c, locales.OperationInProgress(operationName(item.Operation))).
-						FontSize(12).FillWidth()
-				}
-				if item.Problem != "" {
-					app.inlineProblem(c, item.Problem)
-				}
-				if app.repository.snapshot.Operation.Kind == "merge" {
-					ui.Button(c, locales.FileChanges()).OnClick(func() {
-						app.leaveConflict(func() { app.switchWorkspace("changes") })
-					})
-				}
+		ui.Text(c, status).FillWidth().Padding(6, 12).FontSize(11).
+			TextColor(c.Theme().TextMuted).SingleLine().Tooltip(status)
+	}
+	for _, problem := range []string{item.ContainmentProblem, item.Problem} {
+		if problem != "" {
+			app.inlineProblem(c, problem)
+		}
+	}
+	if app.repository.snapshot.Operation.Kind == "merge" {
+		ui.Row(c).FillWidth().Padding(6, 12).Children(func() {
+			ui.Button(c, locales.FileChanges()).OnClick(func() {
+				app.leaveConflict(func() { app.switchWorkspace("changes") })
 			})
 		})
-	})
+	}
 }
