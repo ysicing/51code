@@ -11,28 +11,33 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"time"
 )
 
-// Worktree 的 Branch 使用 refs/heads/ 全名；Head 为空表示尚无提交。
+// Worktree 的 Branch 和 ContainedIn 使用 refs/heads/ 全名；Head 为空表示尚无提交。
+// ContainedIn 只包含通过祖先关系确认的其他本地分支，CleanupCandidate 还要求可安全移除。
 type Worktree struct {
-	Path        string `json:"path"`
-	Head        string `json:"head"`
-	Branch      string `json:"branch"`
-	Main        bool   `json:"main"`
-	Current     bool   `json:"current"`
-	Detached    bool   `json:"detached"`
-	Bare        bool   `json:"bare"`
-	Locked      bool   `json:"locked"`
-	Prunable    bool   `json:"prunable"`
-	LockReason  string `json:"lockReason"`
-	PruneReason string `json:"pruneReason"`
-	Dirty       bool   `json:"dirty"`
-	Ignored     bool   `json:"ignored"`
-	Operation   string `json:"operation"`
-	Problem     string `json:"problem"`
+	Path               string   `json:"path"`
+	Head               string   `json:"head"`
+	Branch             string   `json:"branch"`
+	Main               bool     `json:"main"`
+	Current            bool     `json:"current"`
+	Detached           bool     `json:"detached"`
+	Bare               bool     `json:"bare"`
+	Locked             bool     `json:"locked"`
+	Prunable           bool     `json:"prunable"`
+	LockReason         string   `json:"lockReason"`
+	PruneReason        string   `json:"pruneReason"`
+	Dirty              bool     `json:"dirty"`
+	Ignored            bool     `json:"ignored"`
+	Operation          string   `json:"operation"`
+	Problem            string   `json:"problem"`
+	ContainedIn        []string `json:"containedIn,omitempty"`
+	CleanupCandidate   bool     `json:"cleanupCandidate"`
+	ContainmentProblem string   `json:"containmentProblem,omitempty"`
 }
 
 // WorktreeReview 的目标始终是当前 Repository.Path。
@@ -155,6 +160,9 @@ func (repo *Repository) Worktrees(ctx context.Context) ([]Worktree, error) {
 	defer unlock()
 	states, err := repo.worktrees(ctx, common)
 	if err != nil {
+		return nil, err
+	}
+	if err := repo.worktreeCleanupCandidates(ctx, states); err != nil {
 		return nil, err
 	}
 	result := make([]Worktree, 0, len(states))
@@ -417,6 +425,10 @@ func (repo *Repository) MergeWorktree(ctx context.Context, path, token string) e
 
 // RemoveWorktree 不强制移除，不删除分支，也不清理其他工作树元数据。
 func (repo *Repository) RemoveWorktree(ctx context.Context, path, token string) error {
+	return repo.removeWorktree(ctx, path, token, false)
+}
+
+func (repo *Repository) removeWorktree(ctx context.Context, path, token string, cleanup bool) error {
 	// 删除大型工作树目录可能耗时较长，中途被杀会留下部分删除的目录。
 	ctx, cancel := context.WithTimeout(ctx, checkoutTimeout)
 	defer cancel()
@@ -425,7 +437,11 @@ func (repo *Repository) RemoveWorktree(ctx context.Context, path, token string) 
 		return err
 	}
 	defer unlock()
-	review, state, err := repo.reviewWorktree(ctx, common, path)
+	reviewWorktree := repo.reviewWorktree
+	if cleanup {
+		reviewWorktree = repo.reviewWorktreeCleanup
+	}
+	review, state, err := reviewWorktree(ctx, common, path)
 	if err != nil {
 		return err
 	}
@@ -440,6 +456,23 @@ func (repo *Repository) RemoveWorktree(ctx context.Context, path, token string) 
 	}
 	if err := state.source.checkIdentity(ctx, common); err != nil {
 		return err
+	}
+	if cleanup {
+		head, err := (&Repository{Path: review.Worktree.Path}).head(ctx)
+		if err != nil {
+			return err
+		}
+		if head != review.Worktree.Head {
+			return errors.New("工作树状态已改变，请刷新后重新确认")
+		}
+		branches, err := repo.worktreeContainingBranches(ctx, review.Worktree.Head)
+		if err != nil {
+			return err
+		}
+		branches = worktreeOtherBranches(branches, review.Worktree.Branch)
+		if !slices.Equal(branches, review.Worktree.ContainedIn) {
+			return errors.New("工作树的提交包含关系已改变，请刷新后重新确认")
+		}
 	}
 	_, err = run(ctx, repo.Path, "", checkoutTimeout, "worktree", "remove", "--", review.Worktree.Path)
 	return err

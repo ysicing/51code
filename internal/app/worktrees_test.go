@@ -10,8 +10,160 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ysicing/51code/internal/gitrepo"
+	"github.com/ysicing/51code/locales"
+
 	"github.com/egoist/mygo/ui"
 )
+
+func TestNativeWorktreesCleanupFilterPreservesSelection(t *testing.T) {
+	state := &nativeWorktrees{selected: -1}
+	items := []gitrepo.Worktree{
+		{Path: "/main", Current: true},
+		{Path: "/first", CleanupCandidate: true},
+		{Path: "/second", CleanupCandidate: true},
+	}
+	state.setItems(items)
+	state.selected = 2
+	state.candidatesOnly = true
+	state.filterItems()
+	if len(state.items) != 2 || state.items[state.selected].Path != "/second" {
+		t.Fatal("filter lost selection by path")
+	}
+	state.setItems(items[:2])
+	if len(state.items) != 1 || state.selected != 0 || state.items[0].Path != "/first" {
+		t.Fatal("refresh did not choose a remaining visible candidate")
+	}
+	state.setItems(items[:1])
+	if len(state.items) != 0 || state.selected != -1 {
+		t.Fatal("empty candidate filter retained a hidden selection")
+	}
+	state.candidatesOnly = false
+	state.filterItems()
+	if len(state.items) != 1 || state.selected != 0 || !state.items[0].Current {
+		t.Fatal("returning to all worktrees lost the current worktree")
+	}
+}
+
+func TestNativeWorktreesCleanupConfirmationAndRemoval(t *testing.T) {
+	app, path, finish := nativeFixture(t)
+	linked := filepath.Join(t.TempDir(), "candidate")
+	nativeGit(t, path, "worktree", "add", "-b", "topic", linked)
+	linked, err := filepath.EvalSymlinks(linked)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeNativeFile(t, path, ".git/info/exclude", "ignored.txt\n")
+	writeNativeFile(t, linked, "ignored.txt", "ignored data")
+	app.openWorktrees()
+	finish()
+	tester := ui.NewTester(app.view, 1024, 680)
+	if err := tester.Click(locales.WorktreeCleanupCandidates()); err != nil {
+		t.Fatal(err)
+	}
+	if !app.worktrees.candidatesOnly || len(app.worktrees.items) != 1 || app.worktrees.items[0].Path != linked {
+		t.Fatal("candidate filter did not hide main worktree")
+	}
+	if err := tester.Click(locales.CleanupWorktreeMenu()); err != nil {
+		t.Fatal(err)
+	}
+	finish()
+	tester.Frame()
+	dialog := app.dialog
+	if dialog == nil || !dialog.danger || dialog.blocked || !strings.Contains(dialog.detail, linked) ||
+		dialog.body == nil ||
+		!strings.Contains(dialog.detail, locales.WorktreeRemoveDetail()) {
+		t.Fatal("cleanup confirmation omitted ancestry, directory or ignored-file/branch retention warning")
+	}
+	if _, found := tester.Find(locales.WorktreeCleanupDetail("main")); !found {
+		t.Fatal("cleanup confirmation did not render containing branches")
+	}
+	if err := tester.Click(locales.Cancel()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(linked, "ignored.txt")); err != nil {
+		t.Fatal("cancel changed source files:", err)
+	}
+	if err := tester.Click(locales.CleanupWorktreeMenu()); err != nil {
+		t.Fatal(err)
+	}
+	finish()
+	tester.Frame()
+	if err := tester.Click(locales.Remove()); err != nil {
+		t.Fatal(err)
+	}
+	finish()
+	tester.Frame()
+	if app.dialog != nil || app.problem != "" || len(app.worktrees.items) != 0 || len(app.worktrees.allItems) != 1 {
+		t.Fatal("cleanup did not refresh the empty candidate view", app.problem)
+	}
+	if _, found := tester.Find(locales.EmptyWorktreeCleanupCandidates()); !found {
+		t.Fatal("empty candidate view omitted its empty state")
+	}
+	if nativeGit(t, path, "branch", "--list", "topic") == "" {
+		t.Fatal("cleanup deleted retained branch")
+	}
+	if _, err := os.Stat(linked); !os.IsNotExist(err) {
+		t.Fatalf("candidate directory not removed: %v", err)
+	}
+	if err := tester.Click(locales.AllWorktrees()); err != nil {
+		t.Fatal(err)
+	}
+	if len(app.worktrees.items) != 1 || !app.worktrees.items[0].Current {
+		t.Fatal("all worktrees unavailable after cleanup")
+	}
+}
+
+func TestNativeWorktreesCleanupRechecksBeforeConfirmation(t *testing.T) {
+	app, path, finish := nativeFixture(t)
+	linked := filepath.Join(t.TempDir(), "candidate")
+	nativeGit(t, path, "worktree", "add", "-b", "topic", linked)
+	nativeGit(t, linked, "commit", "--allow-empty", "-m", "topic")
+	nativeGit(t, path, "branch", "landed", "topic")
+	app.openWorktrees()
+	finish()
+	if !app.worktrees.items[1].CleanupCandidate {
+		t.Fatal("expected a candidate before target removal")
+	}
+	nativeGit(t, path, "branch", "-D", "landed")
+	app.reviewWorktreeCleanup(linked)
+	finish()
+	if app.dialog == nil || !app.dialog.blocked || app.dialog.submit != nil || app.dialog.action != "" {
+		t.Fatal("stale candidate offered removal after confirmation recheck")
+	}
+	app.dialog = nil
+	app.reviewWorktree(linked, true)
+	finish()
+	if app.dialog == nil || app.dialog.blocked || app.dialog.submit == nil {
+		t.Fatal("ordinary removal was coupled to candidate ancestry")
+	}
+}
+
+func TestNativeWorktreesCleanupFailureRetainsConfirmation(t *testing.T) {
+	app, path, finish := nativeFixture(t)
+	linked := filepath.Join(t.TempDir(), "candidate")
+	nativeGit(t, path, "worktree", "add", "-b", "topic", linked)
+	nativeGit(t, linked, "commit", "--allow-empty", "-m", "topic")
+	nativeGit(t, path, "branch", "landed", "topic")
+	app.openWorktrees()
+	finish()
+	app.reviewWorktreeCleanup(linked)
+	finish()
+	dialog := app.dialog
+	if dialog == nil || dialog.submit == nil {
+		t.Fatal("missing cleanup confirmation")
+	}
+	nativeGit(t, path, "branch", "-D", "landed")
+	dialog.submit(dialog)
+	finish()
+	dismissNativeError(t, app)
+	if app.dialog != dialog || dialog.problem == "" {
+		t.Fatal("failed cleanup lost confirmation and failure reason")
+	}
+	if _, err := os.Stat(filepath.Join(linked, "hello.txt")); err != nil {
+		t.Fatal("stale cleanup removed source files:", err)
+	}
+}
 
 func TestNativeWorktreesDiscoverAndOpen(t *testing.T) {
 	app, path, finish := nativeFixture(t)
@@ -314,6 +466,17 @@ func TestNativeWorktreesAppearanceAndReadOnly(t *testing.T) {
 			}
 			if open, found := tester.AccessByRole(ui.RoleButton, "打开工作树"); !found || open.Disabled || open.Offscreen {
 				t.Fatal("不可写仓库仍应允许打开工作树")
+			}
+			if cleanup, found := tester.AccessByRole(ui.RoleButton, locales.CleanupWorktreeMenu()); !found ||
+				!cleanup.Disabled || cleanup.Offscreen {
+				t.Fatal("不可写仓库的清理按钮应可见但禁用")
+			}
+			if filter, found := tester.AccessByRole(ui.RoleRadio, locales.WorktreeCleanupCandidates()); !found ||
+				filter.Disabled || filter.Offscreen {
+				t.Fatal("不可写仓库仍应允许筛选清理候选")
+			}
+			if _, found := tester.Find(locales.WorktreeContainedIn("main")); !found {
+				t.Fatal("没有展示通过祖先关系确认包含 HEAD 的分支")
 			}
 			if directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); directory != "" {
 				saveNativeScreenshot(t, tester, directory, fmt.Sprintf("worktrees-%s-%d.png", appearance, size[0]))

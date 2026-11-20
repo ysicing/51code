@@ -408,6 +408,9 @@ func (app *nativeApp) repositoryEntryMenu(menu *ui.Menu, entry workspace.LocalRe
 			}
 		}
 	}).Disabled(unavailable)
+	if menu.Item(locales.RelocateRepositoryMenu()).Disabled(unavailable || app.libraryRelocationBlocked(entry.Path)).Chosen() {
+		app.chooseRelocateRepository(entry)
+	}
 	menu.Separator()
 	if menu.Item(locales.RemoveFromListMenu()).Danger().Disabled(unavailable).Chosen() {
 		app.confirm(locales.RemoveRepositoryTitle(), entry.Path+"\n"+locales.KeepDiskFiles(), locales.Remove(), func() {

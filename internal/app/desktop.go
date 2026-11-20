@@ -145,6 +145,7 @@ func (desktop *nativeDesktop) openRepository(source *nativeApp, path string) {
 	}
 	if app := desktop.repositories[path]; app != nil && !app.closed {
 		desktop.present(app)
+		desktop.markRepositoryOpened(source, path)
 		return
 	}
 	source.runTask(locales.OpeningRepository(), true, func(ctx context.Context) (func(), error) {
@@ -159,6 +160,7 @@ func (desktop *nativeDesktop) openRepository(source *nativeApp, path string) {
 func (desktop *nativeDesktop) openCanonicalRepository(source *nativeApp, path string) {
 	if app := desktop.repositories[path]; app != nil && !app.closed {
 		desktop.present(app)
+		desktop.markRepositoryOpened(source, path)
 		return
 	}
 	if source.closed || source.busy || desktop.checkingQuit || desktop.quitting {
@@ -197,6 +199,7 @@ func (desktop *nativeDesktop) openCanonicalRepository(source *nativeApp, path st
 				return
 			}
 			if app := desktop.repositories[path]; app != nil && !app.closed {
+				desktop.refreshLibraries()
 				desktop.present(app)
 				return
 			}
@@ -204,11 +207,19 @@ func (desktop *nativeDesktop) openCanonicalRepository(source *nativeApp, path st
 			app.adopt(result)
 			app.screen, app.watchDirectories = "changes", directories
 			desktop.repositories[path] = app
+			desktop.refreshLibraries()
 			desktop.present(app)
 			if watchErr != nil && app.prefs.AutoRefreshFiles && app.background != nil {
 				app.reportWatchFailure(app.background, watchErr)
 			}
 		}, nil
+	})
+}
+
+func (desktop *nativeDesktop) markRepositoryOpened(source *nativeApp, path string) {
+	source.runTask(locales.OpeningRepository(), true, func(ctx context.Context) (func(), error) {
+		_, err := desktop.service.MarkRepositoryOpened(ctx, path)
+		return desktop.refreshLibraries, err
 	})
 }
 

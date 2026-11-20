@@ -150,6 +150,8 @@ func (app *nativeApp) view(c *ui.Context) {
 						app.historyWorkspace(c)
 					case "compare":
 						app.comparisonWorkspace(c)
+					case "files":
+						app.browserWorkspace(c)
 					case "worktrees":
 						app.worktreePanel(c)
 					default:
@@ -234,6 +236,7 @@ func (app *nativeApp) sidebar(c *ui.Context) {
 					}
 				})
 				ui.SidebarItem(c, "screen:history", nil, locales.CommitHistory()).Height(26).Padding(0, 8, 0, 40).FontSize(12)
+				ui.SidebarItem(c, "screen:files", nil, locales.RepositoryFiles()).Height(26).Padding(0, 8, 0, 40).FontSize(12)
 				if app.prefs.SidebarItems.Insights {
 					ui.SidebarItem(c, "screen:insights", nil, locales.Insights()).Height(26).Padding(0, 8, 0, 40).FontSize(12)
 				}
@@ -375,9 +378,13 @@ func (app *nativeApp) libraryView(c *ui.Context) {
 			app.emptyLibraryActions(c)
 			return
 		}
-		ui.TextInput(c, &app.query).Search().Placeholder(locales.SearchRepositories()).FillWidth()
+		ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Children(func() {
+			ui.TextInput(c, &app.query).Search().Placeholder(locales.SearchRepositories()).Grow(1).MinWidth(0)
+			ui.MenuButton(c, locales.RepositoryOrder(), app.libraryOrderMenu).
+				Disabled(app.busy || app.closed || app.dialog != nil)
+		})
 		var entries []workspace.LocalRepository
-		for _, entry := range app.library.Repositories {
+		for _, entry := range app.library.OrderedRepositories(app.prefs.LibraryOrder) {
 			if app.group != "" && entry.GroupID != app.group {
 				continue
 			}

@@ -148,6 +148,62 @@ func (app *nativeApp) fileHistoryAction() {
 	app.executeSearch()
 }
 
+func (app *nativeApp) diffBrowserContext() (*gitrepo.FileContent, editor.Pos) {
+	side, position := app.fileViewer.side, editor.Pos{}
+	if app.fileViewer.full {
+		if state := &app.fileViewer.states[side]; state.Buffer != nil {
+			position = state.CursorPos()
+		}
+	} else if len(app.diffViews) == 1 && !app.fileViewer.contextChanged {
+		diff := app.diffViews[0]
+		if diff.Layout == editor.DiffSplit {
+			side, position = 1, diff.CursorPos()
+			if diff.ActiveSide() == editor.DiffOld {
+				side = 0
+			}
+		} else if len(app.unifiedDiffs) == 1 {
+			unified := &app.unifiedDiffs[0]
+			if unified.state.Buffer != nil {
+				cursor := unified.state.CursorPos()
+				if cursor.Line >= 0 && cursor.Line < len(unified.rows) {
+					row := unified.rows[cursor.Line]
+					switch {
+					case row.kind == '-' && row.old > 0:
+						side, position = 0, editor.Pos{Line: row.old - 1, Col: cursor.Col}
+					case row.new > 0:
+						side, position = 1, editor.Pos{Line: row.new - 1, Col: cursor.Col}
+					case row.old > 0:
+						side, position = 0, editor.Pos{Line: row.old - 1, Col: cursor.Col}
+					}
+				}
+			}
+		}
+	}
+	source := app.fileViewer.sources[side]
+	if source == nil || !source.Present {
+		side = 1 - side
+		source = app.fileViewer.sources[side]
+		position = editor.Pos{}
+	}
+	return source, position
+}
+
+func (app *nativeApp) browseDiffFile() {
+	if app.repository == nil || app.busy || app.readTask != nil {
+		return
+	}
+	source, position := app.diffBrowserContext()
+	if source == nil || !source.Present || source.Path == "" {
+		return
+	}
+	// 跳转直接加载目标版本，避免先启动默认 WORKTREE 读取再取消。
+	if app.browser == nil {
+		app.browser = newNativeBrowser()
+	}
+	app.browser.jump = &nativeBrowserJump{revision: source.Revision, file: source.Path, position: position}
+	app.switchWorkspace("files")
+}
+
 func (app *nativeApp) fileDiffPanel(c *ui.Context) {
 	panel := ui.Column(c).Fill().MinWidth(0).Disabled(app.readTask != nil)
 	panel.Children(func() {
@@ -194,6 +250,10 @@ func (app *nativeApp) fileDiffPanel(c *ui.Context) {
 			if full == 0 {
 				app.diffLayoutControl(c)
 			}
+			source, _ := app.diffBrowserContext()
+			iconButton(c, locales.BrowseFile(), nativeIcons["file"]).Shrink(0).
+				Disabled(source == nil || !source.Present || app.readTask != nil).
+				OnClick(app.browseDiffFile)
 			ui.Segmented(c, &full, locales.FileDiff(), locales.FullFile()).
 				Label(locales.FileViewMode()).Disabled(!hasSources).Shrink(0).
 				OnChange(func() { app.fileViewer.full = full == 1 })

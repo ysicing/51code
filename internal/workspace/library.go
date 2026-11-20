@@ -21,12 +21,13 @@ import (
 )
 
 type LocalRepository struct {
-	Name    string `json:"name"`
-	Path    string `json:"path"`
-	GroupID string `json:"groupID"`
-	Branch  string `json:"branch"`
-	Changes int    `json:"changes"`
-	Problem string `json:"problem"`
+	Name         string `json:"name"`
+	Path         string `json:"path"`
+	GroupID      string `json:"groupID"`
+	Branch       string `json:"branch"`
+	Changes      int    `json:"changes"`
+	Problem      string `json:"problem"`
+	LastOpenedAt int64  `json:"lastOpenedAt,omitempty"`
 }
 
 type Group struct {
@@ -164,6 +165,7 @@ func updateEntry(library *Library, snapshot gitrepo.Snapshot) {
 	for index, current := range library.Repositories {
 		if current.Path == snapshot.Path {
 			entry.GroupID = current.GroupID
+			entry.LastOpenedAt = current.LastOpenedAt
 			library.Repositories[index] = entry
 			return
 		}
@@ -179,6 +181,7 @@ func (manager *Manager) Remember(snapshot gitrepo.Snapshot) error {
 				found = true
 				replacement := entryFromSnapshot(snapshot)
 				replacement.GroupID = entry.GroupID
+				replacement.LastOpenedAt = entry.LastOpenedAt
 				if entry == replacement {
 					return errUnchanged
 				}
@@ -296,6 +299,7 @@ func (manager *Manager) RefreshLibrary(ctx context.Context) (Library, error) {
 				continue
 			}
 			entry.GroupID = current.GroupID
+			entry.LastOpenedAt = current.LastOpenedAt
 			if current != entry {
 				next.Repositories[index] = entry
 				changed = true

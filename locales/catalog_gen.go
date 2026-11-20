@@ -36,6 +36,192 @@ type Messages struct{ locale string }
 // source language.
 func In(locale string) Messages { return Messages{locale} }
 
+// RepositoryFiles says "浏览文件"
+// in the language the app shows.
+func RepositoryFiles() string { return In(i18n.Locale()).RepositoryFiles() }
+
+// RepositoryFiles says "浏览文件"
+// in the language of msgs.
+func (msgs Messages) RepositoryFiles() string {
+	return Catalog.Format(msgs.locale, "repositoryFiles", nil)
+}
+
+// FilterRepositoryFiles says "筛选文件路径"
+// in the language the app shows.
+func FilterRepositoryFiles() string { return In(i18n.Locale()).FilterRepositoryFiles() }
+
+// FilterRepositoryFiles says "筛选文件路径"
+// in the language of msgs.
+func (msgs Messages) FilterRepositoryFiles() string {
+	return Catalog.Format(msgs.locale, "filterRepositoryFiles", nil)
+}
+
+// BrowseFile says "查看此行上下文"
+// in the language the app shows.
+func BrowseFile() string { return In(i18n.Locale()).BrowseFile() }
+
+// BrowseFile says "查看此行上下文"
+// in the language of msgs.
+func (msgs Messages) BrowseFile() string {
+	return Catalog.Format(msgs.locale, "browseFile", nil)
+}
+
+// EmptyRepositoryFiles says "此版本没有文件"
+// in the language the app shows.
+func EmptyRepositoryFiles() string { return In(i18n.Locale()).EmptyRepositoryFiles() }
+
+// EmptyRepositoryFiles says "此版本没有文件"
+// in the language of msgs.
+func (msgs Messages) EmptyRepositoryFiles() string {
+	return Catalog.Format(msgs.locale, "emptyRepositoryFiles", nil)
+}
+
+// RepositoryOrder says "排序"
+// in the language the app shows.
+func RepositoryOrder() string { return In(i18n.Locale()).RepositoryOrder() }
+
+// RepositoryOrder says "排序"
+// in the language of msgs.
+func (msgs Messages) RepositoryOrder() string {
+	return Catalog.Format(msgs.locale, "repositoryOrder", nil)
+}
+
+// RepositoryOrderDefault says "添加顺序"
+// in the language the app shows.
+func RepositoryOrderDefault() string { return In(i18n.Locale()).RepositoryOrderDefault() }
+
+// RepositoryOrderDefault says "添加顺序"
+// in the language of msgs.
+func (msgs Messages) RepositoryOrderDefault() string {
+	return Catalog.Format(msgs.locale, "repositoryOrderDefault", nil)
+}
+
+// RepositoryOrderRecent says "最近打开"
+// in the language the app shows.
+func RepositoryOrderRecent() string { return In(i18n.Locale()).RepositoryOrderRecent() }
+
+// RepositoryOrderRecent says "最近打开"
+// in the language of msgs.
+func (msgs Messages) RepositoryOrderRecent() string {
+	return Catalog.Format(msgs.locale, "repositoryOrderRecent", nil)
+}
+
+// RelocateRepositoryMenu says "重新定位…"
+// in the language the app shows.
+func RelocateRepositoryMenu() string { return In(i18n.Locale()).RelocateRepositoryMenu() }
+
+// RelocateRepositoryMenu says "重新定位…"
+// in the language of msgs.
+func (msgs Messages) RelocateRepositoryMenu() string {
+	return Catalog.Format(msgs.locale, "relocateRepositoryMenu", nil)
+}
+
+// RelocateRepository says "重新定位"
+// in the language the app shows.
+func RelocateRepository() string { return In(i18n.Locale()).RelocateRepository() }
+
+// RelocateRepository says "重新定位"
+// in the language of msgs.
+func (msgs Messages) RelocateRepository() string {
+	return Catalog.Format(msgs.locale, "relocateRepository", nil)
+}
+
+// RelocatingRepository says "正在重新定位仓库"
+// in the language the app shows.
+func RelocatingRepository() string { return In(i18n.Locale()).RelocatingRepository() }
+
+// RelocatingRepository says "正在重新定位仓库"
+// in the language of msgs.
+func (msgs Messages) RelocatingRepository() string {
+	return Catalog.Format(msgs.locale, "relocatingRepository", nil)
+}
+
+// RepositoryRelocationOpen says "请先关闭该仓库窗口并等待打开任务结束，再重新定位"
+// in the language the app shows.
+func RepositoryRelocationOpen() string { return In(i18n.Locale()).RepositoryRelocationOpen() }
+
+// RepositoryRelocationOpen says "请先关闭该仓库窗口并等待打开任务结束，再重新定位"
+// in the language of msgs.
+func (msgs Messages) RepositoryRelocationOpen() string {
+	return Catalog.Format(msgs.locale, "repositoryRelocationOpen", nil)
+}
+
+// RepositoryRelocationConflict says "新位置已有仓库偏好，请先处理后再重新定位"
+// in the language the app shows.
+func RepositoryRelocationConflict() string { return In(i18n.Locale()).RepositoryRelocationConflict() }
+
+// RepositoryRelocationConflict says "新位置已有仓库偏好，请先处理后再重新定位"
+// in the language of msgs.
+func (msgs Messages) RepositoryRelocationConflict() string {
+	return Catalog.Format(msgs.locale, "repositoryRelocationConflict", nil)
+}
+
+// AllWorktrees says "全部工作树"
+// in the language the app shows.
+func AllWorktrees() string { return In(i18n.Locale()).AllWorktrees() }
+
+// AllWorktrees says "全部工作树"
+// in the language of msgs.
+func (msgs Messages) AllWorktrees() string {
+	return Catalog.Format(msgs.locale, "allWorktrees", nil)
+}
+
+// WorktreeCleanupCandidates says "可清理"
+// in the language the app shows.
+func WorktreeCleanupCandidates() string { return In(i18n.Locale()).WorktreeCleanupCandidates() }
+
+// WorktreeCleanupCandidates says "可清理"
+// in the language of msgs.
+func (msgs Messages) WorktreeCleanupCandidates() string {
+	return Catalog.Format(msgs.locale, "worktreeCleanupCandidates", nil)
+}
+
+// EmptyWorktreeCleanupCandidates says "没有可清理的工作树"
+// in the language the app shows.
+func EmptyWorktreeCleanupCandidates() string {
+	return In(i18n.Locale()).EmptyWorktreeCleanupCandidates()
+}
+
+// EmptyWorktreeCleanupCandidates says "没有可清理的工作树"
+// in the language of msgs.
+func (msgs Messages) EmptyWorktreeCleanupCandidates() string {
+	return Catalog.Format(msgs.locale, "emptyWorktreeCleanupCandidates", nil)
+}
+
+// CleanupWorktreeMenu says "清理工作树…"
+// in the language the app shows.
+func CleanupWorktreeMenu() string { return In(i18n.Locale()).CleanupWorktreeMenu() }
+
+// CleanupWorktreeMenu says "清理工作树…"
+// in the language of msgs.
+func (msgs Messages) CleanupWorktreeMenu() string {
+	return Catalog.Format(msgs.locale, "cleanupWorktreeMenu", nil)
+}
+
+// WorktreeContainedIn says "提交已包含在：{branches}"
+// in the language the app shows.
+func WorktreeContainedIn(branches string) string {
+	return In(i18n.Locale()).WorktreeContainedIn(branches)
+}
+
+// WorktreeContainedIn says "提交已包含在：{branches}"
+// in the language of msgs.
+func (msgs Messages) WorktreeContainedIn(branches string) string {
+	return Catalog.Format(msgs.locale, "worktreeContainedIn", map[string]any{"branches": branches})
+}
+
+// WorktreeCleanupDetail says "提交已包含在：{branches}。仅移除工作树目录，保留所有分支。"
+// in the language the app shows.
+func WorktreeCleanupDetail(branches string) string {
+	return In(i18n.Locale()).WorktreeCleanupDetail(branches)
+}
+
+// WorktreeCleanupDetail says "提交已包含在：{branches}。仅移除工作树目录，保留所有分支。"
+// in the language of msgs.
+func (msgs Messages) WorktreeCleanupDetail(branches string) string {
+	return Catalog.Format(msgs.locale, "worktreeCleanupDetail", map[string]any{"branches": branches})
+}
+
 // CopyErrorDetails says "复制详情"
 // in the language the app shows.
 func CopyErrorDetails() string { return In(i18n.Locale()).CopyErrorDetails() }

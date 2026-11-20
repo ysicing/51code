@@ -70,6 +70,7 @@ func TestNativeDesktopRepositoryWindowsKeepIndependentState(t *testing.T) {
 	second := openDesktopRepository(t, desktop, updates, otherPath)
 	second.prefs.Drafts[otherPath] = "第二个仓库的草稿"
 	library.openRepository(path)
+	runBackgroundUpdates(t, updates, func() bool { return !library.busy })
 	if desktop.prefs.LastRepository != path {
 		t.Fatal("重新打开已有窗口也应更新下次启动恢复的仓库")
 	}

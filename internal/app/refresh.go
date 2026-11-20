@@ -46,6 +46,11 @@ func (app *nativeApp) refreshRepositoryView(watch bool) {
 	repository, screen := app.repository, app.screen
 	path, file, staged := repository.snapshot.Path, app.selectedFile, app.staged
 	history := app.nativeHistoryState
+	browser := app.browser
+	browserRevision, browserFile := "", ""
+	if screen == "files" && browser != nil {
+		browserRevision, browserFile = browser.revision, browser.file
+	}
 	blockedAI, blockedToken := app.ai, ""
 	if blockedAI != nil && blockedAI.tooLarge {
 		blockedToken = blockedAI.token
@@ -83,6 +88,10 @@ func (app *nativeApp) refreshRepositoryView(watch bool) {
 		var worktrees []gitrepo.Worktree
 		if err == nil && screen == "worktrees" {
 			worktrees, err = app.service.Worktrees(ctx, path)
+		}
+		var browsing *nativeBrowserResult
+		if err == nil && screen == "files" && browser != nil {
+			browsing, err = app.readBrowser(ctx, path, browserRevision, browserFile)
 		}
 		refreshedToken := ""
 		if err == nil && blockedToken != "" {
@@ -163,9 +172,12 @@ func (app *nativeApp) refreshRepositoryView(watch bool) {
 				app.stashHash = ""
 				app.clearDiff()
 			}
-			if screen == "worktrees" && app.worktrees != nil && !reflect.DeepEqual(app.worktrees.items, worktrees) {
+			if screen == "worktrees" && app.worktrees != nil && !reflect.DeepEqual(app.worktrees.allItems, worktrees) {
 				app.worktrees.setItems(worktrees)
 				changed = true
+			}
+			if browsing != nil && app.browser == browser {
+				changed = browser.apply(browsing) || changed
 			}
 			app.settleRepositoryRefresh(watch, changed)
 			if screen == "insights" && app.insights != nil {

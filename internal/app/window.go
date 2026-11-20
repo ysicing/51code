@@ -32,6 +32,7 @@ type nativePreferences struct {
 	LargeFileChecks      bool                         `json:"largeFileChecks"`
 	LargeFileMiB         int                          `json:"largeFileMiB"`
 	RepositoryGit        map[string]nativeGitOverride `json:"repositoryGit,omitempty"`
+	LibraryOrder         string                       `json:"libraryOrder,omitempty"`
 	Sidebar              float32                      `json:"sidebar"`
 	Files                float32                      `json:"files"`
 	History              float32                      `json:"history"`
@@ -132,6 +133,7 @@ type nativeApp struct {
 	hunkOffsets           []int
 	rawDiff               editor.State
 	fileViewer            nativeFileViewer
+	browser               *nativeBrowser
 	comparison            *nativeComparison
 	worktrees             *nativeWorktrees
 	fileMetrics           nativeFileMetrics
@@ -479,6 +481,11 @@ func (app *nativeApp) readRepository(ctx context.Context, path string, open bool
 	if result.remotes, err = app.service.RemoteConfigs(ctx, path); err != nil {
 		return nil, err
 	}
+	if open {
+		if _, err := app.service.MarkRepositoryOpened(ctx, path); err != nil {
+			return nil, err
+		}
+	}
 	return result, nil
 }
 
@@ -486,6 +493,7 @@ func (app *nativeApp) adopt(result *repositoryView) {
 	if app.repository == nil || app.repository.snapshot.Path != result.snapshot.Path {
 		app.stopCommitAI()
 		app.comparison = nil
+		app.browser = nil
 		app.worktrees = nil
 		app.insights = nil
 	}
@@ -566,6 +574,10 @@ func (app *nativeApp) refresh() {
 				app.refreshRepositoryLanguages(true)
 			}, err
 		})
+		return
+	}
+	if app.screen == "files" {
+		app.refreshRepositoryView(false)
 		return
 	}
 	app.leaveConflict(func() { app.mutate(locales.Refreshing(), nil) })

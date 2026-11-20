@@ -66,6 +66,26 @@ func (app *nativeApp) switchWorkspace(screen string) {
 			app.searchState = app.nativeHistoryState
 		}
 	}
+	if screen == "files" {
+		if app.browser == nil {
+			app.browser = newNativeBrowser()
+		}
+		app.browser.previous, app.browser.history = app.screen, app.nativeHistoryState
+		app.nativeHistoryState = newNativeHistoryState()
+		app.screen = screen
+		if jump := app.browser.jump; jump != nil {
+			app.browser.jump = nil
+			app.loadBrowser(jump.revision, jump.file, &jump.position)
+		} else {
+			app.loadBrowser(app.browser.revision, app.browser.file, nil)
+		}
+		return
+	}
+	if app.screen == "files" && app.browser != nil && app.browser.previous == screen {
+		app.screen, app.nativeHistoryState = screen, app.browser.history
+		app.browser.previous = ""
+		return
+	}
 	app.clearDiff()
 	app.selectedFile, app.stashHash = "", ""
 	app.refSelected = nativeRefKey{}

@@ -15,20 +15,36 @@ import (
 )
 
 type nativeWorktrees struct {
-	items     []gitrepo.Worktree
-	selected  int
-	list      *ui.ListState
-	loaded    bool
-	canceled  bool
-	listWidth float32
+	allItems       []gitrepo.Worktree
+	items          []gitrepo.Worktree
+	candidatesOnly bool
+	selected       int
+	list           *ui.ListState
+	loaded         bool
+	canceled       bool
+	listWidth      float32
 }
 
 func (state *nativeWorktrees) setItems(items []gitrepo.Worktree) {
+	state.allItems, state.loaded, state.canceled = items, true, false
+	state.filterItems()
+}
+
+func (state *nativeWorktrees) filterItems() {
 	path := ""
 	if state.selected >= 0 && state.selected < len(state.items) {
 		path = state.items[state.selected].Path
 	}
-	state.items, state.selected, state.loaded, state.canceled = items, -1, true, false
+	items := state.allItems
+	if state.candidatesOnly {
+		items = nil
+		for _, item := range state.allItems {
+			if item.CleanupCandidate {
+				items = append(items, item)
+			}
+		}
+	}
+	state.items, state.selected = items, -1
 	for index, item := range items {
 		if item.Current && state.selected == -1 {
 			state.selected = index
@@ -103,13 +119,25 @@ func (app *nativeApp) createWorktreeDialog() {
 }
 
 func (app *nativeApp) reviewWorktree(path string, remove bool) {
+	app.reviewWorktreeAction(path, remove, false)
+}
+
+func (app *nativeApp) reviewWorktreeCleanup(path string) {
+	app.reviewWorktreeAction(path, true, true)
+}
+
+func (app *nativeApp) reviewWorktreeAction(path string, remove, cleanup bool) {
 	if app.repository == nil || app.screen != "worktrees" || !app.writable || app.busy ||
 		app.readTask != nil || app.dialog != nil {
 		return
 	}
 	repository := app.repository.snapshot.Path
 	app.load(locales.ReviewingWorktree(), nativeReadCommit, func(ctx context.Context) (func(), error) {
-		review, err := app.service.ReviewWorktree(ctx, repository, path)
+		reviewWorktree := app.service.ReviewWorktree
+		if cleanup {
+			reviewWorktree = app.service.ReviewWorktreeCleanup
+		}
+		review, err := reviewWorktree(ctx, repository, path)
 		if err != nil {
 			return nil, err
 		}
@@ -129,11 +157,25 @@ func (app *nativeApp) reviewWorktree(path string, remove bool) {
 				if item.Branch != "" {
 					dialog.detail += "\n" + locales.BranchName() + ": " + worktreeBranch(item)
 				}
+				if cleanup {
+					dialog.title = locales.CleanupWorktreeMenu()
+					if len(item.ContainedIn) > 0 {
+						contained := locales.WorktreeCleanupDetail(worktreeContainedBranches(item))
+						dialog.body = func(c *ui.Context) {
+							ui.Scroll(c).FillWidth().MaxHeight(160).Children(func() {
+								ui.Text(c, contained).FontSize(12).FillWidth().Selectable().Tooltip(contained)
+							})
+						}
+					}
+				}
 				dialog.danger = true
 				if review.CanRemove {
 					dialog.action = locales.Remove()
 					dialog.submit = func(dialog *nativeDialog) {
 						app.mutateForm(dialog, locales.RemovingWorktree(), func(ctx context.Context, repository string) error {
+							if cleanup {
+								return app.service.RemoveWorktreeCleanup(ctx, repository, item.Path, review.Token)
+							}
 							return app.service.RemoveWorktree(ctx, repository, item.Path, review.Token)
 						})
 					}
@@ -182,6 +224,14 @@ func worktreeBranch(item gitrepo.Worktree) string {
 	return strings.TrimPrefix(item.Branch, "refs/heads/")
 }
 
+func worktreeContainedBranches(item gitrepo.Worktree) string {
+	names := make([]string, 0, len(item.ContainedIn))
+	for _, branch := range item.ContainedIn {
+		names = append(names, strings.TrimPrefix(branch, "refs/heads/"))
+	}
+	return strings.Join(names, ", ")
+}
+
 func (app *nativeApp) worktreeMenu(menu *ui.Menu, item gitrepo.Worktree) {
 	if menu.Item(locales.OpenWorktree()).Disabled(app.busy || item.Bare || item.Prunable).Chosen() {
 		app.openRepository(item.Path)
@@ -195,6 +245,9 @@ func (app *nativeApp) worktreeMenu(menu *ui.Menu, item gitrepo.Worktree) {
 	}
 	if menu.Item(locales.RemoveWorktreeMenu()).Danger().Disabled(unavailable || item.Main).Chosen() {
 		app.reviewWorktree(item.Path, true)
+	}
+	if item.CleanupCandidate && menu.Item(locales.CleanupWorktreeMenu()).Danger().Disabled(unavailable).Chosen() {
+		app.reviewWorktreeCleanup(item.Path)
 	}
 }
 
@@ -223,6 +276,17 @@ func (app *nativeApp) worktreePanel(c *ui.Context) {
 				Disabled(!app.writable || app.busy || app.readTask != nil || app.dialog != nil).
 				OnClick(app.createWorktreeDialog)
 		})
+		ui.Row(c).FillWidth().Padding(0, 12, 10, 12).Children(func() {
+			filter := 0
+			if state.candidatesOnly {
+				filter = 1
+			}
+			ui.Segmented(c, &filter, locales.AllWorktrees(), locales.WorktreeCleanupCandidates()).
+				Label(locales.Worktrees()).OnChange(func() {
+				state.candidatesOnly = filter == 1
+				state.filterItems()
+			})
+		})
 		ui.Divider(c)
 		if state.canceled {
 			ui.Text(c, locales.WorktreeReadCanceled()).FontSize(12).TextColor(c.Theme().TextMuted).
@@ -241,6 +305,9 @@ func (app *nativeApp) worktreePanel(c *ui.Context) {
 					return
 				case state.loaded:
 					message = locales.EmptyWorktrees()
+					if state.candidatesOnly {
+						message = locales.EmptyWorktreeCleanupCandidates()
+					}
 				}
 				ui.Text(c, message).TextColor(c.Theme().TextMuted)
 			})
@@ -280,6 +347,8 @@ func (app *nativeApp) worktreeList(c *ui.Context, state *nativeWorktrees) {
 				})
 				if item.Current {
 					ui.Text(c, locales.CurrentWorktree()).FontSize(10).Shrink(0)
+				} else if item.CleanupCandidate {
+					ui.Text(c, locales.WorktreeCleanupCandidates()).FontSize(10).Shrink(0)
 				}
 			})
 		}).Label(locales.WorktreeList()).FillWidth().Grow(1).MinHeight(0)
@@ -299,6 +368,11 @@ func (app *nativeApp) worktreeDetail(c *ui.Context, state *nativeWorktrees) {
 			ui.Button(c, locales.OpenWorktree()).Disabled(app.busy || item.Bare || item.Prunable).
 				OnClick(func() { app.openRepository(item.Path) })
 			ui.Spacer(c)
+			if item.CleanupCandidate {
+				ui.Button(c, locales.CleanupWorktreeMenu()).
+					Disabled(!app.writable || app.busy || app.readTask != nil || app.dialog != nil).
+					OnClick(func() { app.reviewWorktreeCleanup(item.Path) })
+			}
 			ui.MenuButton(c, locales.More(), func(menu *ui.Menu) {
 				app.worktreeMenu(menu, item)
 			}).Label(locales.WorktreeActions()).Disabled(app.busy)
@@ -318,6 +392,13 @@ func (app *nativeApp) worktreeDetail(c *ui.Context, state *nativeWorktrees) {
 						ui.Text(c, item.Head).FontSize(11).FillWidth().Selectable()
 					}
 				})
+				if len(item.ContainedIn) > 0 {
+					contained := locales.WorktreeContainedIn(worktreeContainedBranches(item))
+					ui.Text(c, contained).FontSize(12).FillWidth().Selectable().Tooltip(contained)
+				}
+				if item.ContainmentProblem != "" {
+					app.inlineProblem(c, item.ContainmentProblem)
+				}
 				for index, status := range []struct {
 					show  bool
 					label func() string

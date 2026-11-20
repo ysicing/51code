@@ -13,6 +13,22 @@ import (
 	"github.com/egoist/mygo"
 )
 
+func (service *RepositoryService) BrowseFiles(ctx context.Context, path, revision string) ([]string, error) {
+	repo, err := service.manager.Get(path)
+	if err != nil {
+		return nil, err
+	}
+	return repo.BrowseFiles(ctx, revision)
+}
+
+func (service *RepositoryService) BrowseFileContent(ctx context.Context, path, file, revision string) (*gitrepo.FileContent, error) {
+	repo, err := service.manager.Get(path)
+	if err != nil {
+		return nil, err
+	}
+	return repo.BrowseFileContent(ctx, file, revision)
+}
+
 func (service *RepositoryService) SearchHistory(ctx context.Context, path, query, file string, skip int, filter gitrepo.HistoryFilter, pageSize ...int) ([]gitrepo.Commit, error) {
 	repo, err := service.manager.Get(path)
 	if err != nil {
