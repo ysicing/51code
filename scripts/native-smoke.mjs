@@ -256,7 +256,11 @@ try {
   console.log("✓ 历史工作区整文件、分组、区块与逐行暂存及取消暂存");
   await press("前往文件变更");
   await press("hello.txt");
-  await shown("复制路径");
+  await press("查看此行上下文");
+  await shown("筛选文件路径");
+  const browserFile = (await shown("文件全文")).find((node) => node.label === "文件全文");
+  assert(browserFile.states?.includes("readOnly"), "文件浏览正文必须只读");
+  await press("文件变更");
   await press("差异");
   await press("差异布局");
   await press("并排");
@@ -457,7 +461,7 @@ try {
   const linked = join(root, "中文工作树");
   const mainHead = git("rev-parse", "HEAD");
   await press("工作树");
-  await press("新建工作树…");
+  await press("新建");
   await fill("工作目录", linked);
   await fill("分支名称", "native-worktree");
   await fill("起点", "HEAD");
@@ -473,7 +477,7 @@ try {
     await press("关闭设置");
     await capture(`native-worktrees-${suffix}.png`);
   }
-  await press("打开工作树");
+  await press("打开");
   await useRepositoryWindow(basename(linked));
   await shown("文件变更");
   await fill("提交说明", "工作树窗口独立草稿");
@@ -481,8 +485,7 @@ try {
   gitAt(linked, "add", ".");
   gitAt(linked, "commit", "-m", "worktree feature");
   await press("工作树");
-  await press(realpathSync(fixture));
-  await press("打开工作树");
+  await press("打开主工作树");
   await useRepositoryWindow(basename(fixture));
   await press("文件变更");
   const originalDraft = (await tree()).find((node) => node.label === "提交说明" && node.actions?.includes("setValue"));
