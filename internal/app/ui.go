@@ -29,6 +29,7 @@ var nativeIcons = map[string]*ui.SVG{
 	"cloud":    nativeSymbol(`<path d="M6 17a4 4 0 0 1-.6-8A6 6 0 0 1 17 9h1a4 4 0 0 1 0 8Z"/>`),
 	"settings": nativeSymbol(`<path d="M10 3h4l.6 3 1.4.8 2.9-1 2 3.4-2.3 2v1.6l2.3 2-2 3.4-2.9-1-1.4.8L14 21h-4l-.6-3-1.4-.8-2.9 1-2-3.4 2.3-2v-1.6l-2.3-2 2-3.4 2.9 1 1.4-.8Z"/><circle cx="12" cy="12" r="3"/>`),
 	"check":    nativeSymbol(`<path d="m5 12 4 4L19 6"/>`),
+	"copy":     nativeSymbol(`<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>`),
 	"close":    nativeSymbol(`<path d="m6 6 12 12M6 18 18 6"/>`),
 	"chevron":  nativeSymbol(`<path d="m9 5 7 7-7 7"/>`),
 	"plus":     nativeSymbol(`<path d="M12 5v14M5 12h14"/>`),

@@ -219,6 +219,7 @@ func (app *nativeApp) historyPanel(c *ui.Context) {
 		}
 		return history[index-workingOffset].Subject
 	}
+	services := c.Services()
 	app.historyList.CellMenu = func(menu *ui.Menu, row, _ int) {
 		row -= workingOffset
 		if row < 0 || row >= len(history) {
@@ -228,13 +229,7 @@ func (app *nativeApp) historyPanel(c *ui.Context) {
 		if app.screen == "search" && menu.Item(locales.ViewInCommitHistory()).Disabled(app.busy || app.readTask != nil).Chosen() {
 			app.revealSearchCommit(commit.Hash)
 		}
-		unavailable := !app.canCreateReference() || app.readTask != nil && app.readTask.kind == nativeReadHistory
-		if menu.Item(locales.BranchFromCommit()).Disabled(unavailable).Chosen() {
-			app.referenceDialog(false, locales.ReferenceCommit()+" "+commit.Subject, commit.Hash, false)
-		}
-		if menu.Item(locales.TagFromCommit()).Disabled(unavailable).Chosen() {
-			app.referenceDialog(true, locales.ReferenceCommit()+" "+commit.Subject, commit.Hash, false)
-		}
+		app.historyCommitMenu(menu, commit, services)
 	}
 	theme := *c.Theme()
 	tableTheme := theme
@@ -342,12 +337,27 @@ func (app *nativeApp) historyDetails(c *ui.Context) {
 		if selected != nil {
 			ui.Text(c, selected.Subject).Bold().FontSize(15).MaxLines(1).Selectable().Tooltip(selected.Subject)
 		}
-		ui.Row(c).FillWidth().Gap(12).AlignItems(ui.Center).Children(func() {
+		commit := gitrepo.Commit{Hash: app.commitHash}
+		if selected != nil {
+			commit = *selected
+		}
+		services := c.Services()
+		ui.Row(c).FillWidth().Gap(6).AlignItems(ui.Center).Wrap().Children(func() {
 			if selected != nil {
 				ui.Text(c, selected.Author).FontSize(11).MaxWidth(120).SingleLine().Selectable()
 				ui.Text(c, historyDate(app.commitDate(*selected))).FontSize(11).TextColor(c.Theme().TextMuted).SingleLine().Tooltip(app.historyDateLabel())
 			}
-			ui.Text(c, app.commitHash).Font("monospace").FontSize(11).MinWidth(0).Grow(1).SingleLine().Selectable().Label(locales.FullCommitID())
+			ui.Row(c).Gap(2).AlignItems(ui.Center).Grow(1).MinWidth(0).Children(func() {
+				ui.Text(c, commit.Hash).Font("monospace").FontSize(11).MinWidth(0).Shrink(1).SingleLine().
+					Selectable().Label(locales.FullCommitID()).Tooltip(commit.Hash)
+				iconButton(c, locales.CopyWorktreeCommit(), nativeIcons["copy"]).Shrink(0).
+					OnClick(func() { services.WriteClipboard(commit.Hash) })
+			})
+			ui.Button(c, locales.CompareCommitWithHead()).FontSize(12).Shrink(0).Disabled(!app.canCompareCommit()).
+				OnClick(func() { app.compareCommitWithHead(commit.Hash) })
+			iconButton(c, locales.CommitActions(), nativeIcons["more"]).Shrink(0).Menu(func(menu *ui.Menu) {
+				app.historyCommitMenu(menu, commit, services)
+			})
 			if app.screen == "search" {
 				hash := app.commitHash
 				ui.Button(c, locales.ViewInCommitHistory()).FontSize(12).Disabled(app.busy || app.readTask != nil).

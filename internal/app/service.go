@@ -159,6 +159,14 @@ func (service *RepositoryService) Merge(ctx context.Context, path, branch string
 	return repo.MergeWithOptions(ctx, branch, options)
 }
 
+func (service *RepositoryService) ApplyCommit(ctx context.Context, path, kind, hash, branch, head string) error {
+	repo, err := service.manager.Get(path)
+	if err != nil {
+		return err
+	}
+	return repo.ApplyCommit(ctx, kind, hash, branch, head)
+}
+
 func (service *RepositoryService) OperationAction(ctx context.Context, path, kind, token, action string) error {
 	repo, err := service.manager.Get(path)
 	if err != nil {

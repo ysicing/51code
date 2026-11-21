@@ -5906,6 +5906,66 @@ func (msgs Messages) CherryPick() string {
 	return Catalog.Format(msgs.locale, "cherryPick", nil)
 }
 
+// CherryPickCommitMenu says "拣选到当前分支…"
+// in the language the app shows.
+func CherryPickCommitMenu() string { return In(i18n.Locale()).CherryPickCommitMenu() }
+
+// CherryPickCommitMenu says "拣选到当前分支…"
+// in the language of msgs.
+func (msgs Messages) CherryPickCommitMenu() string {
+	return Catalog.Format(msgs.locale, "cherryPickCommitMenu", nil)
+}
+
+// RevertCommit says "还原提交"
+// in the language the app shows.
+func RevertCommit() string { return In(i18n.Locale()).RevertCommit() }
+
+// RevertCommit says "还原提交"
+// in the language of msgs.
+func (msgs Messages) RevertCommit() string {
+	return Catalog.Format(msgs.locale, "revertCommit", nil)
+}
+
+// RevertCommitMenu says "还原此提交…"
+// in the language the app shows.
+func RevertCommitMenu() string { return In(i18n.Locale()).RevertCommitMenu() }
+
+// RevertCommitMenu says "还原此提交…"
+// in the language of msgs.
+func (msgs Messages) RevertCommitMenu() string {
+	return Catalog.Format(msgs.locale, "revertCommitMenu", nil)
+}
+
+// CommitActionTarget says "目标分支：{branch}"
+// in the language the app shows.
+func CommitActionTarget(branch string) string { return In(i18n.Locale()).CommitActionTarget(branch) }
+
+// CommitActionTarget says "目标分支：{branch}"
+// in the language of msgs.
+func (msgs Messages) CommitActionTarget(branch string) string {
+	return Catalog.Format(msgs.locale, "commitActionTarget", map[string]any{"branch": branch})
+}
+
+// CompareCommitWithHead says "与 HEAD 比较"
+// in the language the app shows.
+func CompareCommitWithHead() string { return In(i18n.Locale()).CompareCommitWithHead() }
+
+// CompareCommitWithHead says "与 HEAD 比较"
+// in the language of msgs.
+func (msgs Messages) CompareCommitWithHead() string {
+	return Catalog.Format(msgs.locale, "compareCommitWithHead", nil)
+}
+
+// CommitActions says "提交操作"
+// in the language the app shows.
+func CommitActions() string { return In(i18n.Locale()).CommitActions() }
+
+// CommitActions says "提交操作"
+// in the language of msgs.
+func (msgs Messages) CommitActions() string {
+	return Catalog.Format(msgs.locale, "commitActions", nil)
+}
+
 // More says "更多"
 // in the language the app shows.
 func More() string { return In(i18n.Locale()).More() }

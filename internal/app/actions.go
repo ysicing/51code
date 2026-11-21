@@ -448,6 +448,8 @@ func operationName(kind string) string {
 		return locales.Rebase()
 	case "cherry-pick":
 		return locales.CherryPick()
+	case "revert":
+		return locales.RevertCommit()
 	default:
 		return kind
 	}

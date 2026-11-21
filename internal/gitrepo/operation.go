@@ -272,7 +272,11 @@ func (repo *Repository) checkMergeIgnoredPaths(ctx context.Context, ref string) 
 	if err != nil || len(hash) != 20 && len(hash) != 32 || status != "0" && status != "1" {
 		return errors.New("无法读取安全合并预检结果")
 	}
-	added, err := repo.git(ctx, "diff", "--no-ext-diff", "--no-renames", "--name-only", "--diff-filter=A", "-z", "HEAD", tree, "--")
+	return repo.checkIgnoredPathCollisions(ctx, "HEAD", tree, ignored)
+}
+
+func (repo *Repository) checkIgnoredPathCollisions(ctx context.Context, head, tree, ignored string) error {
+	added, err := repo.git(ctx, "diff", "--no-ext-diff", "--no-renames", "--name-only", "--diff-filter=A", "-z", head, tree, "--")
 	if err != nil {
 		return err
 	}
@@ -323,7 +327,7 @@ func (repo *Repository) checkMergeIgnoredPaths(ctx context.Context, ref string) 
 				return err
 			}
 			if collision {
-				return fmt.Errorf("合并会覆盖忽略的本地路径，请先移走或备份：%s", path)
+				return fmt.Errorf("操作会覆盖忽略的本地路径，请先移走或备份：%s", path)
 			}
 		}
 	}
@@ -346,6 +350,94 @@ func mergePathInside(root *os.Root, path string, directory os.FileInfo, parents 
 		}
 	}
 	return false, nil
+}
+
+func (repo *Repository) ApplyCommit(ctx context.Context, kind, hash, branch, expectedHead string) error {
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+
+	if kind != "cherry-pick" && kind != "revert" {
+		return errors.New("不支持的提交操作")
+	}
+	if err := validCommitHash(hash); err != nil {
+		return err
+	}
+	parents, err := repo.commitParents(ctx, hash)
+	if err != nil {
+		return err
+	}
+	if parents[0] != hash || len(parents) > 2 {
+		return errors.New("此操作仅支持非合并提交")
+	}
+	operation, err := repo.operation(ctx)
+	if err != nil {
+		return err
+	}
+	if operation.Kind != "" {
+		return errors.New("请先完成当前 Git 操作")
+	}
+	_, files, err := repo.streamStatus(ctx, []string{
+		"status", "--porcelain=v2", "-z", "--untracked-files=all", "--ignore-submodules=none",
+	})
+	if err != nil {
+		return err
+	}
+	if len(files) > 0 {
+		return errors.New("请先提交或贮藏工作区变更")
+	}
+	if err := validCommitHash(expectedHead); err != nil {
+		return err
+	}
+	if err := repo.checkApplyCommitIgnoredPaths(ctx, kind, parents, expectedHead); err != nil {
+		return err
+	}
+	ref, err := repo.git(ctx, "symbolic-ref", "--quiet", "HEAD")
+	if err != nil && !exitCode(err, 1) {
+		return err
+	}
+	head, err := repo.head(ctx)
+	if err != nil {
+		return err
+	}
+	if branch == "" || head == "" || strings.TrimSpace(ref) != "refs/heads/"+branch || head != expectedHead {
+		return errors.New("当前分支或 HEAD 已改变，请刷新后重新确认")
+	}
+	_, err = run(ctx, repo.Path, "", 2*time.Minute, kind, "--no-edit", "--strategy=ort", "--", hash)
+	return err
+}
+
+func (repo *Repository) checkApplyCommitIgnoredPaths(ctx context.Context, kind string, commits []string, head string) error {
+	ignored, err := repo.git(ctx, "ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z")
+	if err != nil || ignored == "" {
+		return err
+	}
+	var parent string
+	if len(commits) == 2 {
+		parent = commits[1]
+	} else {
+		parent, err = repo.git(ctx, "hash-object", "-t", "tree", "--stdin")
+		if err != nil {
+			return err
+		}
+		parent = strings.TrimSpace(parent)
+	}
+	base, incoming := parent, commits[0]
+	if kind == "revert" {
+		base, incoming = incoming, base
+	}
+	var output limitedBuffer
+	err = runTo(ctx, repo.Path, "", 2*time.Minute, &output, output.String,
+		"merge-tree", "--write-tree", "--no-messages", "--name-only", "--merge-base="+base, head, incoming)
+	if err != nil && !exitCode(err, 1) {
+		return fmt.Errorf("无法预检忽略文件是否会被覆盖：%w", err)
+	}
+	tree, _, _ := strings.Cut(strings.TrimSpace(output.String()), "\n")
+	if output.overflow || validCommitHash(tree) != nil {
+		return errors.New("无法读取提交操作的预检结果")
+	}
+	return repo.checkIgnoredPathCollisions(ctx, head, tree, ignored)
 }
 
 func (repo *Repository) OperationAction(ctx context.Context, kind, token, action string) error {
