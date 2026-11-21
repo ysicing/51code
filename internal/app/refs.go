@@ -220,6 +220,7 @@ func (app *nativeApp) referenceItems(c *ui.Context, tree ui.TreeParts, nodes []*
 }
 
 func (app *nativeApp) localBranchSidebar(c *ui.Context) {
+	services := c.Services()
 	build := func(refs *nativeRefTree) {
 		var names []string
 		var current string
@@ -246,6 +247,9 @@ func (app *nativeApp) localBranchSidebar(c *ui.Context) {
 		}
 		item.ContextMenu(func(menu *ui.Menu) {
 			if !branch.Current {
+				if menu.Item(locales.CheckoutBranchOrOpenWorktree()).Disabled(app.dialog != nil).Chosen() {
+					app.openLocalBranch(name)
+				}
 				if menu.Item(locales.MergeBranchInto(name, app.repository.snapshot.Branch)).
 					Disabled(!app.canMerge() || app.dialog != nil).Chosen() {
 					app.mergeDialogFrom("refs/heads/" + name)
@@ -263,6 +267,10 @@ func (app *nativeApp) localBranchSidebar(c *ui.Context) {
 			if menu.Item(locales.RenameBranchMenu()).Disabled(!app.writable).Chosen() {
 				app.renameBranchDialog(name)
 			}
+			if menu.Item(locales.CopyBranchName()).Chosen() {
+				services.WriteClipboard(name)
+			}
+			menu.Separator()
 			if menu.Item(locales.DeleteBranchMenu()).Disabled(branch.Current || !app.writable).Chosen() {
 				app.deleteBranch(name, false)
 			}
@@ -270,13 +278,45 @@ func (app *nativeApp) localBranchSidebar(c *ui.Context) {
 				app.deleteBranch(name, true)
 			}
 		})
-		if item.Clicked() && app.writable && !branch.Current {
-			app.leaveConflict(func() {
-				app.mutate(locales.SwitchingBranch(), func(ctx context.Context, path string) error {
-					return app.service.SwitchBranch(ctx, path, name)
-				})
-			})
+		item.OnClick(func() { app.viewBranch("本地分支", name, "refs/heads/"+name) })
+	})
+}
+
+func (app *nativeApp) viewBranch(kind, name, ref string) {
+	if app.repository == nil || app.dialog != nil {
+		return
+	}
+	app.leaveConflict(func() {
+		app.switchWorkspace("history")
+		app.refSelected = nativeRefKey{repository: app.repository.snapshot.Path, kind: kind, reference: name}
+		app.historyQuery, app.historyFile = "", ""
+		app.historyFilter.CurrentBranch = false
+		app.historyFilter.BranchRef = ref
+		app.searchHistory(false)
+	})
+}
+
+func (app *nativeApp) openLocalBranch(name string) {
+	if app.repository == nil || app.dialog != nil {
+		return
+	}
+	path := app.repository.snapshot.Path
+	app.runTask(locales.ReadingWorktrees(), true, func(ctx context.Context) (func(), error) {
+		worktree, err := app.service.BranchWorktree(ctx, path, name)
+		if err != nil {
+			return nil, err
 		}
+		return func() {
+			if worktree != "" {
+				app.openRepository(worktree)
+			} else if app.writable {
+				app.leaveConflict(func() {
+					app.mutate(locales.SwitchingBranch(), func(ctx context.Context, path string) error {
+						return app.service.SwitchBranch(ctx, path, name)
+					})
+				})
+			}
+		}, nil
 	})
 }
 

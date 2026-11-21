@@ -348,6 +348,9 @@ func (app *nativeApp) searchHistory(more bool) {
 			app.historyLoaded = true
 			app.historyMore = len(commits) == limit
 			app.historyPagePaused = false
+			if !more && request.filter.BranchRef != "" && len(commits) > 0 {
+				app.selectCommit(commits[0].Hash)
+			}
 		}, err
 	})
 }

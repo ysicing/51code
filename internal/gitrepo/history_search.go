@@ -22,6 +22,7 @@ type CommitFile struct {
 type HistoryFilter struct {
 	CurrentBranch bool
 	HideRemotes   bool
+	BranchRef     string
 	Mode          string
 	Since         string
 	Until         string
@@ -36,6 +37,10 @@ const (
 )
 
 func (filter HistoryFilter) validate() error {
+	if filter.BranchRef != "" && !strings.HasPrefix(filter.BranchRef, "refs/heads/") &&
+		!strings.HasPrefix(filter.BranchRef, "refs/remotes/") {
+		return errors.New("分支引用无效")
+	}
 	switch filter.Mode {
 	case "", "message", "hash", "branch", "changes", "author":
 	default:
@@ -85,7 +90,7 @@ func (repo *Repository) SearchHistory(ctx context.Context, query string, path st
 		return nil, err
 	}
 	defer repo.mu.Unlock()
-	if filter.CurrentBranch {
+	if filter.CurrentBranch && filter.BranchRef == "" {
 		head, err := repo.head(ctx)
 		if err != nil {
 			return nil, err

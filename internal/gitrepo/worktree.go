@@ -172,6 +172,42 @@ func (repo *Repository) Worktrees(ctx context.Context) ([]Worktree, error) {
 	return result, nil
 }
 
+func (repo *Repository) BranchWorktree(ctx context.Context, name string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	common, unlock, err := repo.lockWorktree(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer unlock()
+	states, err := repo.worktreeEntries(ctx)
+	if err != nil {
+		return "", err
+	}
+	for _, state := range states {
+		item := state.Worktree
+		if item.Current || item.Branch != "refs/heads/"+name {
+			continue
+		}
+		if item.Problem != "" {
+			return "", errors.New(item.Problem)
+		}
+		if item.Prunable || item.Bare {
+			return "", fmt.Errorf("分支所在工作树不可用：%s", item.Path)
+		}
+		target := &Repository{Path: item.Path}
+		paths, err := target.revParsePaths(ctx, "--git-common-dir", "--show-toplevel")
+		if err != nil {
+			return "", err
+		}
+		if !worktreeSamePath(paths[0], common) || !worktreeSamePath(paths[1], item.Path) {
+			return "", fmt.Errorf("工作树已变化，请刷新后重试：%s", item.Path)
+		}
+		return item.Path, nil
+	}
+	return "", nil
+}
+
 // ReviewWorktree 仅检查列表中的条目，不把任意路径当成链接工作树。
 func (repo *Repository) ReviewWorktree(ctx context.Context, path string) (WorktreeReview, error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)

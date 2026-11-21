@@ -27,20 +27,26 @@ func remoteBranchParts(reference string, remotes []gitrepo.RemoteConfig) (string
 }
 
 func (app *nativeApp) remoteSidebar(c *ui.Context) {
+	services := c.Services()
 	app.referenceSidebar(c, "远端", "远端分支树", nativeIcons["cloud"], app.remoteNodes, func(_ *nativeRefTree, reference string, item ui.Element) {
 		_, name := remoteBranchParts(reference, app.repository.remotes)
 		if name == "HEAD" {
 			item.Tooltip(reference + " · " + locales.RemoteHead())
 		} else {
 			item.ContextMenu(func(menu *ui.Menu) {
+				if menu.Item(locales.CheckoutRemoteBranch() + "…").Disabled(!app.writable || app.dialog != nil).Chosen() {
+					app.checkoutDialog(reference)
+				}
 				if menu.Item(locales.MergeBranchInto(reference, app.repository.snapshot.Branch)).
 					Disabled(!app.canMerge() || app.dialog != nil).Chosen() {
 					app.mergeDialogFrom("refs/remotes/" + reference)
 				}
+				menu.Separator()
+				if menu.Item(locales.CopyBranchName()).Chosen() {
+					services.WriteClipboard(reference)
+				}
 			})
-			if item.Clicked() && app.writable {
-				app.checkoutDialog(reference)
-			}
+			item.OnClick(func() { app.viewBranch("远端", reference, "refs/remotes/"+reference) })
 		}
 	})
 }

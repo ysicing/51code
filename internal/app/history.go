@@ -137,17 +137,26 @@ func (app *nativeApp) historyPanel(c *ui.Context) {
 		app.searchControls(c)
 	} else {
 		ui.Row(c).FillWidth().Padding(4, 10).Gap(8).AlignItems(ui.Center).Children(func() {
-			scopes := []string{locales.AllBranches(), locales.CurrentBranch()}
-			scope := scopes[0]
-			if app.historyFilter.CurrentBranch {
-				scope = scopes[1]
+			if branch := app.historyFilter.BranchRef; branch != "" {
+				name := strings.TrimPrefix(strings.TrimPrefix(branch, "refs/heads/"), "refs/remotes/")
+				ui.Text(c, name).Label(locales.HistoryBranchScope()).Tooltip(name).SingleLine().FontSize(12).MinWidth(0).MaxWidth(180)
+				ui.Button(c, locales.AllBranches()).FontSize(12).Disabled(app.busy).OnClick(func() {
+					app.historyFilter.BranchRef = ""
+					app.searchHistory(false)
+				})
+			} else {
+				scopes := []string{locales.AllBranches(), locales.CurrentBranch()}
+				scope := scopes[0]
+				if app.historyFilter.CurrentBranch {
+					scope = scopes[1]
+				}
+				c.Key("history-scope")
+				ui.Select(c, &scope, scopes).Label(locales.HistoryBranchScope()).Width(140).Height(26).FontSize(12).
+					Disabled(app.busy).OnChange(func() {
+					app.historyFilter.CurrentBranch = scope == scopes[1]
+					app.searchHistory(false)
+				})
 			}
-			c.Key("history-scope")
-			ui.Select(c, &scope, scopes).Label(locales.HistoryBranchScope()).Width(140).Height(26).FontSize(12).
-				Disabled(app.busy).OnChange(func() {
-				app.historyFilter.CurrentBranch = scope == scopes[1]
-				app.searchHistory(false)
-			})
 			remotes := []string{locales.ShowRemoteBranches(), locales.HideRemoteBranches()}
 			remote := remotes[0]
 			if app.historyFilter.HideRemotes {

@@ -14,7 +14,7 @@ import (
 
 func (app *nativeApp) historyWorkingOffset() int {
 	if app.screen == "history" && app.repository != nil && len(app.repository.snapshot.Files) > 0 && app.historyOffset == 0 &&
-		app.historyResult.query == "" && app.historyResult.file == "" {
+		app.historyResult.query == "" && app.historyResult.file == "" && app.historyResult.filter.BranchRef == "" {
 		return 1
 	}
 	return 0

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/ysicing/51code/internal/gitrepo"
+	"github.com/ysicing/51code/locales"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -175,21 +176,20 @@ func TestNativeReferenceDirectories(t *testing.T) {
 	tester.Key(0, ui.KeyDown)
 	tester.Key(0, ui.KeyEnter)
 	finish()
+	finish()
 	tester.Frame()
-	if app.problem != "" || nativeGit(t, path, "branch", "--show-current") != "a/b/c" {
-		t.Fatalf("目录中的分支未使用完整引用切换: %s", app.problem)
+	if app.problem != "" || app.historyResult.filter.BranchRef != "refs/heads/a/b/c" ||
+		nativeGit(t, path, "branch", "--show-current") != "main" {
+		t.Fatalf("目录中的分支未使用完整引用查看历史: %s", app.problem)
 	}
 	current, found := tester.AccessByRole(ui.RoleTreeItem, "a/b/c")
 	if !found || !current.Selected {
-		t.Fatal("当前分支未标记为选中")
+		t.Fatal("浏览的分支未标记为选中")
 	}
-	if err := tester.Click("a/b/c"); err != nil {
+	if err := tester.RightClick("origin/a/b/c"); err != nil {
 		t.Fatal(err)
 	}
-	if app.busy {
-		t.Fatal("分支与标签同名时，重复点击当前分支不应再次切换")
-	}
-	if err := tester.Click("origin/a/b/c"); err != nil {
+	if err := tester.ChooseMenuItem(locales.CheckoutRemoteBranch() + "…"); err != nil {
 		t.Fatal(err)
 	}
 	if app.dialog == nil || app.dialog.detail != "origin/a/b/c" || app.dialog.fields[0].value != "a/b/c" {

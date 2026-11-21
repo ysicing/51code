@@ -53,7 +53,7 @@ func (repo *Repository) LocateHistory(ctx context.Context, hash, query, path str
 		return HistoryLocation{}, errors.New("无法读取目标提交")
 	}
 	location := HistoryLocation{Commit: detail.commits[0]}
-	if filter.CurrentBranch {
+	if filter.CurrentBranch && filter.BranchRef == "" {
 		head, err := repo.head(ctx)
 		if err != nil {
 			return HistoryLocation{}, err

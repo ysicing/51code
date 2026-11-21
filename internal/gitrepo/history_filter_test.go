@@ -47,6 +47,8 @@ func TestHistoryBranchFilters(t *testing.T) {
 		{"all without remotes", HistoryFilter{HideRemotes: true}, []string{head, local, tagged, base}},
 		{"current with remotes", HistoryFilter{CurrentBranch: true}, []string{head, base}},
 		{"current without remotes", HistoryFilter{CurrentBranch: true, HideRemotes: true}, []string{head, base}},
+		{"exact local", HistoryFilter{BranchRef: "refs/heads/origin/local"}, []string{local, base}},
+		{"exact remote", HistoryFilter{BranchRef: "refs/remotes/origin/remote-only", HideRemotes: true}, []string{remote, base}},
 	} {
 		t.Run(check.name, func(t *testing.T) {
 			for _, query := range []string{"", "NEEDLE"} {

@@ -191,7 +191,17 @@ func (repo *Repository) readHistory(ctx context.Context, path string, filter His
 		args = append(args, "-G"+regexp.QuoteMeta(stdout.query), "--regexp-ignore-case", "--diff-merges=first-parent",
 			"--no-patch", "--no-ext-diff", "--no-textconv")
 	}
-	if filter.Mode == "branch" && stdout.query != "" {
+	if filter.BranchRef != "" {
+		hash, err := repo.git(ctx, "show-ref", "--verify", "--hash", "--", filter.BranchRef)
+		if err != nil {
+			return err
+		}
+		hash = strings.TrimSpace(hash)
+		if err := validCommitHash(hash); err != nil {
+			return err
+		}
+		args = append(args, hash)
+	} else if filter.Mode == "branch" && stdout.query != "" {
 		refs, err := repo.git(ctx, "for-each-ref", "--format=%(refname)", "refs/heads/", "refs/remotes/")
 		if err != nil {
 			return err

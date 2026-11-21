@@ -8,12 +8,14 @@ import (
 	"testing"
 
 	"github.com/ysicing/51code/internal/gitrepo"
+	"github.com/ysicing/51code/locales"
 
 	"github.com/egoist/mygo/ui"
 )
 
 func TestNativeRemoteBranchTree(t *testing.T) {
-	app, _, _ := nativeFixture(t)
+	app, path, finish := nativeFixture(t)
+	nativeGit(t, path, "update-ref", "refs/remotes/origin/main", "HEAD")
 	app.repository.remotes = []gitrepo.RemoteConfig{{Name: "origin"}, {Name: "upstream"}, {Name: "team/mirror"}, {Name: "empty"}}
 	app.repository.branches = append(app.repository.branches,
 		gitrepo.Branch{Name: "origin/HEAD", Remote: true},
@@ -68,8 +70,11 @@ func TestNativeRemoteBranchTree(t *testing.T) {
 	}
 	tester.Key(0, ui.KeyDown)
 	tester.Key(0, ui.KeyEnter)
-	if app.dialog == nil || app.dialog.detail != "origin/main" {
-		t.Fatal("键盘导航未选中所属远端的分支")
+	finish()
+	finish()
+	if app.dialog != nil || app.historyResult.filter.BranchRef != "refs/remotes/origin/main" ||
+		app.commitHash != app.repository.snapshot.Head || app.repository.snapshot.Branch != "main" {
+		t.Fatal("键盘导航未打开所属远端分支的历史")
 	}
 	app.dialog = nil
 	tester.Frame()
@@ -84,7 +89,16 @@ func TestNativeRemoteBranchTree(t *testing.T) {
 		{"upstream/main", "main"},
 		{"team/mirror/release/next", "release/next"},
 	} {
-		if err := tester.Click(branch.reference); err != nil {
+		if err := tester.RightClick(branch.reference); err != nil {
+			t.Fatal(err)
+		}
+		if err := tester.ChooseMenuItem(locales.CopyBranchName()); err != nil || tester.Clipboard() != branch.reference {
+			t.Fatalf("无法复制远程分支的全名 %s: %v", branch.reference, err)
+		}
+		if err := tester.RightClick(branch.reference); err != nil {
+			t.Fatal(err)
+		}
+		if err := tester.ChooseMenuItem(locales.CheckoutRemoteBranch() + "…"); err != nil {
 			t.Fatal(err)
 		}
 		if app.dialog == nil || app.dialog.detail != branch.reference || app.dialog.fields[0].value != branch.name {

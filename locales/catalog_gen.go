@@ -2520,6 +2520,16 @@ func (msgs Messages) CopyTagName() string {
 	return Catalog.Format(msgs.locale, "copyTagName", nil)
 }
 
+// CopyBranchName says "复制分支名"
+// in the language the app shows.
+func CopyBranchName() string { return In(i18n.Locale()).CopyBranchName() }
+
+// CopyBranchName says "复制分支名"
+// in the language of msgs.
+func (msgs Messages) CopyBranchName() string {
+	return Catalog.Format(msgs.locale, "copyBranchName", nil)
+}
+
 // CopyPath says "复制路径"
 // in the language the app shows.
 func CopyPath() string { return In(i18n.Locale()).CopyPath() }
@@ -4428,6 +4438,16 @@ func CheckoutRemoteBranch() string { return In(i18n.Locale()).CheckoutRemoteBran
 // in the language of msgs.
 func (msgs Messages) CheckoutRemoteBranch() string {
 	return Catalog.Format(msgs.locale, "checkoutRemoteBranch", nil)
+}
+
+// CheckoutBranchOrOpenWorktree says "检出或打开工作树"
+// in the language the app shows.
+func CheckoutBranchOrOpenWorktree() string { return In(i18n.Locale()).CheckoutBranchOrOpenWorktree() }
+
+// CheckoutBranchOrOpenWorktree says "检出或打开工作树"
+// in the language of msgs.
+func (msgs Messages) CheckoutBranchOrOpenWorktree() string {
+	return Catalog.Format(msgs.locale, "checkoutBranchOrOpenWorktree", nil)
 }
 
 // Checkout says "检出"

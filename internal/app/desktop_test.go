@@ -7,6 +7,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -56,6 +57,68 @@ func openDesktopRepository(t *testing.T, desktop *nativeDesktop, updates <-chan 
 	}
 	t.Fatalf("未打开仓库 %s: %s", path, desktop.library.problem)
 	return nil
+}
+
+func TestNativeBranchViewAndWorktreeCheckout(t *testing.T) {
+	desktop, path, updates, _ := desktopFixture(t)
+	linked := filepath.Join(t.TempDir(), "linked")
+	nativeGit(t, path, "worktree", "add", "-b", "occupied", linked)
+	nativeGit(t, path, "branch", "available")
+	writeNativeFile(t, linked, "hello.txt", "occupied commit\n")
+	nativeGit(t, linked, "commit", "-am", "occupied tip")
+	tip := nativeGit(t, linked, "rev-parse", "HEAD")
+	nativeGit(t, path, "commit", "--allow-empty", "-m", "source only")
+	writeNativeFile(t, path, "hello.txt", "main draft\n")
+	writeNativeFile(t, linked, "hello.txt", "linked draft\n")
+	linkedPath, err := filepath.EvalSymlinks(linked)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := openDesktopRepository(t, desktop, updates, path)
+	source.writable = false
+	tester := ui.NewTester(source.view, 1024, 680)
+	checkoutBranch := func(name string) {
+		t.Helper()
+		tester.Frame()
+		if err := tester.RightClick(name); err != nil {
+			t.Fatal(err)
+		}
+		if err := tester.ChooseMenuItem(locales.CheckoutBranchOrOpenWorktree()); err != nil {
+			t.Fatal(err)
+		}
+		runBackgroundUpdates(t, updates, func() bool { return !source.busy })
+		if source.problem != "" {
+			t.Fatal(source.problem)
+		}
+	}
+	if err := tester.Click("occupied"); err != nil {
+		t.Fatal(err)
+	}
+	runBackgroundUpdates(t, updates, func() bool { return source.readTask == nil })
+	if source.problem != "" || source.screen != "history" || source.historyResult.filter.BranchRef != "refs/heads/occupied" ||
+		len(source.history) != 2 || source.commitHash != tip || !strings.Contains(source.diff.Text, "occupied commit") ||
+		source.historyWorkingOffset() != 0 || len(desktop.repositories) != 1 || source.repository.snapshot.Branch != "main" {
+		t.Fatal("单击工作树中的分支未只读打开目标分支的历史和最新差异")
+	}
+	checkoutBranch("occupied")
+	target := desktop.repositories[linkedPath]
+	if target == nil || target.repository.snapshot.Branch != "occupied" || desktop.active != target {
+		t.Fatal("已检出的分支未在对应工作树窗口打开")
+	}
+	if source.repository.snapshot.Branch != "main" || !fileExists(target.repository.snapshot.Files, "hello.txt", false) ||
+		!fileExists(source.repository.snapshot.Files, "hello.txt", false) {
+		t.Fatal("打开工作树改变了来源分支或丢失未提交的文件状态")
+	}
+	checkoutBranch("occupied")
+	if desktop.repositories[linkedPath] != target || desktop.active != target || len(desktop.repositories) != 2 {
+		t.Fatal("重复点击没有激活原来的工作树窗口")
+	}
+	source.writable = true
+	checkoutBranch("available")
+	if source.repository.snapshot.Branch != "available" ||
+		nativeGit(t, linked, "branch", "--show-current") != "occupied" {
+		t.Fatal("检出空闲分支未在来源工作树切换，或影响了另一个工作树")
+	}
 }
 
 func TestNativeDesktopRepositoryWindowsKeepIndependentState(t *testing.T) {

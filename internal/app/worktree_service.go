@@ -17,6 +17,14 @@ func (service *RepositoryService) Worktrees(ctx context.Context, path string) ([
 	return repo.Worktrees(ctx)
 }
 
+func (service *RepositoryService) BranchWorktree(ctx context.Context, path, name string) (string, error) {
+	repo, err := service.manager.Get(path)
+	if err != nil {
+		return "", err
+	}
+	return repo.BranchWorktree(ctx, name)
+}
+
 func (service *RepositoryService) CreateWorktree(ctx context.Context, repository, path, branch, start string, existing bool) (gitrepo.Worktree, error) {
 	repo, err := service.manager.Get(repository)
 	if err != nil {
