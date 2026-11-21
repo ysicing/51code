@@ -7,6 +7,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -68,6 +69,7 @@ func TestNativeBranchViewAndWorktreeCheckout(t *testing.T) {
 	nativeGit(t, linked, "commit", "-am", "occupied tip")
 	tip := nativeGit(t, linked, "rev-parse", "HEAD")
 	nativeGit(t, path, "commit", "--allow-empty", "-m", "source only")
+	head := nativeGit(t, path, "rev-parse", "HEAD")
 	writeNativeFile(t, path, "hello.txt", "main draft\n")
 	writeNativeFile(t, linked, "hello.txt", "linked draft\n")
 	linkedPath, err := filepath.EvalSymlinks(linked)
@@ -76,6 +78,11 @@ func TestNativeBranchViewAndWorktreeCheckout(t *testing.T) {
 	}
 	source := openDesktopRepository(t, desktop, updates, path)
 	source.writable = false
+	source.switchWorkspace("history")
+	source.searchHistory(false)
+	runBackgroundUpdates(t, updates, func() bool { return source.readTask == nil })
+	allHistory := slices.Clone(source.history)
+	historyList := source.historyList
 	tester := ui.NewTester(source.view, 1024, 680)
 	checkoutBranch := func(name string) {
 		t.Helper()
@@ -95,10 +102,33 @@ func TestNativeBranchViewAndWorktreeCheckout(t *testing.T) {
 		t.Fatal(err)
 	}
 	runBackgroundUpdates(t, updates, func() bool { return source.readTask == nil })
-	if source.problem != "" || source.screen != "history" || source.historyResult.filter.BranchRef != "refs/heads/occupied" ||
-		len(source.history) != 2 || source.commitHash != tip || !strings.Contains(source.diff.Text, "occupied commit") ||
-		source.historyWorkingOffset() != 0 || len(desktop.repositories) != 1 || source.repository.snapshot.Branch != "main" {
-		t.Fatal("单击工作树中的分支未只读打开目标分支的历史和最新差异")
+	if source.problem != "" || source.screen != "history" || source.historyRequest() != (nativeHistoryRequest{}) ||
+		len(allHistory) != 3 || !slices.EqualFunc(source.history, allHistory, func(left, right gitrepo.Commit) bool { return left.Hash == right.Hash }) ||
+		source.historyList != historyList || source.commitHash != tip || source.historySelected < 0 ||
+		!strings.Contains(source.diff.Text, "occupied commit") || source.historyWorkingOffset() != 1 ||
+		len(desktop.repositories) != 1 || source.repository.snapshot.Branch != "main" {
+		t.Fatal("单击工作树中的分支未在原历史列表中定位提交和差异")
+	}
+	source.historyFilter.CurrentBranch = true
+	source.searchHistory(false)
+	runBackgroundUpdates(t, updates, func() bool { return source.readTask == nil })
+	tester.Frame()
+	if err := tester.Click("occupied"); err != nil {
+		t.Fatal(err)
+	}
+	runBackgroundUpdates(t, updates, func() bool { return source.readTask == nil })
+	tester.Frame()
+	if !source.historyFilter.CurrentBranch || len(source.history) != 2 || source.history[0].Hash != head ||
+		source.historySelected != -1 || source.commitHash != tip || !strings.Contains(source.diff.Text, "occupied commit") {
+		t.Fatal("筛选外的分支定位应显示提交详情并保留历史筛选")
+	}
+	if err := tester.Click(locales.ViewInAllHistory()); err != nil {
+		t.Fatal(err)
+	}
+	runBackgroundUpdates(t, updates, func() bool { return source.readTask == nil })
+	if source.historyFilter.CurrentBranch || source.historySelected < 0 || source.commitHash != tip ||
+		len(source.history) != len(allHistory) {
+		t.Fatal("显式查看全部历史未定位分支尖端")
 	}
 	checkoutBranch("occupied")
 	target := desktop.repositories[linkedPath]

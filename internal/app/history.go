@@ -137,26 +137,17 @@ func (app *nativeApp) historyPanel(c *ui.Context) {
 		app.searchControls(c)
 	} else {
 		ui.Row(c).FillWidth().Padding(4, 10).Gap(8).AlignItems(ui.Center).Children(func() {
-			if branch := app.historyFilter.BranchRef; branch != "" {
-				name := strings.TrimPrefix(strings.TrimPrefix(branch, "refs/heads/"), "refs/remotes/")
-				ui.Text(c, name).Label(locales.HistoryBranchScope()).Tooltip(name).SingleLine().FontSize(12).MinWidth(0).MaxWidth(180)
-				ui.Button(c, locales.AllBranches()).FontSize(12).Disabled(app.busy).OnClick(func() {
-					app.historyFilter.BranchRef = ""
-					app.searchHistory(false)
-				})
-			} else {
-				scopes := []string{locales.AllBranches(), locales.CurrentBranch()}
-				scope := scopes[0]
-				if app.historyFilter.CurrentBranch {
-					scope = scopes[1]
-				}
-				c.Key("history-scope")
-				ui.Select(c, &scope, scopes).Label(locales.HistoryBranchScope()).Width(140).Height(26).FontSize(12).
-					Disabled(app.busy).OnChange(func() {
-					app.historyFilter.CurrentBranch = scope == scopes[1]
-					app.searchHistory(false)
-				})
+			scopes := []string{locales.AllBranches(), locales.CurrentBranch()}
+			scope := scopes[0]
+			if app.historyFilter.CurrentBranch {
+				scope = scopes[1]
 			}
+			c.Key("history-scope")
+			ui.Select(c, &scope, scopes).Label(locales.HistoryBranchScope()).Width(140).Height(26).FontSize(12).
+				Disabled(app.busy).OnChange(func() {
+				app.historyFilter.CurrentBranch = scope == scopes[1]
+				app.searchHistory(false)
+			})
 			remotes := []string{locales.ShowRemoteBranches(), locales.HideRemoteBranches()}
 			remote := remotes[0]
 			if app.historyFilter.HideRemotes {
@@ -171,14 +162,18 @@ func (app *nativeApp) historyPanel(c *ui.Context) {
 			app.historyReadControls(c)
 		})
 	}
-	if app.viewedTag != "" {
+	if ref := app.viewedRef; ref.reference != "" && (ref.kind == "标签" || app.historySelected < 0) {
+		icon := nativeIcons["branch"]
+		if ref.kind == "标签" {
+			icon = nativeIcons["tag"]
+		}
 		ui.Row(c).FillWidth().Padding(4, 10).Gap(8).AlignItems(ui.Center).Children(func() {
-			ui.Icon(c, nativeIcons["tag"]).FontSize(12).Shrink(0)
-			ui.Text(c, app.viewedTag).FontSize(12).SingleLine().Tooltip(app.viewedTag).MinWidth(0).Shrink(1)
+			ui.Icon(c, icon).FontSize(12).Shrink(0)
+			ui.Text(c, ref.reference).FontSize(12).SingleLine().Tooltip(ref.reference).MinWidth(0).Shrink(1)
 			if app.historySelected < 0 {
 				ui.Text(c, locales.TagOutsideHistoryFilter()).FontSize(12).TextColor(c.Theme().TextMuted).SingleLine().MinWidth(0).Shrink(1)
 				ui.Button(c, locales.ViewInAllHistory()).FontSize(12).Disabled(app.busy || app.readTask != nil).
-					OnClick(func() { app.selectTag(app.viewedTag, true) })
+					OnClick(func() { app.selectHistoryReference(ref.kind, ref.reference, true) })
 			}
 		})
 	}

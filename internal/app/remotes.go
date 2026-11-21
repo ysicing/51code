@@ -46,7 +46,7 @@ func (app *nativeApp) remoteSidebar(c *ui.Context) {
 					services.WriteClipboard(reference)
 				}
 			})
-			item.OnClick(func() { app.viewBranch("远端", reference, "refs/remotes/"+reference) })
+			item.OnClick(func() { app.selectHistoryReference("远端", reference, false) })
 		}
 	})
 }

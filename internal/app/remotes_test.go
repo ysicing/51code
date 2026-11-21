@@ -71,10 +71,10 @@ func TestNativeRemoteBranchTree(t *testing.T) {
 	tester.Key(0, ui.KeyDown)
 	tester.Key(0, ui.KeyEnter)
 	finish()
-	finish()
-	if app.dialog != nil || app.historyResult.filter.BranchRef != "refs/remotes/origin/main" ||
+	if app.problem != "" || app.dialog != nil || app.viewedRef.kind != "远端" || app.viewedRef.reference != "origin/main" ||
+		app.historyRequest() != (nativeHistoryRequest{}) ||
 		app.commitHash != app.repository.snapshot.Head || app.repository.snapshot.Branch != "main" {
-		t.Fatal("键盘导航未打开所属远端分支的历史")
+		t.Fatalf("键盘导航未定位所属远端分支的提交: %s", app.problem)
 	}
 	app.dialog = nil
 	tester.Frame()

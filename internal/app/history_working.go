@@ -14,7 +14,7 @@ import (
 
 func (app *nativeApp) historyWorkingOffset() int {
 	if app.screen == "history" && app.repository != nil && len(app.repository.snapshot.Files) > 0 && app.historyOffset == 0 &&
-		app.historyResult.query == "" && app.historyResult.file == "" && app.historyResult.filter.BranchRef == "" {
+		app.historyResult.query == "" && app.historyResult.file == "" {
 		return 1
 	}
 	return 0
@@ -95,7 +95,7 @@ func (app *nativeApp) applyHistoryWorkingSelection(selection *nativeSelection) {
 	app.historyWorking = true
 	app.historySelected, app.commitSelected = -1, -1
 	app.commitHash, app.commitFile, app.commitFiles = "", "", nil
-	app.viewedTag, app.viewedCommit = "", gitrepo.Commit{}
+	app.viewedRef, app.viewedCommit = nativeRefKey{}, gitrepo.Commit{}
 }
 
 func (app *nativeApp) openHistoryWorkingChanges() {

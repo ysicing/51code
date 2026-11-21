@@ -533,7 +533,7 @@ func (app *nativeApp) openRepository(path string) {
 				app.adopt(result)
 				app.screen, app.selectedFile = "changes", ""
 				app.history, app.commitHash, app.commitFiles, app.stashHash = nil, "", nil, ""
-				app.historyOffset, app.viewedTag, app.viewedCommit = 0, "", gitrepo.Commit{}
+				app.historyOffset, app.viewedRef, app.viewedCommit = 0, nativeRefKey{}, gitrepo.Commit{}
 				app.historyGraph, app.historyGraphSource = nil, nil
 				app.historyWorking = false
 				app.historySelected, app.commitSelected = -1, -1
@@ -690,7 +690,7 @@ func (app *nativeApp) mutateFormResult(dialog *nativeDialog, label string, opera
 				}
 			}
 			preserveDetails := preserveHistory && !wasWorking && historyScreen &&
-				refreshErr == nil && (retained >= 0 || app.viewedTag != "" && app.viewedCommit.Hash == app.commitHash)
+				refreshErr == nil && (retained >= 0 || app.viewedRef.reference != "" && app.viewedCommit.Hash == app.commitHash)
 			if result != nil {
 				// 记录读取开始时间，监听随后报告的、早于该时间的变化无需再完整读取一次。
 				app.noteRepositoryRead(path, readStarted)
@@ -718,7 +718,7 @@ func (app *nativeApp) mutateFormResult(dialog *nativeDialog, label string, opera
 				if preserveDetails {
 					app.historySelected = retained
 				} else {
-					app.viewedTag, app.viewedCommit = "", gitrepo.Commit{}
+					app.viewedRef, app.viewedCommit = nativeRefKey{}, gitrepo.Commit{}
 					app.commitHash, app.commitFile, app.commitFiles = "", "", nil
 					app.historySelected, app.commitSelected = -1, -1
 					app.historyList, app.commitList = &ui.ListState{}, &ui.ListState{}

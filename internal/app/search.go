@@ -34,7 +34,7 @@ type nativeHistoryState struct {
 	historyGraphCache    *historyGraphCache
 	historyList          *ui.ListState
 	commitHash           string
-	viewedTag            string
+	viewedRef            nativeRefKey
 	viewedCommit         gitrepo.Commit
 	commitFiles          []gitrepo.CommitFile
 	commitFile           string
@@ -234,7 +234,7 @@ func (app *nativeApp) revealSearchCommit(hash string) {
 			app.historyPagePaused = false
 			app.historyQuery, app.historyFile, app.historyFilter = "", "", filter
 			app.historyResult = app.historyRequest()
-			app.viewedTag, app.viewedCommit = "", location.Commit
+			app.viewedRef, app.viewedCommit = nativeRefKey{}, location.Commit
 			app.historyList = &ui.ListState{}
 			app.applyCommitSelection(hash, files, file)
 			if err == nil {

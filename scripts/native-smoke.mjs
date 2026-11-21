@@ -319,7 +319,6 @@ try {
   await press("main");
   await shown("提交历史表格");
   assert.equal(git("branch", "--show-current"), "native-topic");
-  await press("所有分支");
   git("switch", "main");
   assert.equal(git("branch", "--show-current"), "main");
   await press("提交历史");

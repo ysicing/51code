@@ -278,21 +278,7 @@ func (app *nativeApp) localBranchSidebar(c *ui.Context) {
 				app.deleteBranch(name, true)
 			}
 		})
-		item.OnClick(func() { app.viewBranch("本地分支", name, "refs/heads/"+name) })
-	})
-}
-
-func (app *nativeApp) viewBranch(kind, name, ref string) {
-	if app.repository == nil || app.dialog != nil {
-		return
-	}
-	app.leaveConflict(func() {
-		app.switchWorkspace("history")
-		app.refSelected = nativeRefKey{repository: app.repository.snapshot.Path, kind: kind, reference: name}
-		app.historyQuery, app.historyFile = "", ""
-		app.historyFilter.CurrentBranch = false
-		app.historyFilter.BranchRef = ref
-		app.searchHistory(false)
+		item.OnClick(func() { app.selectHistoryReference("本地分支", name, false) })
 	})
 }
 

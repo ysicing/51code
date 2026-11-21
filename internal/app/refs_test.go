@@ -176,11 +176,11 @@ func TestNativeReferenceDirectories(t *testing.T) {
 	tester.Key(0, ui.KeyDown)
 	tester.Key(0, ui.KeyEnter)
 	finish()
-	finish()
 	tester.Frame()
-	if app.problem != "" || app.historyResult.filter.BranchRef != "refs/heads/a/b/c" ||
+	if app.problem != "" || app.viewedRef.kind != "本地分支" || app.viewedRef.reference != "a/b/c" ||
+		app.historyRequest() != (nativeHistoryRequest{}) || app.commitHash != app.repository.snapshot.Head ||
 		nativeGit(t, path, "branch", "--show-current") != "main" {
-		t.Fatalf("目录中的分支未使用完整引用查看历史: %s", app.problem)
+		t.Fatalf("目录中的分支未使用完整引用定位历史: %s", app.problem)
 	}
 	current, found := tester.AccessByRole(ui.RoleTreeItem, "a/b/c")
 	if !found || !current.Selected {

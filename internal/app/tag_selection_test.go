@@ -37,7 +37,7 @@ func TestNativeTagSelectionResolvesAnnotatedTagsAndScrolls(t *testing.T) {
 	}
 	finish()
 	tester.Frame()
-	if app.problem != "" || app.commitHash != base || app.historySelected != 24 || app.viewedTag != "v1" ||
+	if app.problem != "" || app.commitHash != base || app.historySelected != 24 || app.viewedRef.reference != "v1" ||
 		!strings.Contains(app.diff.Text, "原始内容") || app.viewedCommit.Subject != "初始提交" {
 		t.Fatalf("附注标签没有展示提交详情: hash=%s selected=%d problem=%s", app.commitHash, app.historySelected, app.problem)
 	}
@@ -111,7 +111,7 @@ func TestNativeTagSelectionPreservesFiltersAndOffersExplicitReveal(t *testing.T)
 	}
 	finish()
 	tester.Frame()
-	if app.problem != "" || app.commitHash != base || app.viewedTag != tag || app.diff.Text != diff ||
+	if app.problem != "" || app.commitHash != base || app.viewedRef.reference != tag || app.diff.Text != diff ||
 		app.historyRequest() != request || app.historyList != list || app.commitList != commitList ||
 		nativeGit(t, path, "rev-parse", "hotfix-filtered") != base {
 		t.Fatalf("筛选外标签创建分支丢失当前查看内容: %s", app.problem)
@@ -172,7 +172,7 @@ func TestNativeTagContextMenuUsesClickedTag(t *testing.T) {
 	}
 	finish()
 	tester.Frame()
-	if app.problem != "" || app.commitHash != head || app.viewedTag != "v2" {
+	if app.problem != "" || app.commitHash != head || app.viewedRef.reference != "v2" {
 		t.Fatalf("只读状态无法查看右键标签: hash=%s problem=%s", app.commitHash, app.problem)
 	}
 }
@@ -218,7 +218,7 @@ func TestNativeTagSelectionBeyondFirstPageAndLoadMore(t *testing.T) {
 	}
 	finish()
 	tester.Frame()
-	if app.historyOffset != 0 || len(app.history) != 100 || app.viewedTag != "" || app.commitHash != "" {
+	if app.historyOffset != 0 || len(app.history) != 100 || app.viewedRef.reference != "" || app.commitHash != "" {
 		t.Fatal("返回最新提交未恢复首屏")
 	}
 }
@@ -233,14 +233,14 @@ func TestNativeTagSelectionRejectsObsoleteAndCancelledReads(t *testing.T) {
 	app.selectTag("v2", false)
 	finish()
 	finish()
-	if app.problem != "" || app.viewedTag != "v2" || app.commitHash != head {
-		t.Fatalf("快速切换标签被旧结果覆盖: tag=%s hash=%s problem=%s", app.viewedTag, app.commitHash, app.problem)
+	if app.problem != "" || app.viewedRef.reference != "v2" || app.commitHash != head {
+		t.Fatalf("快速切换标签被旧结果覆盖: tag=%s hash=%s problem=%s", app.viewedRef.reference, app.commitHash, app.problem)
 	}
 	history, list, commitList := app.history, app.historyList, app.commitList
 	app.selectTag("v1", false)
 	app.readTask.cancel()
 	finish()
-	if app.commitHash != head || app.viewedTag != "v2" || app.historyList != list ||
+	if app.commitHash != head || app.viewedRef.reference != "v2" || app.historyList != list ||
 		app.commitList != commitList || !slices.EqualFunc(app.history, history, func(a, b gitrepo.Commit) bool { return a.Hash == b.Hash }) {
 		t.Fatal("取消标签定位破坏了已有内容")
 	}
@@ -248,7 +248,7 @@ func TestNativeTagSelectionRejectsObsoleteAndCancelledReads(t *testing.T) {
 	app.openRepository(path)
 	finish()
 	finish()
-	if app.screen != "changes" || app.commitHash != "" || app.viewedTag != "" {
+	if app.screen != "changes" || app.commitHash != "" || app.viewedRef.reference != "" {
 		t.Fatal("切换仓库后回填了旧标签结果")
 	}
 }

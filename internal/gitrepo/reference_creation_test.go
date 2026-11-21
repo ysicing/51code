@@ -18,10 +18,11 @@ func TestReferenceCreationTargetsAndNamespaces(t *testing.T) {
 	git(t, dir, "tag", "--no-sign", "release")
 	git(t, dir, "tag", "-a", "--no-sign", "-m", "release", "annotated")
 	git(t, dir, "tag", "-a", "--no-sign", "-m", "nested", "nested", "annotated")
+	git(t, dir, "update-ref", "refs/remotes/origin/release", base)
 	git(t, dir, "commit", "--allow-empty", "-m", "next")
 	head := git(t, dir, "rev-parse", "HEAD")
 	git(t, dir, "branch", "release")
-	for _, reference := range []string{"refs/tags/release", "refs/tags/annotated", "refs/tags/nested", base} {
+	for _, reference := range []string{"refs/tags/release", "refs/tags/annotated", "refs/tags/nested", "refs/remotes/origin/release", base} {
 		target, err := repo.ResolveCreationTarget(ctx, reference)
 		if err != nil || target != base {
 			t.Fatalf("resolve %s: %s %v", reference, target, err)

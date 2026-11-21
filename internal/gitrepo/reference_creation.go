@@ -59,7 +59,7 @@ func (repo *Repository) ResolveCreationTarget(ctx context.Context, reference str
 	}
 	defer repo.mu.Unlock()
 	switch {
-	case strings.HasPrefix(reference, "refs/heads/"), strings.HasPrefix(reference, "refs/tags/"):
+	case strings.HasPrefix(reference, "refs/heads/"), strings.HasPrefix(reference, "refs/remotes/"), strings.HasPrefix(reference, "refs/tags/"):
 		if _, err := repo.git(ctx, "check-ref-format", reference); err != nil {
 			return "", errors.New("创建起点无效")
 		}
