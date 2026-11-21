@@ -5494,6 +5494,26 @@ func (msgs Messages) CurrentBranch() string {
 	return Catalog.Format(msgs.locale, "currentBranch", nil)
 }
 
+// BranchAheadCount says "领先 {count, number} 个提交"
+// in the language the app shows.
+func BranchAheadCount(count int) string { return In(i18n.Locale()).BranchAheadCount(count) }
+
+// BranchAheadCount says "领先 {count, number} 个提交"
+// in the language of msgs.
+func (msgs Messages) BranchAheadCount(count int) string {
+	return Catalog.Format(msgs.locale, "branchAheadCount", map[string]any{"count": count})
+}
+
+// BranchBehindCount says "落后 {count, number} 个提交"
+// in the language the app shows.
+func BranchBehindCount(count int) string { return In(i18n.Locale()).BranchBehindCount(count) }
+
+// BranchBehindCount says "落后 {count, number} 个提交"
+// in the language of msgs.
+func (msgs Messages) BranchBehindCount(count int) string {
+	return Catalog.Format(msgs.locale, "branchBehindCount", map[string]any{"count": count})
+}
+
 // RemoteHead says "远端默认分支引用"
 // in the language the app shows.
 func RemoteHead() string { return In(i18n.Locale()).RemoteHead() }

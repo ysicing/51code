@@ -6,6 +6,7 @@ package app
 import (
 	"cmp"
 	"context"
+	"fmt"
 	"slices"
 	"strings"
 
@@ -111,7 +112,7 @@ func (app *nativeApp) referenceSidebar(c *ui.Context, title, label string, icon 
 			// 折叠时 Group 不调用回调，节点树也不会构建。
 			section.Group(func() {
 				refs.sync(app.refSource(), build)
-				app.referenceItems(c, tree, refs.nodes, title, func(name string, item ui.Element) { leaf(refs, name, item) })
+				app.referenceItems(c, tree, refs.nodes, title, refs.branches, func(name string, item ui.Element) { leaf(refs, name, item) })
 			})
 		})
 	})
@@ -145,7 +146,7 @@ func nativeDisclosure(c *ui.Context, expanded bool, color ui.Color) {
 	ui.Icon(c, nativeIcons["chevron"]).FontSize(10).Rotate(degrees).TextColor(color)
 }
 
-func (app *nativeApp) referenceItems(c *ui.Context, tree ui.TreeParts, nodes []*nativeRefNode, kind string, leaf func(string, ui.Element)) {
+func (app *nativeApp) referenceItems(c *ui.Context, tree ui.TreeParts, nodes []*nativeRefNode, kind string, branches map[string]gitrepo.Branch, leaf func(string, ui.Element)) {
 	for _, node := range nodes {
 		group := ui.Column(c).Key(node.reference).FillWidth()
 		key := nativeRefKey{repository: app.repository.snapshot.Path, kind: kind, reference: node.reference}
@@ -183,6 +184,11 @@ func (app *nativeApp) referenceItems(c *ui.Context, tree ui.TreeParts, nodes []*
 			}
 			row.AccessSelected(selected)
 			row.FocusRing(row.FocusVisible())
+			branch := branches[node.reference]
+			badge, description := branchTrackingBadge(branch)
+			if description != "" {
+				row.Description(description)
+			}
 			row.Children(func() {
 				arrow := ui.Box(c).Size(14, 14).Shrink(0)
 				if open != nil {
@@ -205,18 +211,37 @@ func (app *nativeApp) referenceItems(c *ui.Context, tree ui.TreeParts, nodes []*
 				if node.current {
 					text.FontWeight(600)
 				}
+				if badge != "" {
+					chip := ui.Badge(c, badge)
+					if selected {
+						chip.Background(color.Alpha(0.2)).TextColor(color)
+					}
+				}
 			})
 			if open != nil {
 				if row.Clicked() {
 					*open = !*open
 				}
 				app.refCollapsed[key] = !*open
-				item.Group(func() { app.referenceItems(c, tree, node.children, kind, leaf) })
+				item.Group(func() { app.referenceItems(c, tree, node.children, kind, branches, leaf) })
 			} else if !node.remote {
 				leaf(node.reference, row)
 			}
 		})
 	}
+}
+
+func branchTrackingBadge(branch gitrepo.Branch) (string, string) {
+	var text, description []string
+	if branch.Ahead > 0 {
+		text = append(text, fmt.Sprintf("%d↑", branch.Ahead))
+		description = append(description, locales.BranchAheadCount(branch.Ahead))
+	}
+	if branch.Behind > 0 {
+		text = append(text, fmt.Sprintf("%d↓", branch.Behind))
+		description = append(description, locales.BranchBehindCount(branch.Behind))
+	}
+	return strings.Join(text, " "), strings.Join(description, " · ")
 }
 
 func (app *nativeApp) localBranchSidebar(c *ui.Context) {

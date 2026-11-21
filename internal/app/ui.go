@@ -85,12 +85,21 @@ func toolButton(c *ui.Context, label string, icon *ui.SVG) ui.Element {
 	})
 }
 
-func titlebarButton(c *ui.Context, label string, icon *ui.SVG) ui.Element {
-	return ui.Button(c, "").Label(label).Tooltip(label).Height(44).MinWidth(48).Padding(4, 8).Children(func() {
+func titlebarButton(c *ui.Context, label string, icon *ui.SVG, badge, description string) ui.Element {
+	button := ui.Button(c, "").Label(label).Tooltip(label).Height(44).MinWidth(48).Padding(4, 8)
+	if description != "" {
+		button.Description(description).Tooltip(label + " · " + description)
+	}
+	return button.Children(func() {
 		ui.Column(c).AlignItems(ui.Center).Gap(2).Children(func() {
 			ui.Icon(c, icon).FontSize(16)
 			ui.Text(c, label).FontSize(11).SingleLine()
 		})
+		if badge != "" {
+			ui.Text(c, badge).Absolute().Top(0).End(2).MinWidth(14).Height(14).
+				Padding(0, 3).AlignItems(ui.Center).TextAlign(ui.Center).FontSize(9).FontWeight(600).SingleLine().
+				Background(c.Theme().Accent).TextColor(c.Theme().AccentText).Radius(7)
+		}
 	})
 }
 
@@ -125,9 +134,6 @@ func (app *nativeApp) view(c *ui.Context) {
 					ui.Row(c).AlignItems(ui.Center).Gap(5).Children(func() {
 						ui.Icon(c, nativeIcons["branch"]).FontSize(12).TextColor(c.Theme().TextMuted)
 						ui.Text(c, snapshot.Branch).FontSize(11).TextColor(c.Theme().TextMuted).MaxLines(1).MinWidth(0).Shrink(1).Tooltip(snapshot.Branch)
-						if snapshot.Ahead > 0 || snapshot.Behind > 0 {
-							ui.Text(c, fmt.Sprintf("↑%d ↓%d", snapshot.Ahead, snapshot.Behind)).FontSize(11).TextColor(c.Theme().TextMuted)
-						}
 					})
 				}
 			})
@@ -328,20 +334,32 @@ func (app *nativeApp) toolbar(c *ui.Context) {
 			}
 		} else if app.repository != nil {
 			ui.Row(c).Children(func() {
-				for _, remote := range []struct{ id, title string }{{"fetch", locales.Fetch()}, {"pull", locales.Pull()}, {"push", locales.Push()}} {
-					remote := remote
-					if titlebarButton(c, remote.title, nativeIcons[remote.id]).Disabled(disabled || !app.writable).Clicked() {
+				snapshot := app.repository.snapshot
+				for _, remote := range []struct {
+					id, title string
+					count     int
+					describe  func(int) string
+				}{
+					{"fetch", locales.Fetch(), 0, nil},
+					{"pull", locales.Pull(), snapshot.Behind, locales.BranchBehindCount},
+					{"push", locales.Push(), snapshot.Ahead, locales.BranchAheadCount},
+				} {
+					badge, description := "", ""
+					if remote.count > 0 {
+						badge, description = fmt.Sprint(remote.count), remote.describe(remote.count)
+					}
+					if titlebarButton(c, remote.title, nativeIcons[remote.id], badge, description).Disabled(disabled || !app.writable).Clicked() {
 						app.remoteAction(remote.id)
 					}
 				}
 			})
-			if titlebarButton(c, locales.Branch(), nativeIcons["branch"]).Disabled(disabled || !app.writable).Clicked() {
+			if titlebarButton(c, locales.Branch(), nativeIcons["branch"], "", "").Disabled(disabled || !app.writable).Clicked() {
 				app.branchDialog()
 			}
-			if titlebarButton(c, locales.Merge(), nativeIcons["merge"]).Disabled(disabled || !app.canMerge()).Clicked() {
+			if titlebarButton(c, locales.Merge(), nativeIcons["merge"], "", "").Disabled(disabled || !app.canMerge()).Clicked() {
 				app.mergeDialog()
 			}
-			if titlebarButton(c, locales.RepositorySettings(), nativeIcons["settings"]).Disabled(disabled).Clicked() {
+			if titlebarButton(c, locales.RepositorySettings(), nativeIcons["settings"], "", "").Disabled(disabled).Clicked() {
 				app.repositorySettingsDialog()
 			}
 			iconButton(c, locales.More(), nativeIcons["more"]).Disabled(disabled).Menu(app.repositoryActions)

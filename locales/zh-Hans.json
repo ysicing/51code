@@ -542,6 +542,8 @@
   "forceDeleteBranchMenu": "强制删除分支",
   "deleteTagMenu": "删除标签",
   "currentBranch": "当前分支",
+  "branchAheadCount": "领先 {count, number} 个提交",
+  "branchBehindCount": "落后 {count, number} 个提交",
   "remoteHead": "远端默认分支引用",
   "referenceTree": "{kind}树",
   "referenceDirectory": "{kind}目录 {path}",

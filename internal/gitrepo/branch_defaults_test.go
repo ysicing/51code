@@ -78,3 +78,61 @@ func TestBranchesReadConfiguredUpstreamTarget(t *testing.T) {
 	}
 	t.Fatal("missing current branch")
 }
+
+func TestBranchesReportDivergenceFromOwnUpstream(t *testing.T) {
+	repo, path := fixture(t)
+	git(t, path, "commit", "--allow-empty", "-m", "base")
+	base := git(t, path, "rev-parse", "HEAD")
+	git(t, path, "remote", "add", "origin", t.TempDir())
+	git(t, path, "update-ref", "refs/remotes/origin/main", base)
+	git(t, path, "branch", "--set-upstream-to=origin/main", "main")
+	git(t, path, "branch", "synced", base)
+	git(t, path, "branch", "--set-upstream-to=origin/main", "synced")
+	git(t, path, "branch", "untracked", base)
+	git(t, path, "update-ref", "refs/remotes/origin/gone", base)
+	git(t, path, "branch", "gone", base)
+	git(t, path, "branch", "--set-upstream-to=origin/gone", "gone")
+	git(t, path, "update-ref", "-d", "refs/remotes/origin/gone")
+	git(t, path, "switch", "--detach", base)
+	for range 3 {
+		git(t, path, "commit", "--allow-empty", "-m", "upstream")
+	}
+	git(t, path, "update-ref", "refs/remotes/origin/topic", "HEAD")
+	git(t, path, "branch", "behind", base)
+	git(t, path, "branch", "--set-upstream-to=origin/topic", "behind")
+	git(t, path, "switch", "-c", "topic", base)
+	for range 2 {
+		git(t, path, "commit", "--allow-empty", "-m", "topic")
+	}
+	git(t, path, "branch", "--set-upstream-to=origin/topic", "topic")
+	git(t, path, "switch", "main")
+	git(t, path, "commit", "--allow-empty", "-m", "main")
+	git(t, path, "tag", "base", base)
+
+	ctx := context.Background()
+	branches, err := repo.Branches(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	refs, err := repo.References(ctx)
+	if err != nil || !slices.Equal(branches, refs.Branches) {
+		t.Fatalf("references differ from branches: %+v, %v", refs, err)
+	}
+	if len(refs.Tags) != 1 || refs.Tags[0].Hash != base {
+		t.Fatalf("reference query lost the full tag hash: %+v", refs.Tags)
+	}
+	want := map[string][2]int{
+		"main": {1, 0}, "topic": {2, 3}, "behind": {0, 3},
+		"synced": {}, "untracked": {}, "gone": {},
+		"origin/main": {}, "origin/topic": {},
+	}
+	if len(branches) != len(want) {
+		t.Fatalf("unexpected branches: %+v", branches)
+	}
+	for _, branch := range branches {
+		expected, ok := want[branch.Name]
+		if !ok || [2]int{branch.Ahead, branch.Behind} != expected {
+			t.Errorf("%s ahead/behind = %d/%d, want %v", branch.Name, branch.Ahead, branch.Behind, expected)
+		}
+	}
+}

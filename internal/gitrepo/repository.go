@@ -54,6 +54,8 @@ type Branch struct {
 	Upstream       string `json:"upstream"`
 	UpstreamRemote string `json:"upstreamRemote"`
 	UpstreamBranch string `json:"upstreamBranch"`
+	Ahead          int    `json:"ahead"`
+	Behind         int    `json:"behind"`
 }
 
 type Commit struct {
@@ -423,7 +425,8 @@ func (repo *Repository) History(ctx context.Context, skip int) ([]Commit, error)
 }
 
 // branchFormat 的字段顺序由 parseBranches 解析，References 在其后追加完整对象 ID。
-const branchFormat = "%(refname)%00%(objectname:short)%00%(HEAD)%00%(upstream:short)%00%(symref)%00%(upstream:remotename)%00%(upstream:remoteref)"
+const branchFormat = "%(refname)%00%(objectname:short)%00%(HEAD)%00%(upstream:short)%00%(symref)%00%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream:track,nobracket)"
+const branchFieldCount = 8
 
 // refRecords 按行拆分 for-each-ref 输出；引用名不能含换行或 NUL。
 func refRecords(output string, count int, invalid string) ([][]string, error) {
@@ -448,7 +451,7 @@ func (repo *Repository) Branches(ctx context.Context) ([]Branch, error) {
 	if err != nil {
 		return nil, err
 	}
-	records, err := refRecords(output, 7, "无法解析分支")
+	records, err := refRecords(output, branchFieldCount, "无法解析分支")
 	if err != nil {
 		return nil, err
 	}
@@ -476,7 +479,7 @@ func (repo *Repository) References(ctx context.Context) (References, error) {
 	if err != nil {
 		return References{}, err
 	}
-	records, err := refRecords(output, 8, "无法解析引用")
+	records, err := refRecords(output, branchFieldCount+1, "无法解析引用")
 	if err != nil {
 		return References{}, err
 	}
@@ -487,9 +490,9 @@ func (repo *Repository) References(ctx context.Context) (References, error) {
 	for _, fields := range records {
 		switch name := fields[0]; {
 		case strings.HasPrefix(name, "refs/heads/"), strings.HasPrefix(name, "refs/remotes/"):
-			branches = append(branches, fields[:7])
+			branches = append(branches, fields[:branchFieldCount])
 		case strings.HasPrefix(name, "refs/tags/"):
-			refs.Tags = append(refs.Tags, Tag{Name: strings.TrimPrefix(name, "refs/tags/"), Hash: fields[7]})
+			refs.Tags = append(refs.Tags, Tag{Name: strings.TrimPrefix(name, "refs/tags/"), Hash: fields[branchFieldCount]})
 		case name == "refs/stash":
 			stash = true
 		}
@@ -511,9 +514,11 @@ func parseBranches(records [][]string) []Branch {
 	for _, fields := range records {
 		remote := strings.HasPrefix(fields[0], "refs/remotes/")
 		name := strings.TrimPrefix(strings.TrimPrefix(fields[0], "refs/heads/"), "refs/remotes/")
+		ahead, behind := branchDivergence(fields[7])
 		branches = append(branches, Branch{
 			Name: name, Hash: fields[1], Current: fields[2] == "*", Remote: remote, Upstream: fields[3],
 			UpstreamRemote: fields[5], UpstreamBranch: strings.TrimPrefix(fields[6], "refs/heads/"),
+			Ahead: ahead, Behind: behind,
 		})
 		if remote && strings.HasSuffix(fields[0], "/HEAD") && fields[4] != "" {
 			prefix := strings.TrimSuffix(fields[0], "HEAD")
@@ -551,6 +556,23 @@ func parseBranches(records [][]string) []Branch {
 		branch.Default = !branch.Remote && branch.Name == defaultName || branch.Remote && defaults[branch.Name]
 	}
 	return branches
+}
+
+func branchDivergence(tracking string) (ahead, behind int) {
+	for status := range strings.SplitSeq(tracking, ", ") {
+		direction, count, _ := strings.Cut(status, " ")
+		value, err := strconv.Atoi(count)
+		if err != nil || value <= 0 {
+			continue
+		}
+		switch direction {
+		case "ahead":
+			ahead = value
+		case "behind":
+			behind = value
+		}
+	}
+	return ahead, behind
 }
 
 func (repo *Repository) validateBranch(ctx context.Context, name string) error {

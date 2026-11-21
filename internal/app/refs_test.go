@@ -38,6 +38,69 @@ func TestNativeDefaultBranchPrecedesDirectories(t *testing.T) {
 	}
 }
 
+func TestNativeBranchSyncBadgesFollowCurrentAndLocalUpstreams(t *testing.T) {
+	app, _, _ := nativeFixture(t)
+	app.repository.snapshot.Upstream = "origin/main"
+	app.repository.snapshot.Ahead, app.repository.snapshot.Behind = 17, 23
+	app.repository.branches = []gitrepo.Branch{
+		{Name: "main", Current: true, Default: true, Upstream: "origin/main", Ahead: 17, Behind: 23},
+		{Name: "topic/very-long-branch-name-for-testing-narrow-sidebar", Upstream: "origin/topic", Ahead: 31},
+		{Name: "behind", Upstream: "origin/behind", Behind: 42},
+		{Name: "synced", Upstream: "origin/synced"},
+		{Name: "no-upstream"},
+	}
+	tester := ui.NewTester(app.view, 1024, 680)
+	for _, dark := range []bool{false, true} {
+		tester.SetDark(dark)
+		for _, entry := range []struct {
+			role         ui.Role
+			label, count string
+		}{
+			{ui.RoleButton, locales.Push(), "17"},
+			{ui.RoleButton, locales.Pull(), "23"},
+			{ui.RoleTreeItem, "main", "17↑ 23↓"},
+			{ui.RoleTreeItem, "behind", "42↓"},
+			{ui.RoleTreeItem, "topic/very-long-branch-name-for-testing-narrow-sidebar", "31↑"},
+		} {
+			element, ok := tester.AccessByRole(entry.role, entry.label)
+			parent := element.Bounds
+			badge, found := tester.Find(entry.count)
+			if !ok || !found || badge.W == 0 || badge.H == 0 || badge.X < parent.X ||
+				badge.X+badge.W > parent.X+parent.W || badge.Y < parent.Y || badge.Y+badge.H > parent.Y+parent.H {
+				t.Fatalf("%s badge %q falls outside its element: badge=%+v parent=%+v", entry.label, entry.count, badge, parent)
+			}
+		}
+		for _, badge := range []string{"31", "42", "0↑", "0↓"} {
+			if _, found := tester.Find(badge); found {
+				t.Fatalf("unexpected badge: %s", badge)
+			}
+		}
+		for _, label := range []string{"synced", "no-upstream"} {
+			row, ok := tester.AccessByRole(ui.RoleTreeItem, label)
+			if !ok || row.Description != label {
+				t.Fatalf("branch without divergence has a description: %+v", row)
+			}
+		}
+		if directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); directory != "" {
+			saveNativeScreenshot(t, tester, directory, fmt.Sprintf("branch-sync-badges-dark-%t.png", dark))
+		}
+	}
+	app.repository.snapshot.Ahead, app.repository.snapshot.Behind = 0, 0
+	app.repository.branches = []gitrepo.Branch{{Name: "main", Current: true, Upstream: "origin/main"}}
+	tester.Frame()
+	for _, label := range []string{locales.Push(), locales.Pull()} {
+		button, ok := tester.AccessByRole(ui.RoleButton, label)
+		if !ok || button.Description != label {
+			t.Fatalf("toolbar button retained a count: %+v", button)
+		}
+	}
+	for _, badge := range []string{"17", "23", "17↑ 23↓", "42↓", "31↑"} {
+		if _, found := tester.Find(badge); found {
+			t.Fatalf("outdated badge still visible after refresh: %s", badge)
+		}
+	}
+}
+
 func TestNativeReferenceDirectoryStateScopes(t *testing.T) {
 	app, _, _ := nativeFixture(t)
 	app.repository.branches = append(app.repository.branches,

@@ -542,6 +542,8 @@
   "forceDeleteBranchMenu": "Force Delete Branch",
   "deleteTagMenu": "Delete Tag",
   "currentBranch": "Current branch",
+  "branchAheadCount": "{count, plural, one {# commit ahead} other {# commits ahead}}",
+  "branchBehindCount": "{count, plural, one {# commit behind} other {# commits behind}}",
   "remoteHead": "Remote default branch reference",
   "referenceTree": "{kind} tree",
   "referenceDirectory": "{kind} directory {path}",
