@@ -89,6 +89,10 @@ func (app *nativeApp) refreshRepositoryView(watch bool) {
 		if err == nil && screen == "worktrees" {
 			worktrees, err = app.service.Worktrees(ctx, path)
 		}
+		var submodules []gitrepo.Submodule
+		if err == nil && screen == "submodules" {
+			submodules, _ = app.readSubmodules(ctx, path)
+		}
 		var browsing *nativeBrowserResult
 		if err == nil && screen == "files" && browser != nil {
 			browsing, err = app.readBrowser(ctx, path, browserRevision, browserFile)
@@ -174,6 +178,10 @@ func (app *nativeApp) refreshRepositoryView(watch bool) {
 			}
 			if screen == "worktrees" && app.worktrees != nil && !reflect.DeepEqual(app.worktrees.allItems, worktrees) {
 				app.worktrees.setItems(worktrees)
+				changed = true
+			}
+			if submodules != nil && !slices.Equal(app.submodules.items, submodules) {
+				app.submodules.items = submodules
 				changed = true
 			}
 			if browsing != nil && app.browser == browser {

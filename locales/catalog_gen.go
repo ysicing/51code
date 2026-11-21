@@ -1750,6 +1750,186 @@ func (msgs Messages) Worktrees() string {
 	return Catalog.Format(msgs.locale, "worktrees", nil)
 }
 
+// Submodules says "子模块"
+// in the language the app shows.
+func Submodules() string { return In(i18n.Locale()).Submodules() }
+
+// Submodules says "子模块"
+// in the language of msgs.
+func (msgs Messages) Submodules() string {
+	return Catalog.Format(msgs.locale, "submodules", nil)
+}
+
+// NoSubmodules says "暂无子模块"
+// in the language the app shows.
+func NoSubmodules() string { return In(i18n.Locale()).NoSubmodules() }
+
+// NoSubmodules says "暂无子模块"
+// in the language of msgs.
+func (msgs Messages) NoSubmodules() string {
+	return Catalog.Format(msgs.locale, "noSubmodules", nil)
+}
+
+// ReadingSubmodules says "正在读取子模块…"
+// in the language the app shows.
+func ReadingSubmodules() string { return In(i18n.Locale()).ReadingSubmodules() }
+
+// ReadingSubmodules says "正在读取子模块…"
+// in the language of msgs.
+func (msgs Messages) ReadingSubmodules() string {
+	return Catalog.Format(msgs.locale, "readingSubmodules", nil)
+}
+
+// SubmoduleActions says "子模块操作"
+// in the language the app shows.
+func SubmoduleActions() string { return In(i18n.Locale()).SubmoduleActions() }
+
+// SubmoduleActions says "子模块操作"
+// in the language of msgs.
+func (msgs Messages) SubmoduleActions() string {
+	return Catalog.Format(msgs.locale, "submoduleActions", nil)
+}
+
+// AddSubmodule says "添加子模块"
+// in the language the app shows.
+func AddSubmodule() string { return In(i18n.Locale()).AddSubmodule() }
+
+// AddSubmodule says "添加子模块"
+// in the language of msgs.
+func (msgs Messages) AddSubmodule() string {
+	return Catalog.Format(msgs.locale, "addSubmodule", nil)
+}
+
+// AddSubmoduleDetail says "输入仓库地址和相对于当前工作树的路径。Git 会暂存 .gitmodules 和新子模块引用。"
+// in the language the app shows.
+func AddSubmoduleDetail() string { return In(i18n.Locale()).AddSubmoduleDetail() }
+
+// AddSubmoduleDetail says "输入仓库地址和相对于当前工作树的路径。Git 会暂存 .gitmodules 和新子模块引用。"
+// in the language of msgs.
+func (msgs Messages) AddSubmoduleDetail() string {
+	return Catalog.Format(msgs.locale, "addSubmoduleDetail", nil)
+}
+
+// AddingSubmodule says "正在添加子模块…"
+// in the language the app shows.
+func AddingSubmodule() string { return In(i18n.Locale()).AddingSubmodule() }
+
+// AddingSubmodule says "正在添加子模块…"
+// in the language of msgs.
+func (msgs Messages) AddingSubmodule() string {
+	return Catalog.Format(msgs.locale, "addingSubmodule", nil)
+}
+
+// InitializeSubmodule says "初始化子模块"
+// in the language the app shows.
+func InitializeSubmodule() string { return In(i18n.Locale()).InitializeSubmodule() }
+
+// InitializeSubmodule says "初始化子模块"
+// in the language of msgs.
+func (msgs Messages) InitializeSubmodule() string {
+	return Catalog.Format(msgs.locale, "initializeSubmodule", nil)
+}
+
+// UpdateSubmodule says "更新子模块"
+// in the language the app shows.
+func UpdateSubmodule() string { return In(i18n.Locale()).UpdateSubmodule() }
+
+// UpdateSubmodule says "更新子模块"
+// in the language of msgs.
+func (msgs Messages) UpdateSubmodule() string {
+	return Catalog.Format(msgs.locale, "updateSubmodule", nil)
+}
+
+// UpdateSubmoduleDetail says "Git 会在子模块中检出主仓库记录的提交 {hash}，并进入分离 HEAD 状态。"
+// in the language the app shows.
+func UpdateSubmoduleDetail(hash string) string { return In(i18n.Locale()).UpdateSubmoduleDetail(hash) }
+
+// UpdateSubmoduleDetail says "Git 会在子模块中检出主仓库记录的提交 {hash}，并进入分离 HEAD 状态。"
+// in the language of msgs.
+func (msgs Messages) UpdateSubmoduleDetail(hash string) string {
+	return Catalog.Format(msgs.locale, "updateSubmoduleDetail", map[string]any{"hash": hash})
+}
+
+// UpdatingSubmodule says "正在检出子模块…"
+// in the language the app shows.
+func UpdatingSubmodule() string { return In(i18n.Locale()).UpdatingSubmodule() }
+
+// UpdatingSubmodule says "正在检出子模块…"
+// in the language of msgs.
+func (msgs Messages) UpdatingSubmodule() string {
+	return Catalog.Format(msgs.locale, "updatingSubmodule", nil)
+}
+
+// SubmoduleCurrentCommit says "当前提交"
+// in the language the app shows.
+func SubmoduleCurrentCommit() string { return In(i18n.Locale()).SubmoduleCurrentCommit() }
+
+// SubmoduleCurrentCommit says "当前提交"
+// in the language of msgs.
+func (msgs Messages) SubmoduleCurrentCommit() string {
+	return Catalog.Format(msgs.locale, "submoduleCurrentCommit", nil)
+}
+
+// SubmoduleTargetCommit says "记录的提交"
+// in the language the app shows.
+func SubmoduleTargetCommit() string { return In(i18n.Locale()).SubmoduleTargetCommit() }
+
+// SubmoduleTargetCommit says "记录的提交"
+// in the language of msgs.
+func (msgs Messages) SubmoduleTargetCommit() string {
+	return Catalog.Format(msgs.locale, "submoduleTargetCommit", nil)
+}
+
+// SubmoduleUninitialized says "未初始化"
+// in the language the app shows.
+func SubmoduleUninitialized() string { return In(i18n.Locale()).SubmoduleUninitialized() }
+
+// SubmoduleUninitialized says "未初始化"
+// in the language of msgs.
+func (msgs Messages) SubmoduleUninitialized() string {
+	return Catalog.Format(msgs.locale, "submoduleUninitialized", nil)
+}
+
+// SubmoduleNeedsUpdate says "提交不一致"
+// in the language the app shows.
+func SubmoduleNeedsUpdate() string { return In(i18n.Locale()).SubmoduleNeedsUpdate() }
+
+// SubmoduleNeedsUpdate says "提交不一致"
+// in the language of msgs.
+func (msgs Messages) SubmoduleNeedsUpdate() string {
+	return Catalog.Format(msgs.locale, "submoduleNeedsUpdate", nil)
+}
+
+// SubmoduleUpToDate says "与记录一致"
+// in the language the app shows.
+func SubmoduleUpToDate() string { return In(i18n.Locale()).SubmoduleUpToDate() }
+
+// SubmoduleUpToDate says "与记录一致"
+// in the language of msgs.
+func (msgs Messages) SubmoduleUpToDate() string {
+	return Catalog.Format(msgs.locale, "submoduleUpToDate", nil)
+}
+
+// SubmoduleUnavailable says "不可用"
+// in the language the app shows.
+func SubmoduleUnavailable() string { return In(i18n.Locale()).SubmoduleUnavailable() }
+
+// SubmoduleUnavailable says "不可用"
+// in the language of msgs.
+func (msgs Messages) SubmoduleUnavailable() string {
+	return Catalog.Format(msgs.locale, "submoduleUnavailable", nil)
+}
+
+// SubmoduleInProgress says "正在进行 Git 操作"
+// in the language the app shows.
+func SubmoduleInProgress() string { return In(i18n.Locale()).SubmoduleInProgress() }
+
+// SubmoduleInProgress says "正在进行 Git 操作"
+// in the language of msgs.
+func (msgs Messages) SubmoduleInProgress() string {
+	return Catalog.Format(msgs.locale, "submoduleInProgress", nil)
+}
+
 // EmptyWorktrees says "暂无附加工作树"
 // in the language the app shows.
 func EmptyWorktrees() string { return In(i18n.Locale()).EmptyWorktrees() }

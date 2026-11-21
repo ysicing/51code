@@ -10,11 +10,12 @@ import (
 )
 
 type nativeSidebarItems struct {
-	Insights  bool `json:"insights"`
-	Search    bool `json:"search"`
-	Compare   bool `json:"compare"`
-	Stash     bool `json:"stash"`
-	Worktrees bool `json:"worktrees"`
+	Insights   bool `json:"insights"`
+	Search     bool `json:"search"`
+	Compare    bool `json:"compare"`
+	Stash      bool `json:"stash"`
+	Worktrees  bool `json:"worktrees"`
+	Submodules bool `json:"submodules"`
 }
 
 func (app *nativeApp) reconcileSidebar() {
@@ -34,6 +35,8 @@ func (app *nativeApp) reconcileSidebar() {
 		visible = app.prefs.SidebarItems.Stash
 	case "worktrees":
 		visible = app.prefs.SidebarItems.Worktrees
+	case "submodules":
+		visible = app.prefs.SidebarItems.Submodules
 	}
 	if !visible {
 		app.switchWorkspace("changes")

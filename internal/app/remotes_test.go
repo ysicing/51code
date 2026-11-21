@@ -89,6 +89,14 @@ func TestNativeRemoteBranchTree(t *testing.T) {
 		{"upstream/main", "main"},
 		{"team/mirror/release/next", "release/next"},
 	} {
+		sidebar, found := tester.AccessByRole(ui.RoleTree, locales.RepositoryNavigation())
+		bounds, visible := tester.Find(branch.reference)
+		if !found || !visible {
+			t.Fatalf("侧栏缺少远端分支 %s", branch.reference)
+		}
+		if bottom := sidebar.Bounds.Y + sidebar.Bounds.H; bounds.Y+bounds.H > bottom {
+			tester.Scroll(sidebar.Bounds.X+sidebar.Bounds.W/2, sidebar.Bounds.Y+sidebar.Bounds.H/2, 0, bounds.Y+bounds.H-bottom+26)
+		}
 		if err := tester.RightClick(branch.reference); err != nil {
 			t.Fatal(err)
 		}

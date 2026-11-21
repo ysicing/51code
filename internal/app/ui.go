@@ -163,6 +163,8 @@ func (app *nativeApp) view(c *ui.Context) {
 						app.browserWorkspace(c)
 					case "worktrees":
 						app.worktreePanel(c)
+					case "submodules":
+						app.submodulePanel(c)
 					case "trash":
 						app.repositoryTrashPanel(c)
 					default:
@@ -269,6 +271,9 @@ func (app *nativeApp) sidebar(c *ui.Context) {
 					ui.SidebarItem(c, "screen:worktrees", nil, locales.Worktrees()).Height(26).Padding(0, 8, 0, 40).FontSize(12)
 				}
 				ui.SidebarItem(c, "screen:trash", nil, locales.Trash()).Height(26).Padding(0, 8, 0, 40).FontSize(12)
+				if app.prefs.SidebarItems.Submodules {
+					ui.SidebarItem(c, "screen:submodules", nil, locales.Submodules()).Height(26).Padding(0, 8, 0, 40).FontSize(12)
+				}
 			})
 			app.localBranchSidebar(c)
 			app.tagSidebar(c)
@@ -282,6 +287,8 @@ func (app *nativeApp) sidebar(c *ui.Context) {
 					app.group = ""
 					if screen == "worktrees" {
 						app.loadWorktrees()
+					} else if screen == "submodules" {
+						app.loadSubmodules()
 					} else if screen == "trash" {
 						app.loadRepositoryTrash()
 					} else if screen == "history" && !app.historyLoaded {

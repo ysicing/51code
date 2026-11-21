@@ -150,9 +150,21 @@ func TestStatusStreamMatchesWholeParse(t *testing.T) {
 	if len(wantFiles) != 4 || wantFiles[1].OriginalPath != "old name.txt" || wantBranch.upstream != "origin/main" {
 		t.Fatalf("unexpected parse: %+v %+v", wantBranch, wantFiles)
 	}
+	unknownCounts, unknownFiles, err := parseStatus(strings.Join([]string{
+		"# branch.oid 0123456789012345678901234567890123456789",
+		"# branch.head main",
+		"# branch.upstream origin/main",
+		"# branch.ab +? -?",
+		"",
+	}, "\x00"))
+	if err != nil || unknownCounts.head == "" || unknownCounts.branch != "main" || unknownCounts.upstream != "" ||
+		unknownCounts.ahead != 0 || unknownCounts.behind != 0 || len(unknownFiles) != 0 {
+		t.Fatalf("unknown ahead/behind counts: %+v %+v %v", unknownCounts, unknownFiles, err)
+	}
 	for _, broken := range []string{
 		"2 R. N... 100644 100644 100644 aaaa bbbb R100 new\x00",
 		"2 R. N... 100644 100644 100644 aaaa bbbb R100 new\x00\x00",
+		"# branch.ab +? -1\x00",
 		"x unknown\x00",
 	} {
 		if _, _, err := parseStatus(broken); err == nil {

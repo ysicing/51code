@@ -68,7 +68,7 @@ func TestNativeSidebarVisibilityIndependentAndPersistent(t *testing.T) {
 	finish()
 	shortcuts := app.prefs.Shortcuts
 	tester := sidebarSettingsTester(t, app)
-	labels := []string{"搜索", "版本比较", "贮藏", "工作树"}
+	labels := []string{"搜索", "版本比较", "贮藏", "工作树", "子模块"}
 	for index, label := range labels {
 		if checkbox, found := tester.AccessByRole(ui.RoleCheckBox, label); !found || !checkbox.Checked {
 			t.Fatalf("缺少默认开启的独立开关 %s: %+v", label, checkbox)
@@ -142,11 +142,17 @@ func TestNativeSidebarVisibilityIndependentAndPersistent(t *testing.T) {
 	}
 	tester.Key(0, ui.KeySpace)
 	tester.Frame()
+	if err := tester.Click("子模块"); err != nil {
+		t.Fatal(err)
+	}
 	if err := tester.Click("关闭设置"); err != nil {
 		t.Fatal(err)
 	}
 	if _, found := tester.Find("贮藏"); !found {
 		t.Fatal("重新开启贮藏后入口未恢复")
+	}
+	if _, found := tester.Find("子模块"); !found {
+		t.Fatal("重新开启子模块后入口未恢复")
 	}
 	for _, label := range []string{"搜索", "版本比较", "工作树"} {
 		if _, found := tester.Find(label); found {
@@ -157,7 +163,7 @@ func TestNativeSidebarVisibilityIndependentAndPersistent(t *testing.T) {
 
 func TestNativeSidebarVisibilityLeavesHiddenPage(t *testing.T) {
 	for _, item := range []struct{ screen, label string }{
-		{"search", "搜索"}, {"compare", "版本比较"}, {"stash", "贮藏"}, {"worktrees", "工作树"},
+		{"search", "搜索"}, {"compare", "版本比较"}, {"stash", "贮藏"}, {"worktrees", "工作树"}, {"submodules", "子模块"},
 	} {
 		t.Run(item.screen, func(t *testing.T) {
 			app, _, finish := nativeFixture(t)
@@ -231,7 +237,7 @@ func TestNativeSidebarVisibilityLegacyPreferences(t *testing.T) {
 			restored := newNativeApp(app.service, path)
 			t.Cleanup(restored.cancel)
 			tester := sidebarSettingsTester(t, restored)
-			for _, label := range []string{"洞察", "搜索", "版本比较", "贮藏", "工作树"} {
+			for _, label := range []string{"洞察", "搜索", "版本比较", "贮藏", "工作树", "子模块"} {
 				want := label != "搜索" || test.search
 				if label == "洞察" {
 					want = test.insights

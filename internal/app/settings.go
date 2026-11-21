@@ -482,6 +482,7 @@ func (app *nativeApp) generalPreferences(c *ui.Context) {
 				items := &app.prefs.SidebarItems
 				app.sidebarPreference(c, "search", locales.Search(), &items.Search)
 				app.sidebarPreference(c, "stash", locales.Stash(), &items.Stash)
+				app.sidebarPreference(c, "submodules", locales.Submodules(), &items.Submodules)
 			})
 		})
 	})

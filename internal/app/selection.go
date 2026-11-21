@@ -41,6 +41,7 @@ const (
 	nativeReadInsights
 	nativeReadWorktreeSearch
 	nativeReadReflog
+	nativeReadSubmodules
 )
 
 type nativeRead struct {

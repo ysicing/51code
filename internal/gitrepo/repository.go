@@ -219,6 +219,9 @@ func (parser *statusParser) record(record string) error {
 			if len(fields) != 2 {
 				return errInvalidStatus
 			}
+			if fields[0] == "+?" && fields[1] == "-?" {
+				break
+			}
 			ahead, aheadErr := strconv.Atoi(strings.TrimPrefix(fields[0], "+"))
 			behind, behindErr := strconv.Atoi(strings.TrimPrefix(fields[1], "-"))
 			if aheadErr != nil || behindErr != nil {

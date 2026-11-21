@@ -139,6 +139,7 @@ type nativeApp struct {
 	pathSearch            nativeWorktreeSearch
 	comparison            *nativeComparison
 	worktrees             *nativeWorktrees
+	submodules            nativeSubmodules
 	fileMetrics           nativeFileMetrics
 	diffWidth             float32
 	diffAutoSplit         bool
@@ -198,7 +199,7 @@ func newNativeApp(service *RepositoryService, stateFile string) *nativeApp {
 			Appearance: appearanceSystem, Shortcuts: defaultNativeShortcuts(),
 			StartupPage: "library", AutoRefreshFiles: true, AutoFetchMinutes: 15, DoubleClickStage: true,
 			LFSIntegration: true, LargeFileChecks: true, LargeFileMiB: 50,
-			SidebarItems: nativeSidebarItems{Insights: true, Search: true, Compare: true, Stash: true, Worktrees: true},
+			SidebarItems: nativeSidebarItems{Insights: true, Search: true, Compare: true, Stash: true, Worktrees: true, Submodules: true},
 		},
 		nativeHistoryState: newNativeHistoryState(),
 		browseState:        newNativeHistoryState(), searchState: newNativeHistoryState(),
@@ -502,6 +503,7 @@ func (app *nativeApp) adopt(result *repositoryView) {
 		app.searchMode = nativeSearchCommits
 		app.contentSearch, app.pathSearch = nativeWorktreeSearch{}, nativeWorktreeSearch{}
 		app.worktrees = nil
+		app.submodules = nativeSubmodules{}
 		app.repositoryTrash = nativeTrashList{}
 		app.insights = nil
 	}
@@ -672,6 +674,10 @@ func (app *nativeApp) mutateFormResult(dialog *nativeDialog, label string, opera
 		if refreshErr == nil && screen == "worktrees" {
 			worktreeItems, detailErr = app.service.Worktrees(ctx, path)
 		}
+		var submodules []gitrepo.Submodule
+		if refreshErr == nil && screen == "submodules" {
+			submodules, detailErr = app.readSubmodules(ctx, path)
+		}
 		var trashItems []gitrepo.DiscardBackup
 		if refreshErr == nil && screen == "trash" {
 			trashItems, detailErr = app.service.DiscardBackups(ctx, path, trashDays)
@@ -736,6 +742,9 @@ func (app *nativeApp) mutateFormResult(dialog *nativeDialog, label string, opera
 			app.writable = refreshErr == nil
 			if screen == "worktrees" && refreshErr == nil && detailErr == nil && app.worktrees != nil {
 				app.worktrees.setItems(worktreeItems)
+			}
+			if screen == "submodules" && refreshErr == nil && detailErr == nil {
+				app.submodules.items = submodules
 			}
 			if screen == "trash" && refreshErr == nil && detailErr == nil {
 				app.repositoryTrash.items = trashItems
