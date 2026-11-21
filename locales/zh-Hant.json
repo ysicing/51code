@@ -438,6 +438,7 @@
   "remoteBranchName": "遠端分支名稱",
   "checkoutRemoteBranch": "簽出遠端分支",
   "checkoutBranchOrOpenWorktree": "簽出或開啟工作樹",
+  "readOnlyBranchCheckout": "目前的儲存庫為唯讀，無法簽出分支。請重新整理儲存庫後再試一次。",
   "checkout": "簽出",
   "localBranchName": "本機分支名稱",
   "remoteBranchTree": "遠端分支樹",

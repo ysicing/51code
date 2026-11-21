@@ -438,6 +438,7 @@
   "remoteBranchName": "远程分支名称",
   "checkoutRemoteBranch": "检出远程分支",
   "checkoutBranchOrOpenWorktree": "检出或打开工作树",
+  "readOnlyBranchCheckout": "当前仓库为只读，无法检出分支。请刷新仓库后重试。",
   "checkout": "检出",
   "localBranchName": "本地分支名称",
   "remoteBranchTree": "远端分支树",

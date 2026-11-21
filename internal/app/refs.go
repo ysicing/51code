@@ -326,6 +326,9 @@ func (app *nativeApp) openLocalBranch(name string) {
 						return app.service.SwitchBranch(ctx, path, name)
 					})
 				})
+			} else {
+				app.problem = locales.ReadOnlyBranchCheckout()
+				app.showProblemDetails(app.problem)
 			}
 		}, nil
 	})

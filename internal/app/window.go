@@ -585,6 +585,21 @@ func (app *nativeApp) refresh() {
 		app.refreshRepositoryView(false)
 		return
 	}
+	if app.screen == "search" && app.searchMode != nativeSearchCommits {
+		paths := app.searchMode == nativeSearchPaths
+		state := &app.contentSearch
+		if paths {
+			state = &app.pathSearch
+		}
+		app.leaveConflict(func() {
+			app.mutateFormResult(nil, locales.Refreshing(), nil, func(error) {
+				if app.writable && (paths || state.submitted) {
+					app.startWorktreeSearch(state, paths, false)
+				}
+			})
+		})
+		return
+	}
 	app.leaveConflict(func() { app.mutate(locales.Refreshing(), nil) })
 }
 

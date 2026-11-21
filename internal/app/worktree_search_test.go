@@ -77,6 +77,53 @@ func TestNativeWorktreeSearchOpensMatchAndKeepsResults(t *testing.T) {
 	if app.searchMode != nativeSearchContent || !tester.HasText("前缀 needle") {
 		t.Fatal("returning from the preview discarded search results")
 	}
+	writeNativeFile(t, path, filename, "updated text\n")
+	app.refresh()
+	for app.busy || app.readTask != nil {
+		finish()
+	}
+	tester.Frame()
+	if app.contentSearch.query != "needle" || !tester.HasText(locales.NoWorktreeSearchMatches()) || tester.HasText("前缀 needle") {
+		t.Fatal("refresh did not re-run the submitted content query")
+	}
+	if err := tester.Click(locales.SearchWorktreeText()); err != nil {
+		t.Fatal(err)
+	}
+	tester.Key(ui.Cmd, ui.KeyA)
+	tester.Type("updated")
+	app.refresh()
+	for app.busy || app.readTask != nil {
+		finish()
+	}
+	if app.contentSearch.query != "updated" || app.contentSearch.searched {
+		t.Fatal("refresh should preserve an unsubmitted content query")
+	}
+}
+
+func TestNativeQuickOpenEnterWhileSearching(t *testing.T) {
+	for _, changeQuery := range []bool{false, true} {
+		app, _, finish := nativeFixture(t)
+		app.openQuickSearch()
+		tester := ui.NewTester(app.view, 1024, 680)
+		if err := tester.Click(locales.FilterRepositoryFiles()); err != nil {
+			t.Fatal(err)
+		}
+		tester.Type("hello")
+		tester.Key(0, ui.KeyEnter)
+		if changeQuery {
+			tester.Type(".txt")
+		}
+		for app.readTask != nil {
+			finish()
+		}
+		if changeQuery {
+			if app.screen != "search" || len(app.pathSearch.results) != 1 {
+				t.Fatal("editing the query should cancel the pending open")
+			}
+		} else if app.screen != "files" || app.browser.file != "hello.txt" {
+			t.Fatal("one Enter should open the matching file when results arrive")
+		}
+	}
 }
 
 func TestNativeQuickOpenRanksAndOpensFilesByKeyboard(t *testing.T) {
@@ -93,6 +140,15 @@ func TestNativeQuickOpenRanksAndOpensFilesByKeyboard(t *testing.T) {
 	tester.Frame()
 	if len(app.pathSearch.results) != 2 || app.pathSearch.results[0].Path != "browser.go" {
 		t.Fatalf("quick open results = %+v", app.pathSearch.results)
+	}
+	writeNativeFile(t, path, "new-browser-window.go", "package app\n")
+	app.refresh()
+	for app.busy || app.readTask != nil {
+		finish()
+	}
+	tester.Frame()
+	if len(app.pathSearch.results) != 3 || app.pathSearch.query != "brw .go" {
+		t.Fatalf("refresh did not update quick open results: %+v", app.pathSearch.results)
 	}
 	if directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); directory != "" {
 		saveNativeScreenshot(t, tester, directory, "quick-open.png")

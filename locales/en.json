@@ -438,6 +438,7 @@
   "remoteBranchName": "Remote branch name",
   "checkoutRemoteBranch": "Check Out Remote Branch",
   "checkoutBranchOrOpenWorktree": "Check Out or Open Worktree",
+  "readOnlyBranchCheckout": "This repository is read-only. Refresh the repository before checking out a branch.",
   "checkout": "Check Out",
   "localBranchName": "Local branch name",
   "remoteBranchTree": "Remote branches tree",

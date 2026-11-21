@@ -21,30 +21,24 @@ func (repo *Repository) BrowseFiles(ctx context.Context, revision string) ([]str
 		return nil, err
 	}
 	paths := map[string]bool{}
+	addPath := func(path string) error {
+		if path != "" {
+			paths[strings.TrimSuffix(path, "/")] = true
+		}
+		return nil
+	}
 	if revision == "WORKTREE" || revision == "INDEX" {
 		args := []string{"ls-files", "-z", "--cached"}
 		if revision == "WORKTREE" {
 			args = append(args, "--others", "--exclude-standard")
 		}
-		output, err := repo.git(ctx, append(args, "--")...)
-		if err != nil {
+		if err := runRecords(ctx, repo.Path, 30*time.Second, addPath, append(args, "--")...); err != nil {
 			return nil, err
-		}
-		for _, path := range strings.Split(output, "\x00") {
-			if path != "" {
-				paths[strings.TrimSuffix(path, "/")] = true
-			}
 		}
 	}
 	if hash != "" && revision != "INDEX" {
-		output, err := repo.git(ctx, "ls-tree", "-r", "--name-only", "-z", hash, "--")
-		if err != nil {
+		if err := runRecords(ctx, repo.Path, 30*time.Second, addPath, "ls-tree", "-r", "--name-only", "-z", hash, "--"); err != nil {
 			return nil, err
-		}
-		for _, path := range strings.Split(output, "\x00") {
-			if path != "" {
-				paths[path] = true
-			}
 		}
 	}
 	files := make([]string, 0, len(paths))

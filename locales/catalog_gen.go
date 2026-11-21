@@ -4450,6 +4450,16 @@ func (msgs Messages) CheckoutBranchOrOpenWorktree() string {
 	return Catalog.Format(msgs.locale, "checkoutBranchOrOpenWorktree", nil)
 }
 
+// ReadOnlyBranchCheckout says "当前仓库为只读，无法检出分支。请刷新仓库后重试。"
+// in the language the app shows.
+func ReadOnlyBranchCheckout() string { return In(i18n.Locale()).ReadOnlyBranchCheckout() }
+
+// ReadOnlyBranchCheckout says "当前仓库为只读，无法检出分支。请刷新仓库后重试。"
+// in the language of msgs.
+func (msgs Messages) ReadOnlyBranchCheckout() string {
+	return Catalog.Format(msgs.locale, "readOnlyBranchCheckout", nil)
+}
+
 // Checkout says "检出"
 // in the language the app shows.
 func Checkout() string { return In(i18n.Locale()).Checkout() }

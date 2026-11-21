@@ -24,15 +24,17 @@ const (
 )
 
 type nativeWorktreeSearch struct {
-	query      string
-	results    []gitrepo.WorktreeSearchMatch
-	generation uint64
-	searched   bool
-	limited    bool
-	selected   int
-	list       ui.ListState
-	input      ui.Handle
-	focus      bool
+	query        string
+	results      []gitrepo.WorktreeSearchMatch
+	generation   uint64
+	submitted    bool
+	searched     bool
+	openOnResult bool
+	limited      bool
+	selected     int
+	list         ui.ListState
+	input        ui.Handle
+	focus        bool
 }
 
 func (app *nativeApp) searchWorkspace(c *ui.Context) {
@@ -98,10 +100,13 @@ func (app *nativeApp) worktreeSearchPanel(c *ui.Context, state *nativeWorktreeSe
 	}
 	submit := func() {
 		if paths && state.searched && len(state.results) > 0 {
-			app.openWorktreeSearchMatch(state.results[min(len(state.results)-1, max(0, state.selected))])
-		} else {
+			openSelected()
+			return
+		}
+		if !paths || !reading {
 			app.startWorktreeSearch(state, paths, false)
 		}
+		state.openOnResult = paths
 	}
 	ui.Row(c).FillWidth().Padding(8, 10).Gap(8).AlignItems(ui.Center).Children(func() {
 		if state.focus {
@@ -192,6 +197,8 @@ func (app *nativeApp) worktreeSearchPanel(c *ui.Context, state *nativeWorktreeSe
 func (state *nativeWorktreeSearch) resetResults() {
 	state.generation++
 	state.results, state.searched, state.limited = nil, false, false
+	state.submitted = false
+	state.openOnResult = false
 	state.selected, state.list = -1, ui.ListState{}
 }
 
@@ -204,6 +211,7 @@ func (app *nativeApp) startWorktreeSearch(state *nativeWorktreeSearch, paths, de
 		return
 	}
 	state.resetResults()
+	state.submitted = true
 	generation := state.generation
 	repository, post := app.repository, app.post
 	path := repository.snapshot.Path
@@ -227,7 +235,11 @@ func (app *nativeApp) startWorktreeSearch(state *nativeWorktreeSearch, paths, de
 				state.results, state.searched = results, err == nil
 				if len(results) > 0 {
 					state.selected = 0
+					if state.openOnResult && err == nil {
+						app.openWorktreeSearchMatch(results[0])
+					}
 				}
+				state.openOnResult = false
 			}, err
 		}
 		var matches []gitrepo.WorktreeSearchMatch

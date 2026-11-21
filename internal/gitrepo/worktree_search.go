@@ -34,15 +34,15 @@ type WorktreeSearchMatch struct {
 }
 
 func (repo *Repository) WorktreeSearchPaths(ctx context.Context) ([]string, error) {
-	output, err := repo.git(ctx, "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--")
-	if err != nil {
-		return nil, err
-	}
 	var paths []string
-	for path := range strings.SplitSeq(output, "\x00") {
+	err := runRecords(ctx, repo.Path, 30*time.Second, func(path string) error {
 		if path != "" && validBrowsePath(path) == nil {
 			paths = append(paths, path)
 		}
+		return nil
+	}, "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--")
+	if err != nil {
+		return nil, err
 	}
 	slices.Sort(paths)
 	return slices.Compact(paths), nil

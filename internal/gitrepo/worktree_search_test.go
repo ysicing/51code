@@ -6,13 +6,48 @@ package gitrepo
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
+
+func TestWorktreeSearchAndBrowseBeyondOutputLimit(t *testing.T) {
+	ctx := context.Background()
+	repo, dir := fixture(t)
+	write(t, dir, "match.txt", "needle\n")
+	git(t, dir, "add", "match.txt")
+	blob := git(t, dir, "rev-parse", ":match.txt")
+	prefix := strings.Repeat(strings.Repeat("a", 180)+"/", 4)
+	count := outputLimit/len(prefix) + 1
+	var entries strings.Builder
+	for index := range count {
+		fmt.Fprintf(&entries, "100644 %s\t%s%05d.txt\n", blob, prefix, index)
+	}
+	if _, err := run(ctx, dir, entries.String(), 30*time.Second, "update-index", "--index-info"); err != nil {
+		t.Fatal(err)
+	}
+	git(t, dir, "commit", "-qm", "large index")
+	var matches []WorktreeSearchMatch
+	limited, err := repo.SearchWorktree(ctx, "needle", func(batch []WorktreeSearchMatch) { matches = append(matches, batch...) })
+	if err != nil || limited || len(matches) != 1 || matches[0].Path != "match.txt" {
+		t.Fatalf("search: %+v, limited %t, err %v", matches, limited, err)
+	}
+	for _, revision := range []string{"WORKTREE", "HEAD", "INDEX"} {
+		paths, err := repo.BrowseFiles(ctx, revision)
+		if err != nil || len(paths) != count+1 || !slices.Contains(paths, matches[0].Path) {
+			t.Fatalf("browse %s: %d paths, err %v", revision, len(paths), err)
+		}
+	}
+	content, err := repo.BrowseFileContent(ctx, matches[0].Path, "WORKTREE")
+	if err != nil || content.Text != "needle\n" {
+		t.Fatalf("preview: %+v, err %v", content, err)
+	}
+}
 
 func TestWorktreeSearchIncludesLocalTextAndKeepsBackendParity(t *testing.T) {
 	repo, dir := fixture(t)

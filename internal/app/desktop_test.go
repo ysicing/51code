@@ -84,7 +84,7 @@ func TestNativeBranchViewAndWorktreeCheckout(t *testing.T) {
 	allHistory := slices.Clone(source.history)
 	historyList := source.historyList
 	tester := ui.NewTester(source.view, 1024, 680)
-	checkoutBranch := func(name string) {
+	checkoutBranch := func(name, wantProblem string) {
 		t.Helper()
 		tester.Frame()
 		if err := tester.RightClick(name); err != nil {
@@ -94,8 +94,8 @@ func TestNativeBranchViewAndWorktreeCheckout(t *testing.T) {
 			t.Fatal(err)
 		}
 		runBackgroundUpdates(t, updates, func() bool { return !source.busy })
-		if source.problem != "" {
-			t.Fatal(source.problem)
+		if source.problem != wantProblem {
+			t.Fatalf("checkout %s: problem %q, want %q", name, source.problem, wantProblem)
 		}
 	}
 	if err := tester.Click("occupied"); err != nil {
@@ -130,7 +130,7 @@ func TestNativeBranchViewAndWorktreeCheckout(t *testing.T) {
 		len(source.history) != len(allHistory) {
 		t.Fatal("显式查看全部历史未定位分支尖端")
 	}
-	checkoutBranch("occupied")
+	checkoutBranch("occupied", "")
 	target := desktop.repositories[linkedPath]
 	if target == nil || target.repository.snapshot.Branch != "occupied" || desktop.active != target {
 		t.Fatal("已检出的分支未在对应工作树窗口打开")
@@ -139,15 +139,20 @@ func TestNativeBranchViewAndWorktreeCheckout(t *testing.T) {
 		!fileExists(source.repository.snapshot.Files, "hello.txt", false) {
 		t.Fatal("打开工作树改变了来源分支或丢失未提交的文件状态")
 	}
-	checkoutBranch("occupied")
+	checkoutBranch("occupied", "")
 	if desktop.repositories[linkedPath] != target || desktop.active != target || len(desktop.repositories) != 2 {
 		t.Fatal("重复点击没有激活原来的工作树窗口")
 	}
 	source.writable = true
-	checkoutBranch("available")
+	checkoutBranch("available", "")
 	if source.repository.snapshot.Branch != "available" ||
 		nativeGit(t, linked, "branch", "--show-current") != "occupied" {
 		t.Fatal("检出空闲分支未在来源工作树切换，或影响了另一个工作树")
+	}
+	source.writable = false
+	checkoutBranch("main", locales.ReadOnlyBranchCheckout())
+	if source.dialog == nil || source.dialog.errorDetails == nil || nativeGit(t, path, "branch", "--show-current") != "available" {
+		t.Fatal("只读检出应提示原因并保留当前分支")
 	}
 }
 
