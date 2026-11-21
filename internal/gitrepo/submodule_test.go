@@ -147,7 +147,8 @@ func TestSubmoduleStatusWithUpstreamDivergence(t *testing.T) {
 		}
 	}
 
-	git(t, moduleDir, "commit", "--allow-empty", "-m", "ahead")
+	git(t, moduleDir, "-c", "user.name=Test User", "-c", "user.email=test@example.test",
+		"-c", "commit.gpgsign=false", "commit", "--allow-empty", "-m", "ahead")
 	ahead := git(t, moduleDir, "rev-parse", "HEAD")
 	read(ahead)
 	git(t, moduleDir, "reset", "--hard", "origin/main")
