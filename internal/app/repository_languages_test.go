@@ -193,14 +193,28 @@ func TestNativeRepositoryLanguageLayout(t *testing.T) {
 	app.library.Repositories[0].Name = strings.Repeat("长仓库名称", 12)
 	app.library.Repositories[0].Path = path
 	app.library.Repositories[0].Branch = strings.Repeat("feature/long-branch/", 12)
+	app.library.Repositories[0].Changes = 104
 	summary := gitrepo.LanguageSummary{Complete: true, Languages: []gitrepo.LanguageStat{
 		{Name: "Go", Color: "#00ADD8", Bytes: 80},
 		{Name: "Python", Color: "#3572A5", Bytes: 15},
 		{Name: "Shell", Color: "#89e051", Bytes: 5},
 	}}
 	app.languages = &nativeRepositoryLanguages{entries: map[string]gitrepo.LanguageSummary{path: summary}}
+	app.library.Repositories = append(app.library.Repositories,
+		workspace.LocalRepository{Name: "Desktop", Path: "/work/desktop", Branch: "stable", Changes: 61},
+		workspace.LocalRepository{Name: "Scripts", Path: "/work/scripts", Branch: "trunk", Changes: 5},
+		workspace.LocalRepository{Name: "Docs", Path: "/work/docs", Branch: "main"},
+	)
+	app.languages.entries["/work/desktop"] = gitrepo.LanguageSummary{Languages: []gitrepo.LanguageStat{
+		{Name: "Swift", Color: "#F05138", Bytes: 30},
+	}}
 	for _, appearance := range []string{appearanceLight, appearanceDark} {
 		app.prefs.Appearance = appearance
+		theme := ui.LightTheme()
+		if appearance == appearanceDark {
+			theme = ui.DarkTheme()
+		}
+		compactCountOffsets := make(map[string]float32)
 		for _, width := range []int{1024, 1320} {
 			tester := ui.NewTester(app.view, width, 860)
 			if tester.HasText("Go") != (width == 1320) {
@@ -210,6 +224,42 @@ func TestNativeRepositoryLanguageLayout(t *testing.T) {
 				bounds, found := tester.Find("Go")
 				if !found || bounds.X < app.prefs.Sidebar || bounds.X+bounds.W > float32(width) {
 					t.Fatalf("language clipped: %+v", bounds)
+				}
+				swift, found := tester.Find("Swift")
+				if !found || bounds.X != swift.X {
+					t.Fatalf("language labels start at different positions: Go=%+v Swift=%+v", bounds, swift)
+				}
+			}
+			mainBranch, found := tester.Find("main")
+			if !found {
+				t.Fatal("missing branch without changes")
+			}
+			rightEdge := mainBranch.X + mainBranch.W
+			for _, entry := range app.library.Repositories {
+				if entry.Changes == 0 {
+					continue
+				}
+				branch, hasBranch := tester.Find(entry.Branch)
+				count, hasCount := tester.Find(fmt.Sprint(entry.Changes))
+				gap := count.X - (branch.X + branch.W)
+				if !hasBranch || !hasCount || gap < 0 || gap > 20 {
+					t.Fatalf("change count should sit beside its branch: label=%q width=%d branch=%+v count=%+v", entry.Branch, width, branch, count)
+				}
+				countEdge := count.X + count.W + theme.Space(1.5)
+				if delta := countEdge - rightEdge; delta < -1 || delta > 1 {
+					t.Fatalf("branch group should end at the same right edge: label=%q width=%d got=%v want=%v", entry.Branch, width, countEdge, rightEdge)
+				}
+				if entry.Path == path {
+					if branch.W <= 0 || branch.W > 96 {
+						t.Fatalf("long branch exceeds the compact label width: width=%d branch=%+v", width, branch)
+					}
+				} else {
+					offset := count.X - branch.X
+					if width == 1024 {
+						compactCountOffsets[entry.Path] = offset
+					} else if offset != compactCountOffsets[entry.Path] {
+						t.Fatalf("wide layout added space before the change count for %q: compact=%v wide=%v", entry.Branch, compactCountOffsets[entry.Path], offset)
+					}
 				}
 			}
 			row, found := tester.AccessByRole(ui.RoleButton, app.library.Repositories[0].Name)

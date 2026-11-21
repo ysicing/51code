@@ -339,18 +339,13 @@ func repositoryLanguageTooltip(summary gitrepo.LanguageSummary) string {
 	return strings.Join(parts, " · ")
 }
 
-func (app *nativeApp) repositoryLanguageBadge(c *ui.Context, path string) {
-	width, _ := c.Size()
-	if app.languages == nil || width-app.prefs.Sidebar < 850 {
-		return
-	}
-	summary := app.languages.entries[path]
+func repositoryLanguageBadge(c *ui.Context, summary gitrepo.LanguageSummary) {
+	cell := ui.Row(c).Key("repository-language").Width(132).Shrink(0).Gap(6).AlignItems(ui.Center)
 	if len(summary.Languages) == 0 {
 		return
 	}
 	language := summary.Languages[0]
-	ui.Row(c).Key("repository-language").Width(132).Shrink(0).Gap(6).AlignItems(ui.Center).
-		Tooltip(repositoryLanguageTooltip(summary)).Children(func() {
+	cell.Tooltip(repositoryLanguageTooltip(summary)).Children(func() {
 		ui.Box(c).Size(8, 8).Radius(4).Background(ui.Hex(language.Color)).Border(0.5, c.Theme().Border).Role(ui.RoleNone)
 		ui.Text(c, language.Name).FontSize(12).TextColor(c.Theme().TextMuted).MinWidth(0).Shrink(1).MaxLines(1)
 	})
