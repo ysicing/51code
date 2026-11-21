@@ -140,6 +140,7 @@ func Run(info BuildInfo) {
 				{Label: locales.QuickOpen(), Accelerator: "CmdOrCtrl+P", Click: command(func(desktop *nativeApp) { desktop.openQuickSearch() })},
 				{ID: shortcutRefresh, Label: locales.Refresh(), Accelerator: shortcutAccelerator(defaultNativeShortcuts().Refresh), Click: command(func(desktop *nativeApp) { desktop.refresh() })},
 				{ID: shortcutCommit, Label: locales.Commit(), Accelerator: shortcutAccelerator(defaultNativeShortcuts().Commit), Click: command(func(desktop *nativeApp) { desktop.commit() })},
+				{Label: locales.FindLostCommits(), Click: command(func(window *nativeApp) { window.lostCommitsDialog() })},
 				mygo.Separator(),
 				{Label: locales.RepositorySettingsMenu(), Click: command(func(desktop *nativeApp) { desktop.repositorySettingsDialog() })},
 			}},

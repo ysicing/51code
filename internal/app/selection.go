@@ -40,6 +40,7 @@ const (
 	nativeReadHistoryPage
 	nativeReadInsights
 	nativeReadWorktreeSearch
+	nativeReadReflog
 )
 
 type nativeRead struct {

@@ -7558,6 +7558,56 @@ func (msgs Messages) QuickOpen() string {
 	return Catalog.Format(msgs.locale, "quickOpen", nil)
 }
 
+// FindLostCommits says "找回丢失提交"
+// in the language the app shows.
+func FindLostCommits() string { return In(i18n.Locale()).FindLostCommits() }
+
+// FindLostCommits says "找回丢失提交"
+// in the language of msgs.
+func (msgs Messages) FindLostCommits() string {
+	return Catalog.Format(msgs.locale, "findLostCommits", nil)
+}
+
+// ReadingReflog says "正在读取 Reflog"
+// in the language the app shows.
+func ReadingReflog() string { return In(i18n.Locale()).ReadingReflog() }
+
+// ReadingReflog says "正在读取 Reflog"
+// in the language of msgs.
+func (msgs Messages) ReadingReflog() string {
+	return Catalog.Format(msgs.locale, "readingReflog", nil)
+}
+
+// NoLostCommits says "已扫描的 Reflog 中没有可恢复的丢失提交"
+// in the language the app shows.
+func NoLostCommits() string { return In(i18n.Locale()).NoLostCommits() }
+
+// NoLostCommits says "已扫描的 Reflog 中没有可恢复的丢失提交"
+// in the language of msgs.
+func (msgs Messages) NoLostCommits() string {
+	return Catalog.Format(msgs.locale, "noLostCommits", nil)
+}
+
+// ReflogScanLimit says "仅检查最近 {count, number} 条 Reflog 记录"
+// in the language the app shows.
+func ReflogScanLimit(count int) string { return In(i18n.Locale()).ReflogScanLimit(count) }
+
+// ReflogScanLimit says "仅检查最近 {count, number} 条 Reflog 记录"
+// in the language of msgs.
+func (msgs Messages) ReflogScanLimit(count int) string {
+	return Catalog.Format(msgs.locale, "reflogScanLimit", map[string]any{"count": count})
+}
+
+// CreateRecoveryBranch says "创建恢复分支"
+// in the language the app shows.
+func CreateRecoveryBranch() string { return In(i18n.Locale()).CreateRecoveryBranch() }
+
+// CreateRecoveryBranch says "创建恢复分支"
+// in the language of msgs.
+func (msgs Messages) CreateRecoveryBranch() string {
+	return Catalog.Format(msgs.locale, "createRecoveryBranch", nil)
+}
+
 // NoWorktreeSearchMatches says "工作区没有匹配的文本"
 // in the language the app shows.
 func NoWorktreeSearchMatches() string { return In(i18n.Locale()).NoWorktreeSearchMatches() }

@@ -465,6 +465,9 @@ func (app *nativeApp) repositoryActions(menu *ui.Menu) {
 		app.stashDialog()
 	}
 	menu.Separator()
+	if menu.Item(locales.FindLostCommits()).Disabled(!app.canReadReflog()).Chosen() {
+		app.lostCommitsDialog()
+	}
 	if menu.Item(locales.OpenInTerminal()).Disabled(unavailable || app.closed || app.dialog != nil).Chosen() {
 		app.openRepositoryTerminal(app.repository.snapshot.Path)
 	}
