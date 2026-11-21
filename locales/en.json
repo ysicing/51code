@@ -173,6 +173,7 @@
   "submodules": "Submodules",
   "noSubmodules": "No submodules",
   "readingSubmodules": "Reading submodules…",
+  "submoduleRefreshFailed": "Could not refresh submodules",
   "submoduleActions": "Submodule actions",
   "addSubmodule": "Add Submodule",
   "addSubmoduleDetail": "Enter the repository address and a path relative to this working tree. Git stages .gitmodules and the new submodule reference.",

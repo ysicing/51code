@@ -1780,6 +1780,16 @@ func (msgs Messages) ReadingSubmodules() string {
 	return Catalog.Format(msgs.locale, "readingSubmodules", nil)
 }
 
+// SubmoduleRefreshFailed says "刷新子模块失败"
+// in the language the app shows.
+func SubmoduleRefreshFailed() string { return In(i18n.Locale()).SubmoduleRefreshFailed() }
+
+// SubmoduleRefreshFailed says "刷新子模块失败"
+// in the language of msgs.
+func (msgs Messages) SubmoduleRefreshFailed() string {
+	return Catalog.Format(msgs.locale, "submoduleRefreshFailed", nil)
+}
+
 // SubmoduleActions says "子模块操作"
 // in the language the app shows.
 func SubmoduleActions() string { return In(i18n.Locale()).SubmoduleActions() }

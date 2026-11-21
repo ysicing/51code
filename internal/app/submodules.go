@@ -13,8 +13,9 @@ import (
 )
 
 type nativeSubmodules struct {
-	items []gitrepo.Submodule
-	list  ui.ListState
+	items        []gitrepo.Submodule
+	refreshError string
+	list         ui.ListState
 }
 
 func (app *nativeApp) readSubmodules(ctx context.Context, path string) ([]gitrepo.Submodule, error) {
@@ -35,7 +36,7 @@ func (app *nativeApp) loadSubmodules() {
 		if err != nil {
 			return nil, err
 		}
-		return func() { app.submodules.items = items }, nil
+		return func() { app.submodules.items, app.submodules.refreshError = items, "" }, nil
 	})
 }
 
@@ -162,6 +163,12 @@ func (app *nativeApp) submodulePanel(c *ui.Context) {
 				OnClick(app.addSubmoduleDialog)
 		})
 		ui.Divider(c)
+		if state.refreshError != "" {
+			c.Key("submodule-refresh-error")
+			ui.Box(c).FillWidth().Shrink(0).Padding(8, 12).Children(func() {
+				app.inlineProblem(c, locales.SubmoduleRefreshFailed()+"\n"+state.refreshError)
+			})
+		}
 		if len(state.items) == 0 {
 			message := locales.NoSubmodules()
 			if app.readTask != nil && app.readTask.kind == nativeReadSubmodules {
@@ -194,6 +201,7 @@ func (app *nativeApp) submoduleTable(c *ui.Context, state *nativeSubmodules) {
 		{Title: locales.SubmoduleTargetCommit(), Width: 106, Fixed: true},
 		{ID: "actions", Width: 46, Fixed: true},
 	}
+	c.Key("submodule-table")
 	ui.Table(c, &state.list, columns, len(state.items), func(index, column int) {
 		item := state.items[index]
 		switch column {

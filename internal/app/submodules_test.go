@@ -5,13 +5,77 @@ package app
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"testing"
 
+	"github.com/ysicing/51code/internal/gitrepo"
 	"github.com/ysicing/51code/locales"
 
 	"github.com/egoist/mygo/ui"
 )
+
+func TestNativeSubmoduleBackgroundRefreshKeepsLastSuccessfulList(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Git fault injection uses a POSIX executable wrapper")
+	}
+	app, parent, finish := nativeFixture(t)
+	const path = "deps/module"
+	nativeGit(t, parent, "update-index", "--add", "--cacheinfo", "160000,"+app.repository.snapshot.Head+","+path)
+	app.switchWorkspace("submodules")
+	app.loadSubmodules()
+	finish()
+	tester := ui.NewTester(app.view, 1024, 680)
+	if !tester.HasText(path) {
+		t.Fatal("初次读取未显示子模块")
+	}
+
+	actual, err := exec.LookPath("git")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("XSOURCE_TEST_REAL_GIT", actual)
+	const failure = "submodule index read failed"
+	wrapper := filepath.Join(t.TempDir(), "git")
+	script := "#!/bin/sh\nfor arg in \"$@\"; do\n" +
+		"  if [ \"$arg\" = ls-files ]; then printf '%s\\n' '" + failure + "' >&2; exit 1; fi\n" +
+		"done\nexec \"$XSOURCE_TEST_REAL_GIT\" \"$@\"\n"
+	if err := os.WriteFile(wrapper, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	gitrepo.ConfigureExecutable(gitrepo.ExecutableOptions{Source: "custom", Path: wrapper})
+	t.Cleanup(func() { gitrepo.ConfigureExecutable(gitrepo.ExecutableOptions{Source: "system"}) })
+
+	nativeGit(t, parent, "update-index", "--force-remove", "--", path)
+	app.refreshRepositoryView(true)
+	finish()
+	tester.Frame()
+	if !tester.HasText(path) || !app.writable {
+		t.Fatal("子模块读取失败清空了旧列表或阻止了仓库写操作")
+	}
+	notice := locales.SubmoduleRefreshFailed()
+	if !tester.HasText(notice) {
+		t.Fatal("后台刷新失败未提示")
+	}
+	if err := tester.Click(locales.ShowDetails()); err != nil {
+		t.Fatal(err)
+	}
+	if app.dialog == nil || app.dialog.errorDetails == nil || !tester.HasText(notice+"\n"+failure) {
+		t.Fatal("无法查看子模块刷新失败的 Git 错误")
+	}
+	if err := tester.Click(locales.Close()); err != nil {
+		t.Fatal(err)
+	}
+
+	gitrepo.ConfigureExecutable(gitrepo.ExecutableOptions{Source: "system"})
+	app.refreshOnFocus()
+	finish()
+	tester.Frame()
+	if tester.HasText(path) || tester.HasText(notice) || !tester.HasText(locales.NoSubmodules()) {
+		t.Fatal("后台刷新恢复后未更新列表或清除失败提示")
+	}
+}
 
 func TestNativeSubmoduleAddInitializeAndOpen(t *testing.T) {
 	t.Setenv("GIT_ALLOW_PROTOCOL", "file")

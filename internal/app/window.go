@@ -744,7 +744,7 @@ func (app *nativeApp) mutateFormResult(dialog *nativeDialog, label string, opera
 				app.worktrees.setItems(worktreeItems)
 			}
 			if screen == "submodules" && refreshErr == nil && detailErr == nil {
-				app.submodules.items = submodules
+				app.submodules.items, app.submodules.refreshError = submodules, ""
 			}
 			if screen == "trash" && refreshErr == nil && detailErr == nil {
 				app.repositoryTrash.items = trashItems

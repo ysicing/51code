@@ -173,6 +173,7 @@
   "submodules": "子模組",
   "noSubmodules": "沒有子模組",
   "readingSubmodules": "正在讀取子模組…",
+  "submoduleRefreshFailed": "重新整理子模組失敗",
   "submoduleActions": "子模組操作",
   "addSubmodule": "新增子模組",
   "addSubmoduleDetail": "輸入儲存庫位址和相對於目前工作樹的路徑。Git 會暫存 .gitmodules 和新的子模組引用。",

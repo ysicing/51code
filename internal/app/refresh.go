@@ -90,8 +90,9 @@ func (app *nativeApp) refreshRepositoryView(watch bool) {
 			worktrees, err = app.service.Worktrees(ctx, path)
 		}
 		var submodules []gitrepo.Submodule
+		var submoduleErr error
 		if err == nil && screen == "submodules" {
-			submodules, _ = app.readSubmodules(ctx, path)
+			submodules, submoduleErr = app.readSubmodules(ctx, path)
 		}
 		var browsing *nativeBrowserResult
 		if err == nil && screen == "files" && browser != nil {
@@ -180,9 +181,18 @@ func (app *nativeApp) refreshRepositoryView(watch bool) {
 				app.worktrees.setItems(worktrees)
 				changed = true
 			}
-			if submodules != nil && !slices.Equal(app.submodules.items, submodules) {
-				app.submodules.items = submodules
-				changed = true
+			if screen == "submodules" {
+				refreshError := ""
+				if submoduleErr != nil {
+					refreshError = submoduleErr.Error()
+				} else if !slices.Equal(app.submodules.items, submodules) {
+					app.submodules.items = submodules
+					changed = true
+				}
+				if app.submodules.refreshError != refreshError {
+					app.submodules.refreshError = refreshError
+					changed = true
+				}
 			}
 			if browsing != nil && app.browser == browser {
 				changed = browser.apply(browsing) || changed

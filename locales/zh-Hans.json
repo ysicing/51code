@@ -173,6 +173,7 @@
   "submodules": "子模块",
   "noSubmodules": "暂无子模块",
   "readingSubmodules": "正在读取子模块…",
+  "submoduleRefreshFailed": "刷新子模块失败",
   "submoduleActions": "子模块操作",
   "addSubmodule": "添加子模块",
   "addSubmoduleDetail": "输入仓库地址和相对于当前工作树的路径。Git 会暂存 .gitmodules 和新子模块引用。",
