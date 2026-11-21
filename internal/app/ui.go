@@ -266,6 +266,16 @@ func (app *nativeApp) sidebar(c *ui.Context) {
 				if app.prefs.SidebarItems.Worktrees {
 					ui.SidebarItem(c, "screen:worktrees", nil, locales.Worktrees()).Height(26).Padding(0, 8, 0, 40).FontSize(12)
 				}
+				c.Key("workspace:trash")
+				trash := ui.ButtonBase(c).Label(locales.Trash()).Disabled(app.dialog != nil).
+					FillWidth().Height(26).Padding(0, 8, 0, 40).AlignItems(ui.Center).Radius(c.Theme().Radius)
+				if trash.Hovered() || trash.Pressed() {
+					trash.Background(c.Theme().SurfaceHover)
+				}
+				trash.Children(func() {
+					ui.Text(c, locales.Trash()).Grow(1).SingleLine().FontSize(12)
+				})
+				trash.OnClick(func() { app.showTrash("") })
 			})
 			app.localBranchSidebar(c)
 			app.tagSidebar(c)

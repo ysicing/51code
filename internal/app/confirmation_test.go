@@ -13,6 +13,7 @@ import (
 	"github.com/ysicing/51code/internal/gitrepo"
 	"github.com/ysicing/51code/locales"
 
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -65,6 +66,38 @@ func TestNativeTrashListAndSettings(t *testing.T) {
 	}
 	if !app.prefs.Trash.Disabled || !app.prefs.Trash.Configured {
 		t.Fatal("设置开关未关闭回收站")
+	}
+}
+
+func TestNativeTrashSidebarEntry(t *testing.T) {
+	app, _, finish := nativeFixture(t)
+	mygo.App.SetPath(mygo.PathUserData, t.TempDir())
+	t.Cleanup(func() { mygo.App.SetPath(mygo.PathUserData, "") })
+	tester := ui.NewTester(app.view, 1024, 680)
+	worktrees, found := tester.Find(locales.Worktrees())
+	trash, accessible := tester.AccessByRole(ui.RoleButton, locales.Trash())
+	if !found || !accessible || trash.Offscreen || trash.Bounds.Y < worktrees.Y+worktrees.H {
+		t.Fatalf("回收站入口未显示在工作树下方: 工作树=%+v 回收站=%+v", worktrees, trash)
+	}
+	if err := tester.Click(locales.Trash()); err != nil {
+		t.Fatal(err)
+	}
+	finish()
+	tester.Frame()
+	if app.dialog == nil || app.dialog.title != locales.Trash() || app.screen != "changes" || !tester.HasText(locales.TrashEmpty()) {
+		t.Fatal("侧栏未在当前工作区打开全局回收站空状态")
+	}
+	tester.Key(0, ui.KeyEscape)
+	if app.dialog != nil {
+		t.Fatal("Esc 未关闭回收站")
+	}
+	app.prefs.SidebarItems.Worktrees = false
+	app.prefs.Trash.Disabled = true
+	tester.SetDark(true)
+	tester.Frame()
+	trash, accessible = tester.AccessByRole(ui.RoleButton, locales.Trash())
+	if !accessible || trash.Disabled || trash.Offscreen {
+		t.Fatalf("关闭工作树或回收站备份后仍应能打开回收站: %+v", trash)
 	}
 }
 
