@@ -82,6 +82,13 @@ func historyDate(value string) string {
 	return value
 }
 
+func historyDetailDate(value string) string {
+	if date, err := time.Parse(time.RFC3339, value); err == nil {
+		return date.Format("2006-01-02 15:04:05 -07:00")
+	}
+	return value
+}
+
 func historyRefs(refs string, theme *ui.Theme) []ui.Span {
 	var spans []ui.Span
 	for ref := range strings.SplitSeq(refs, ", ") {
@@ -231,7 +238,7 @@ func (app *nativeApp) historyPanel(c *ui.Context) {
 		}
 		commit := history[row]
 		if app.screen == "search" && menu.Item(locales.ViewInCommitHistory()).Disabled(app.busy || app.readTask != nil).Chosen() {
-			app.revealSearchCommit(commit.Hash)
+			app.revealHistoryCommit(commit.Hash)
 		}
 		app.historyCommitMenu(menu, commit, services)
 	}
@@ -338,36 +345,58 @@ func (app *nativeApp) historyDetails(c *ui.Context) {
 		if commit := app.historyGraphCache.commit(app.history, app.commitHash); commit != nil {
 			selected = commit
 		}
-		if selected != nil {
-			ui.Text(c, selected.Subject).Bold().FontSize(15).MaxLines(1).Selectable().Tooltip(selected.Subject)
-		}
 		commit := gitrepo.Commit{Hash: app.commitHash}
 		if selected != nil {
 			commit = *selected
 		}
 		services := c.Services()
-		ui.Row(c).FillWidth().Gap(6).AlignItems(ui.Center).Wrap().Children(func() {
-			if selected != nil {
-				ui.Text(c, selected.Author).FontSize(11).MaxWidth(120).SingleLine().Selectable()
-				ui.Text(c, historyDate(app.commitDate(*selected))).FontSize(11).TextColor(c.Theme().TextMuted).SingleLine().Tooltip(app.historyDateLabel())
-			}
-			ui.Row(c).Gap(2).AlignItems(ui.Center).Grow(1).MinWidth(0).Children(func() {
-				ui.Text(c, commit.Hash).Font("monospace").FontSize(11).MinWidth(0).Shrink(1).SingleLine().
-					Selectable().Label(locales.FullCommitID()).Tooltip(commit.Hash)
-				iconButton(c, locales.CopyWorktreeCommit(), nativeIcons["copy"]).Shrink(0).
-					OnClick(func() { services.WriteClipboard(commit.Hash) })
-			})
+		ui.Row(c).FillWidth().Gap(6).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, commit.Subject).Bold().FontSize(15).Grow(1).MinWidth(0).SingleLine().
+				Selectable().Tooltip(commit.Subject)
 			ui.Button(c, locales.CompareCommitWithHead()).FontSize(12).Shrink(0).Disabled(!app.canCompareCommit()).
 				OnClick(func() { app.compareCommitWithHead(commit.Hash) })
 			iconButton(c, locales.CommitActions(), nativeIcons["more"]).Shrink(0).Menu(func(menu *ui.Menu) {
 				app.historyCommitMenu(menu, commit, services)
 			})
 			if app.screen == "search" {
-				hash := app.commitHash
-				ui.Button(c, locales.ViewInCommitHistory()).FontSize(12).Disabled(app.busy || app.readTask != nil).
-					OnClick(func() { app.revealSearchCommit(hash) })
+				ui.Button(c, locales.ViewInCommitHistory()).FontSize(12).Shrink(0).Disabled(app.busy || app.readTask != nil).
+					OnClick(func() { app.revealHistoryCommit(commit.Hash) })
 			}
 		})
+		ui.Row(c).FillWidth().Gap(6).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, locales.CommitID()).FontSize(11).TextColor(c.Theme().TextMuted).Shrink(0)
+			ui.Text(c, commit.Hash).Font("monospace").FontSize(11).MinWidth(0).Shrink(1).SingleLine().
+				Selectable().Label(locales.FullCommitID()).Tooltip(commit.Hash)
+			ui.Text(c, "["+shortHash(commit.Hash)+"]").Font("monospace").FontSize(11).
+				TextColor(c.Theme().TextMuted).Shrink(0).SingleLine().Selectable()
+			iconButton(c, locales.CopyWorktreeCommit(), nativeIcons["copy"]).Shrink(0).
+				OnClick(func() { services.WriteClipboard(commit.Hash) })
+		})
+		if len(commit.Parents) > 0 {
+			ui.Row(c).FillWidth().Gap(6).AlignItems(ui.Center).Wrap().Children(func() {
+				ui.Text(c, locales.ParentCommits()).FontSize(11).TextColor(c.Theme().TextMuted)
+				for _, parent := range commit.Parents {
+					c.Key(parent)
+					ui.ButtonBase(c).Label(shortHash(parent)).Tooltip(parent).Padding(2, 0).Shrink(0).
+						Disabled(app.busy || app.readTask != nil || app.dialog != nil).
+						Children(func() {
+							ui.Text(c, shortHash(parent)).Font("monospace").FontSize(11).TextColor(c.Theme().Accent).Underline()
+						}).OnClick(func() { app.revealHistoryCommit(parent) })
+				}
+			})
+		}
+		if selected != nil {
+			author := commit.Author
+			if commit.AuthorEmail != "" {
+				author += " <" + commit.AuthorEmail + ">"
+			}
+			ui.Row(c).FillWidth().Gap(10).AlignItems(ui.Center).Wrap().Children(func() {
+				ui.Text(c, author).FontSize(11).MinWidth(0).MaxWidthPercent(100).SingleLine().
+					Selectable().Tooltip(author)
+				ui.Text(c, historyDetailDate(app.commitDate(commit))).FontSize(11).
+					TextColor(c.Theme().TextMuted).Selectable().Tooltip(app.historyDateLabel())
+			})
+		}
 		if selected != nil && selected.Refs != "" {
 			ui.Text(c, selected.Refs).FontSize(11).TextColor(c.Theme().TextMuted).MaxLines(1).Selectable().Tooltip(selected.Refs)
 		}

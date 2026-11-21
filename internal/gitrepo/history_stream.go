@@ -131,7 +131,7 @@ func (writer *historyLogWriter) accept() {
 	writer.commits = append(writer.commits, Commit{
 		Hash: writer.fields[0], Parents: strings.Fields(writer.fields[1]), Subject: writer.fields[2],
 		Author: writer.fields[3], Date: writer.fields[4], Refs: writer.fields[5],
-		CommitterDate: writer.fields[8],
+		CommitterDate: writer.fields[8], AuthorEmail: writer.fields[7],
 	})
 	writer.found = writer.found || writer.fields[0] == writer.target
 	if len(writer.commits) == writer.limit && (writer.target == "" || writer.found) {

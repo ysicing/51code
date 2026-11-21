@@ -13,6 +13,81 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
+func TestNativeCommitDetailsNavigateMergeParents(t *testing.T) {
+	app, path, finish := nativeFixture(t)
+	root := app.repository.snapshot.Head
+	nativeGit(t, path, "switch", "-c", "topic")
+	writeNativeFile(t, path, "topic.txt", "topic\n")
+	nativeGit(t, path, "add", "topic.txt")
+	nativeGit(t, path, "commit", "-m", "topic parent")
+	topic := nativeGit(t, path, "rev-parse", "HEAD")
+	nativeGit(t, path, "switch", "main")
+	writeNativeFile(t, path, "main.txt", "main\n")
+	nativeGit(t, path, "add", "main.txt")
+	nativeGit(t, path, "commit", "-m", "main parent")
+	main := nativeGit(t, path, "rev-parse", "HEAD")
+	nativeGit(t, path, "merge", "--no-ff", "-m", "merge topic", "topic")
+	nativeGit(t, path, "commit", "--amend", "--no-edit", "--date=2026-11-20T09:08:07+05:30")
+	merge := nativeGit(t, path, "rev-parse", "HEAD")
+	app.refresh()
+	finish()
+	app.switchWorkspace("history")
+	app.searchHistory(false)
+	finish()
+	app.selectCommit(merge)
+	finish()
+
+	tester := ui.NewTester(app.view, 1024, 680)
+	for _, dark := range []bool{false, true} {
+		tester.SetDark(dark)
+		for _, text := range []string{
+			locales.FullCommitID(), "[" + shortHash(merge) + "]",
+			"Native Test <native@example.test>", "2026-11-20 09:08:07 +05:30",
+		} {
+			if !tester.HasText(text) {
+				t.Fatalf("commit detail missing %q", text)
+			}
+		}
+		for _, parent := range []string{main, topic} {
+			link, found := tester.AccessByRole(ui.RoleButton, shortHash(parent))
+			if !found || link.Disabled || link.Offscreen || link.Bounds.X+link.Bounds.W > 1024 {
+				t.Fatalf("merge parent link unavailable: %s %+v", parent, link)
+			}
+		}
+	}
+	if err := tester.Click(locales.CopyWorktreeCommit()); err != nil || tester.Clipboard() != merge {
+		t.Fatalf("copy full merge SHA = %q, %v", tester.Clipboard(), err)
+	}
+	clickParent := func(hash, file string) {
+		t.Helper()
+		link, found := tester.AccessByRole(ui.RoleButton, shortHash(hash))
+		if !found || link.Disabled || link.Offscreen {
+			t.Fatalf("parent link unavailable: %s %+v", hash, link)
+		}
+		tester.ClickAt(link.Bounds.X+link.Bounds.W/2, link.Bounds.Y+link.Bounds.H/2)
+		finish()
+		tester.Frame()
+		if app.historySelected < 0 || app.history[app.historySelected].Hash != hash ||
+			app.commitHash != hash || app.commitFile != file {
+			t.Fatalf("jump to %s selected %s at row %d, file %q", hash, app.commitHash, app.historySelected, app.commitFile)
+		}
+	}
+	clickParent(main, "main.txt")
+	clickParent(root, "hello.txt")
+	if tester.HasText(locales.ParentCommits()) {
+		t.Fatal("root commit shows a parent row")
+	}
+	app.selectCommit(merge)
+	finish()
+	app.history = app.history[:1]
+	app.historyMore = false
+	tester.Frame()
+	clickParent(topic, "topic.txt")
+	if nativeGit(t, path, "rev-parse", "HEAD") != merge {
+		t.Fatal("parent navigation changed the checked-out commit")
+	}
+}
+
 func TestNativeHistoryCommitActions(t *testing.T) {
 	app, path, finish := nativeFixture(t)
 	initial := app.repository.snapshot.Head

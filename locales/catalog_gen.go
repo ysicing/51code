@@ -7968,6 +7968,16 @@ func (msgs Messages) FullCommitID() string {
 	return Catalog.Format(msgs.locale, "fullCommitID", nil)
 }
 
+// ParentCommits says "父提交"
+// in the language the app shows.
+func ParentCommits() string { return In(i18n.Locale()).ParentCommits() }
+
+// ParentCommits says "父提交"
+// in the language of msgs.
+func (msgs Messages) ParentCommits() string {
+	return Catalog.Format(msgs.locale, "parentCommits", nil)
+}
+
 // ChangedFiles says "已修改的文件（{count}）"
 // in the language the app shows.
 func ChangedFiles(count string) string { return In(i18n.Locale()).ChangedFiles(count) }

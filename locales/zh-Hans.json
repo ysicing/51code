@@ -789,6 +789,7 @@
   "loadMore": "加载更多",
   "selectCommit": "选择提交查看变更",
   "fullCommitID": "完整提交 ID",
+  "parentCommits": "父提交",
   "changedFiles": "已修改的文件（{count}）",
   "emptyCommit": "此提交没有文件变更",
   "commitFileList": "提交文件列表",

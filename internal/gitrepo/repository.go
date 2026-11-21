@@ -63,6 +63,7 @@ type Commit struct {
 	Parents       []string `json:"parents"`
 	Subject       string   `json:"subject"`
 	Author        string   `json:"author"`
+	AuthorEmail   string   `json:"authorEmail"`
 	Date          string   `json:"date"`
 	CommitterDate string   `json:"committerDate"`
 	Refs          string   `json:"refs"`
@@ -406,7 +407,7 @@ func (repo *Repository) History(ctx context.Context, skip int) ([]Commit, error)
 		return commits, nil
 	}
 	output, err := repo.git(ctx, "log", "--no-show-signature", "--exclude=refs/stash", "--all", "--decorate-refs-exclude=refs/stash",
-		"--topo-order", "-n", "100", "--skip="+strconv.Itoa(skip), "-z", "--format=%H%x00%P%x00%s%x00%an%x00%aI%x00%D%x00%cI")
+		"--topo-order", "-n", "100", "--skip="+strconv.Itoa(skip), "-z", "--format=%H%x00%P%x00%s%x00%an%x00%aI%x00%D%x00%cI%x00%ae")
 	if err != nil {
 		return nil, err
 	}
@@ -414,14 +415,14 @@ func (repo *Repository) History(ctx context.Context, skip int) ([]Commit, error)
 		return commits, nil
 	}
 	fields := strings.Split(strings.TrimSuffix(output, "\x00"), "\x00")
-	if len(fields)%7 != 0 {
+	if len(fields)%8 != 0 {
 		return nil, errors.New("无法解析提交历史")
 	}
-	for index := 0; index < len(fields); index += 7 {
+	for index := 0; index < len(fields); index += 8 {
 		commits = append(commits, Commit{
 			Hash: fields[index], Parents: strings.Fields(fields[index+1]), Subject: fields[index+2],
 			Author: fields[index+3], Date: fields[index+4], Refs: fields[index+5],
-			CommitterDate: fields[index+6],
+			CommitterDate: fields[index+6], AuthorEmail: fields[index+7],
 		})
 	}
 	return commits, nil

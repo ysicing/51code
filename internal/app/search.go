@@ -204,17 +204,26 @@ func (app *nativeApp) searchPlaceholder() string {
 	}
 }
 
-func (app *nativeApp) revealSearchCommit(hash string) {
+func (app *nativeApp) revealHistoryCommit(hash string) {
 	if app.repository == nil || app.busy || app.readTask != nil {
 		return
 	}
+	fromHistory := app.screen == "history"
+	if fromHistory && app.historyGraphCache.commit(app.history, hash) != nil {
+		app.selectCommit(hash)
+		return
+	}
 	app.switchWorkspace("history")
-	path, filter := app.repository.snapshot.Path, app.historyFilter
+	path := app.repository.snapshot.Path
+	request := nativeHistoryRequest{filter: app.historyFilter}
+	if fromHistory && app.historyLoaded {
+		request = app.historyResult
+	}
 	app.load(locales.ReadingCommit(), nativeReadHistory, func(ctx context.Context) (func(), error) {
-		location, err := app.service.LocateHistory(ctx, path, hash, "", "", filter)
-		if err == nil && len(location.Commits) == 0 {
-			filter = gitrepo.HistoryFilter{}
-			location, err = app.service.LocateHistory(ctx, path, hash, "", "", filter)
+		location, err := app.service.LocateHistory(ctx, path, hash, request.query, request.file, request.filter)
+		if err == nil && len(location.Commits) == 0 && request != (nativeHistoryRequest{}) {
+			request = nativeHistoryRequest{}
+			location, err = app.service.LocateHistory(ctx, path, hash, "", "", request.filter)
 		}
 		if err != nil {
 			return nil, err
@@ -233,8 +242,8 @@ func (app *nativeApp) revealSearchCommit(hash string) {
 			app.history, app.historyOffset = location.Commits, location.Offset
 			app.historyMore, app.historyLoaded = len(location.Commits) == gitrepo.DefaultHistoryPageSize, true
 			app.historyPagePaused = false
-			app.historyQuery, app.historyFile, app.historyFilter = "", "", filter
-			app.historyResult = app.historyRequest()
+			app.historyQuery, app.historyFile, app.historyFilter = request.query, request.file, request.filter
+			app.historyResult = request
 			app.viewedRef, app.viewedCommit = nativeRefKey{}, location.Commit
 			app.historyList = &ui.ListState{}
 			app.applyCommitSelection(hash, files, file)

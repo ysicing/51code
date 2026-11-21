@@ -789,6 +789,7 @@
   "loadMore": "Load More",
   "selectCommit": "Select a commit to view changes",
   "fullCommitID": "Full commit ID",
+  "parentCommits": "Parents",
   "changedFiles": "Changed Files ({count})",
   "emptyCommit": "No file changes in this commit",
   "commitFileList": "Commit file list",
