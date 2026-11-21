@@ -179,6 +179,7 @@ func (app *nativeApp) searchControls(c *ui.Context) {
 }
 
 func (app *nativeApp) executeSearch() {
+	app.setSearchMode(nativeSearchCommits)
 	request := app.historyRequest()
 	if request.filter.Since != "" && request.filter.Until != "" && request.filter.Since > request.filter.Until {
 		return

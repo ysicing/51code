@@ -39,6 +39,7 @@ const (
 	nativeReadCommit
 	nativeReadHistoryPage
 	nativeReadInsights
+	nativeReadWorktreeSearch
 )
 
 type nativeRead struct {

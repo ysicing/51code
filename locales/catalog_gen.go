@@ -7456,6 +7456,56 @@ func (msgs Messages) Search() string {
 	return Catalog.Format(msgs.locale, "search", nil)
 }
 
+// WorktreeSearch says "工作区正文"
+// in the language the app shows.
+func WorktreeSearch() string { return In(i18n.Locale()).WorktreeSearch() }
+
+// WorktreeSearch says "工作区正文"
+// in the language of msgs.
+func (msgs Messages) WorktreeSearch() string {
+	return Catalog.Format(msgs.locale, "worktreeSearch", nil)
+}
+
+// SearchWorktreeText says "搜索工作区文本"
+// in the language the app shows.
+func SearchWorktreeText() string { return In(i18n.Locale()).SearchWorktreeText() }
+
+// SearchWorktreeText says "搜索工作区文本"
+// in the language of msgs.
+func (msgs Messages) SearchWorktreeText() string {
+	return Catalog.Format(msgs.locale, "searchWorktreeText", nil)
+}
+
+// QuickOpen says "快速打开"
+// in the language the app shows.
+func QuickOpen() string { return In(i18n.Locale()).QuickOpen() }
+
+// QuickOpen says "快速打开"
+// in the language of msgs.
+func (msgs Messages) QuickOpen() string {
+	return Catalog.Format(msgs.locale, "quickOpen", nil)
+}
+
+// NoWorktreeSearchMatches says "工作区没有匹配的文本"
+// in the language the app shows.
+func NoWorktreeSearchMatches() string { return In(i18n.Locale()).NoWorktreeSearchMatches() }
+
+// NoWorktreeSearchMatches says "工作区没有匹配的文本"
+// in the language of msgs.
+func (msgs Messages) NoWorktreeSearchMatches() string {
+	return Catalog.Format(msgs.locale, "noWorktreeSearchMatches", nil)
+}
+
+// WorktreeSearchLimited says "仅显示 {count, number} 条结果，可缩小搜索范围。"
+// in the language the app shows.
+func WorktreeSearchLimited(count int) string { return In(i18n.Locale()).WorktreeSearchLimited(count) }
+
+// WorktreeSearchLimited says "仅显示 {count, number} 条结果，可缩小搜索范围。"
+// in the language of msgs.
+func (msgs Messages) WorktreeSearchLimited(count int) string {
+	return Catalog.Format(msgs.locale, "worktreeSearchLimited", map[string]any{"count": count})
+}
+
 // SearchHistory says "搜索提交、作者或 ID"
 // in the language the app shows.
 func SearchHistory() string { return In(i18n.Locale()).SearchHistory() }

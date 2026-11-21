@@ -134,6 +134,9 @@ type nativeApp struct {
 	rawDiff               editor.State
 	fileViewer            nativeFileViewer
 	browser               *nativeBrowser
+	searchMode            int
+	contentSearch         nativeWorktreeSearch
+	pathSearch            nativeWorktreeSearch
 	comparison            *nativeComparison
 	worktrees             *nativeWorktrees
 	fileMetrics           nativeFileMetrics
@@ -494,6 +497,8 @@ func (app *nativeApp) adopt(result *repositoryView) {
 		app.stopCommitAI()
 		app.comparison = nil
 		app.browser = nil
+		app.searchMode = nativeSearchCommits
+		app.contentSearch, app.pathSearch = nativeWorktreeSearch{}, nativeWorktreeSearch{}
 		app.worktrees = nil
 		app.insights = nil
 	}

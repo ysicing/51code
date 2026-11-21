@@ -147,8 +147,10 @@ func (app *nativeApp) view(c *ui.Context) {
 						app.insightsPanel(c)
 					case "library":
 						app.libraryView(c)
-					case "history", "search":
+					case "history":
 						app.historyWorkspace(c)
+					case "search":
+						app.searchWorkspace(c)
 					case "compare":
 						app.comparisonWorkspace(c)
 					case "files":
@@ -273,7 +275,7 @@ func (app *nativeApp) sidebar(c *ui.Context) {
 						app.loadWorktrees()
 					} else if screen == "history" && !app.historyLoaded {
 						app.searchHistory(false)
-					} else if (screen == "history" || screen == "search" && app.historyLoaded) &&
+					} else if (screen == "history" || screen == "search" && app.searchMode == nativeSearchCommits && app.historyLoaded) &&
 						app.historyNeedsRefresh() {
 						app.refresh()
 					}
