@@ -146,6 +146,7 @@ type nativeApp struct {
 	conflict              *gitrepo.Conflict
 	conflictEdit          editor.State
 	conflictBase          [3]editor.State
+	conflictBlocks        nativeConflictBlocks
 	hunk                  int
 	dialog                *nativeDialog
 	trashUndo             nativeTrashUndo
@@ -631,7 +632,7 @@ func (app *nativeApp) mutateFormResult(dialog *nativeDialog, label string, opera
 		historyOffset, historyCount = 0, gitrepo.DefaultHistoryPageSize
 	}
 	conflict, conflictEdit := app.conflict, app.conflictEdit
-	conflictBase := app.conflictBase
+	conflictBase, conflictBlocks := app.conflictBase, app.conflictBlocks
 	dirty := app.conflictDirty()
 	blockedAI, blockedToken := app.ai, ""
 	if blockedAI != nil && blockedAI.tooLarge {
@@ -766,7 +767,7 @@ func (app *nativeApp) mutateFormResult(dialog *nativeDialog, label string, opera
 			if conflict != nil && (operationErr != nil || dirty && (refreshErr != nil || selection != nil && selection.conflict != nil)) {
 				// 修改分支、标签或远程配置时，仍在编辑的冲突草稿和原始校验令牌必须保留。
 				app.conflict, app.conflictEdit = conflict, conflictEdit
-				app.conflictBase = conflictBase
+				app.conflictBase, app.conflictBlocks = conflictBase, conflictBlocks
 				app.selectedFile = file
 			}
 			if screen == "stash" {
@@ -890,7 +891,20 @@ func (app *nativeApp) commitResult(ctx context.Context, path, message, token str
 }
 
 func (app *nativeApp) conflictDirty() bool {
-	return app.conflict != nil && app.conflictEdit.Buffer != nil && app.conflictEdit.Buffer.String() != app.conflict.Result
+	return app.conflict != nil && app.conflictEdit.Buffer != nil && app.conflictDraft() != app.conflict.Result
+}
+
+func (app *nativeApp) conflictDraft() string {
+	return conflictBufferText(app.conflictEdit.Buffer)
+}
+
+func conflictBufferText(buffer *editor.Buffer) string {
+	if buffer == nil {
+		return ""
+	}
+	var text strings.Builder
+	_, _ = buffer.WriteTo(&text)
+	return text.String()
 }
 
 func (app *nativeApp) leaveConflict(action func()) {

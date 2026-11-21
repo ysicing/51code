@@ -792,6 +792,7 @@ func (app *nativeApp) conflictPanel(c *ui.Context) {
 			}
 		})
 		ui.Divider(c)
+		app.conflictBlockToolbar(c)
 		editor.View(c, &app.conflictEdit).Grow(1).FillWidth().MinHeight(0)
 	} else {
 		ui.Text(c, locales.NonTextConflict()).Padding(20)

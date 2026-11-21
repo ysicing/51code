@@ -158,6 +158,7 @@ func (app *nativeApp) clearDiff() {
 	app.hunkOffsets = nil
 	app.rawDiff = editor.State{}
 	app.conflict = nil
+	app.conflictBlocks = nativeConflictBlocks{}
 	app.hunk = 0
 }
 

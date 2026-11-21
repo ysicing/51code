@@ -81,6 +81,57 @@ func TestGitErrorIncludesConflictDiagnostics(t *testing.T) {
 	}
 }
 
+func TestResolveConflictRejectsMarkersWithCarriageReturn(t *testing.T) {
+	repo, dir := conflictFixture(t)
+	ctx := context.Background()
+	if err := repo.Merge(ctx, "topic"); err == nil {
+		t.Fatal("expected conflicting merge")
+	}
+	view, err := repo.Conflict(ctx, "conflict.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	unmerged := git(t, dir, "ls-files", "-u", "--", "conflict.txt")
+	for _, ending := range []string{"\n", "\r\n", "\r"} {
+		content := "header" + ending + strings.ReplaceAll(view.Result, "\n", ending)
+		err := repo.ResolveConflict(ctx, "conflict.txt", view.Token, "result", content)
+		if err == nil || !strings.Contains(err.Error(), "仍包含冲突标记") {
+			t.Fatalf("expected marker rejection with %q line endings, got %v", ending, err)
+		}
+	}
+	if got := git(t, dir, "ls-files", "-u", "--", "conflict.txt"); got != unmerged {
+		t.Fatal("failed resolution changed unmerged index entries")
+	}
+	if content, err := os.ReadFile(filepath.Join(dir, "conflict.txt")); err != nil || string(content) != view.Result {
+		t.Fatalf("failed resolution changed working file: %q, %v", content, err)
+	}
+}
+
+func TestResolveConflictUsesConfiguredMarkerWidth(t *testing.T) {
+	repo, dir := conflictFixture(t)
+	ctx := context.Background()
+	write(t, dir, ".gitattributes", "conflict.txt conflict-marker-size=12\n")
+	git(t, dir, "add", ".gitattributes")
+	git(t, dir, "commit", "-m", "configure conflict marker size")
+	if err := repo.Merge(ctx, "topic"); err == nil {
+		t.Fatal("expected conflicting merge")
+	}
+	view, err := repo.Conflict(ctx, "conflict.txt")
+	if err != nil || view.MarkerSize != 12 || !strings.Contains(view.Result, "<<<<<<<<<<<< ") {
+		t.Fatalf("expected configured markers: %+v, %v", view, err)
+	}
+	if err := repo.ResolveConflict(ctx, "conflict.txt", view.Token, "result", view.Result); err == nil {
+		t.Fatal("staged unresolved configured markers")
+	}
+	const resolved = "Git example:\n<<<<<<< HEAD\n=======\n>>>>>>> topic\n"
+	if err := repo.ResolveConflict(ctx, "conflict.txt", view.Token, "result", resolved); err != nil {
+		t.Fatal(err)
+	}
+	if got := git(t, dir, "show", ":conflict.txt"); got != strings.TrimSuffix(resolved, "\n") {
+		t.Fatalf("staged content = %q", got)
+	}
+}
+
 func TestAbortMergeAndRejectStaleOperation(t *testing.T) {
 	repo, dir := conflictFixture(t)
 	ctx := context.Background()

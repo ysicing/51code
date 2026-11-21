@@ -2954,6 +2954,48 @@ func (msgs Messages) MergeResult() string {
 	return Catalog.Format(msgs.locale, "mergeResult", nil)
 }
 
+// ConflictBlockPosition says "{index, number} / {total, number}"
+// in the language the app shows.
+func ConflictBlockPosition(index int, total int) string {
+	return In(i18n.Locale()).ConflictBlockPosition(index, total)
+}
+
+// ConflictBlockPosition says "{index, number} / {total, number}"
+// in the language of msgs.
+func (msgs Messages) ConflictBlockPosition(index int, total int) string {
+	return Catalog.Format(msgs.locale, "conflictBlockPosition", map[string]any{"index": index, "total": total})
+}
+
+// AcceptCurrentBlock says "接受当前"
+// in the language the app shows.
+func AcceptCurrentBlock() string { return In(i18n.Locale()).AcceptCurrentBlock() }
+
+// AcceptCurrentBlock says "接受当前"
+// in the language of msgs.
+func (msgs Messages) AcceptCurrentBlock() string {
+	return Catalog.Format(msgs.locale, "acceptCurrentBlock", nil)
+}
+
+// AcceptIncomingBlock says "接受传入"
+// in the language the app shows.
+func AcceptIncomingBlock() string { return In(i18n.Locale()).AcceptIncomingBlock() }
+
+// AcceptIncomingBlock says "接受传入"
+// in the language of msgs.
+func (msgs Messages) AcceptIncomingBlock() string {
+	return Catalog.Format(msgs.locale, "acceptIncomingBlock", nil)
+}
+
+// UndoConflictBlockChoice says "撤销本块选择"
+// in the language the app shows.
+func UndoConflictBlockChoice() string { return In(i18n.Locale()).UndoConflictBlockChoice() }
+
+// UndoConflictBlockChoice says "撤销本块选择"
+// in the language of msgs.
+func (msgs Messages) UndoConflictBlockChoice() string {
+	return Catalog.Format(msgs.locale, "undoConflictBlockChoice", nil)
+}
+
 // VersionAbsent says "此版本不存在"
 // in the language the app shows.
 func VersionAbsent() string { return In(i18n.Locale()).VersionAbsent() }

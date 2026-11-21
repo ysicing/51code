@@ -250,8 +250,8 @@ func (app *nativeApp) discardFile() {
 func (app *nativeApp) resolveConflict(choice string) {
 	conflict := *app.conflict
 	content := ""
-	if app.conflictEdit.Buffer != nil {
-		content = app.conflictEdit.Buffer.String()
+	if choice == "result" {
+		content = app.conflictDraft()
 	}
 	action := func() {
 		app.mutate(locales.ResolvingConflict(), func(ctx context.Context, path string) error {

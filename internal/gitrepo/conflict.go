@@ -13,7 +13,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"regexp"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -32,13 +32,14 @@ type ConflictSide struct {
 }
 
 type Conflict struct {
-	Path     string       `json:"path"`
-	Token    string       `json:"token"`
-	Base     ConflictSide `json:"base"`
-	Ours     ConflictSide `json:"ours"`
-	Theirs   ConflictSide `json:"theirs"`
-	Result   string       `json:"result"`
-	Editable bool         `json:"editable"`
+	Path       string       `json:"path"`
+	Token      string       `json:"token"`
+	Base       ConflictSide `json:"base"`
+	Ours       ConflictSide `json:"ours"`
+	Theirs     ConflictSide `json:"theirs"`
+	Result     string       `json:"result"`
+	Editable   bool         `json:"editable"`
+	MarkerSize int          `json:"markerSize"`
 }
 
 func (repo *Repository) Conflict(ctx context.Context, path string) (Conflict, error) {
@@ -136,6 +137,18 @@ func (repo *Repository) conflict(ctx context.Context, path string) (Conflict, er
 		return view, errors.New("此冲突文件类型不支持在应用内处理")
 	}
 	view.Editable = view.Editable && (!view.Ours.Present || view.Ours.Mode != "120000") && (!view.Theirs.Present || view.Theirs.Mode != "120000")
+	if view.Editable {
+		attribute, err := repo.git(ctx, "check-attr", "-z", "conflict-marker-size", "--", path)
+		if err != nil {
+			return view, err
+		}
+		_, value, _ := strings.Cut(attribute, "\x00conflict-marker-size\x00")
+		view.MarkerSize, _ = strconv.Atoi(strings.TrimSuffix(value, "\x00"))
+		if view.MarkerSize <= 0 {
+			view.MarkerSize = 7
+		}
+		fmt.Fprintf(digest, "\x00%d", view.MarkerSize)
+	}
 	head, err := repo.head(ctx)
 	if err != nil {
 		return view, err
@@ -266,7 +279,38 @@ func (repo *Repository) revParsePaths(ctx context.Context, options ...string) ([
 	return paths, nil
 }
 
-var conflictMarker = regexp.MustCompile(`(?m)^(<{7,}|>{7,}|\|{7,})( |$)`)
+// ConflictMarker 识别不含行尾的 Git 冲突标记行，返回标记字符。
+func ConflictMarker(line string, markerSize int) byte {
+	if markerSize <= 0 {
+		markerSize = 7
+	}
+	if len(line) < markerSize {
+		return 0
+	}
+	marker := line[0]
+	switch marker {
+	case '<', '>', '|', '=':
+		for index := 1; index < markerSize; index++ {
+			if line[index] != marker {
+				return 0
+			}
+		}
+		if len(line) == markerSize || marker != '=' && line[markerSize] == ' ' {
+			return marker
+		}
+	}
+	return 0
+}
+
+func hasConflictMarkers(content string, markerSize int) bool {
+	for line := range strings.FieldsFuncSeq(content, func(char rune) bool { return char == '\r' || char == '\n' }) {
+		switch ConflictMarker(line, markerSize) {
+		case '<', '>', '|':
+			return true
+		}
+	}
+	return false
+}
 
 func (repo *Repository) ResolveConflict(ctx context.Context, path, token, choice, content string) error {
 	repo.mu.Lock()
@@ -307,7 +351,7 @@ func (repo *Repository) ResolveConflict(ctx context.Context, path, token, choice
 		if !view.Editable || len(content) > conflictTextLimit || !utf8.ValidString(content) || strings.ContainsRune(content, 0) {
 			return errors.New("此文件不支持文本编辑，请选择保留一个版本")
 		}
-		if conflictMarker.MatchString(content) {
+		if hasConflictMarkers(content, view.MarkerSize) {
 			return errors.New("结果仍包含冲突标记，请先完成编辑")
 		}
 		mode := os.FileMode(0644)
