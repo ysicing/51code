@@ -7,7 +7,7 @@ require (
 	github.com/egoist/mygo v0.10.0
 	github.com/go-enry/go-enry/v2 v2.9.6
 	github.com/google/gops v0.3.29
-	github.com/junegunn/fzf v0.67.0
+	github.com/junegunn/fzf v0.74.5
 	github.com/shirou/gopsutil/v4 v4.26.10
 	golang.org/x/sys v0.50.0
 )
@@ -16,8 +16,9 @@ require (
 	github.com/go-enry/go-oniguruma v1.2.1 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/go-text/typesetting v0.3.5 // indirect
+	github.com/junegunn/go-shellwords v0.0.0-20250127100254-2aa3b3277741 // indirect
 	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
-	github.com/mattn/go-isatty v0.0.20 // indirect
+	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/power-devops/perfstat v0.0.0-20260805114148-88456608a4f6 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/tklauser/go-sysconf v0.4.0 // indirect
