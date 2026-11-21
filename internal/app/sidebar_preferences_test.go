@@ -102,10 +102,10 @@ func TestNativeSidebarVisibilityIndependentAndPersistent(t *testing.T) {
 	if err := tester.Click("更多"); err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Contains(tester.Menu(), "贮藏更改…") {
+	if !slices.Contains(tester.Menu(), "贮藏更改") {
 		t.Fatal("隐藏贮藏侧栏入口后菜单消失")
 	}
-	if err := tester.ChooseMenuItem("贮藏更改…"); err != nil {
+	if err := tester.ChooseMenuItem("贮藏更改"); err != nil {
 		t.Fatal(err)
 	}
 	if app.dialog == nil || app.dialog.action != "贮藏" {

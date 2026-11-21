@@ -106,11 +106,11 @@ func (msgs Messages) RepositoryOrderRecent() string {
 	return Catalog.Format(msgs.locale, "repositoryOrderRecent", nil)
 }
 
-// RelocateRepositoryMenu says "重新定位…"
+// RelocateRepositoryMenu says "重新定位"
 // in the language the app shows.
 func RelocateRepositoryMenu() string { return In(i18n.Locale()).RelocateRepositoryMenu() }
 
-// RelocateRepositoryMenu says "重新定位…"
+// RelocateRepositoryMenu says "重新定位"
 // in the language of msgs.
 func (msgs Messages) RelocateRepositoryMenu() string {
 	return Catalog.Format(msgs.locale, "relocateRepositoryMenu", nil)
@@ -542,11 +542,11 @@ func (msgs Messages) InheritThreshold(value string) string {
 	return Catalog.Format(msgs.locale, "inheritThreshold", map[string]any{"value": value})
 }
 
-// CustomThreshold says "自定义…"
+// CustomThreshold says "自定义"
 // in the language the app shows.
 func CustomThreshold() string { return In(i18n.Locale()).CustomThreshold() }
 
-// CustomThreshold says "自定义…"
+// CustomThreshold says "自定义"
 // in the language of msgs.
 func (msgs Messages) CustomThreshold() string {
 	return Catalog.Format(msgs.locale, "customThreshold", nil)
@@ -612,11 +612,11 @@ func (msgs Messages) CustomLFS() string {
 	return Catalog.Format(msgs.locale, "customLFS", nil)
 }
 
-// ChooseLFS says "选择 git-lfs…"
+// ChooseLFS says "选择 git-lfs"
 // in the language the app shows.
 func ChooseLFS() string { return In(i18n.Locale()).ChooseLFS() }
 
-// ChooseLFS says "选择 git-lfs…"
+// ChooseLFS says "选择 git-lfs"
 // in the language of msgs.
 func (msgs Messages) ChooseLFS() string {
 	return Catalog.Format(msgs.locale, "chooseLFS", nil)
@@ -642,11 +642,11 @@ func (msgs Messages) LfsUnavailable() string {
 	return Catalog.Format(msgs.locale, "lfsUnavailable", nil)
 }
 
-// InstallLFS says "安装 Git LFS…"
+// InstallLFS says "安装 Git LFS"
 // in the language the app shows.
 func InstallLFS() string { return In(i18n.Locale()).InstallLFS() }
 
-// InstallLFS says "安装 Git LFS…"
+// InstallLFS says "安装 Git LFS"
 // in the language of msgs.
 func (msgs Messages) InstallLFS() string {
 	return Catalog.Format(msgs.locale, "installLFS", nil)
@@ -732,11 +732,11 @@ func (msgs Messages) LfsInitialized() string {
 	return Catalog.Format(msgs.locale, "lfsInitialized", nil)
 }
 
-// InitializeLFS says "在此仓库初始化…"
+// InitializeLFS says "在此仓库初始化"
 // in the language the app shows.
 func InitializeLFS() string { return In(i18n.Locale()).InitializeLFS() }
 
-// InitializeLFS says "在此仓库初始化…"
+// InitializeLFS says "在此仓库初始化"
 // in the language of msgs.
 func (msgs Messages) InitializeLFS() string {
 	return Catalog.Format(msgs.locale, "initializeLFS", nil)
@@ -842,21 +842,21 @@ func (msgs Messages) LfsFileActions() string {
 	return Catalog.Format(msgs.locale, "lfsFileActions", nil)
 }
 
-// TrackLFSFile says "使用 LFS 跟踪…"
+// TrackLFSFile says "使用 LFS 跟踪"
 // in the language the app shows.
 func TrackLFSFile() string { return In(i18n.Locale()).TrackLFSFile() }
 
-// TrackLFSFile says "使用 LFS 跟踪…"
+// TrackLFSFile says "使用 LFS 跟踪"
 // in the language of msgs.
 func (msgs Messages) TrackLFSFile() string {
 	return Catalog.Format(msgs.locale, "trackLFSFile", nil)
 }
 
-// UntrackLFSFile says "取消 LFS 跟踪…"
+// UntrackLFSFile says "取消 LFS 跟踪"
 // in the language the app shows.
 func UntrackLFSFile() string { return In(i18n.Locale()).UntrackLFSFile() }
 
-// UntrackLFSFile says "取消 LFS 跟踪…"
+// UntrackLFSFile says "取消 LFS 跟踪"
 // in the language of msgs.
 func (msgs Messages) UntrackLFSFile() string {
 	return Catalog.Format(msgs.locale, "untrackLFSFile", nil)
@@ -942,11 +942,11 @@ func (msgs Messages) ContinueCommit() string {
 	return Catalog.Format(msgs.locale, "continueCommit", nil)
 }
 
-// StageWithLFS says "使用 LFS 并暂存…"
+// StageWithLFS says "使用 LFS 并暂存"
 // in the language the app shows.
 func StageWithLFS() string { return In(i18n.Locale()).StageWithLFS() }
 
-// StageWithLFS says "使用 LFS 并暂存…"
+// StageWithLFS says "使用 LFS 并暂存"
 // in the language of msgs.
 func (msgs Messages) StageWithLFS() string {
 	return Catalog.Format(msgs.locale, "stageWithLFS", nil)
@@ -1122,11 +1122,11 @@ func (msgs Messages) CustomGit() string {
 	return Catalog.Format(msgs.locale, "customGit", nil)
 }
 
-// ChooseGit says "选择 Git…"
+// ChooseGit says "选择 Git"
 // in the language the app shows.
 func ChooseGit() string { return In(i18n.Locale()).ChooseGit() }
 
-// ChooseGit says "选择 Git…"
+// ChooseGit says "选择 Git"
 // in the language of msgs.
 func (msgs Messages) ChooseGit() string {
 	return Catalog.Format(msgs.locale, "chooseGit", nil)
@@ -1364,11 +1364,11 @@ func (msgs Messages) MemoryDiagnostics() string {
 	return Catalog.Format(msgs.locale, "memoryDiagnostics", nil)
 }
 
-// ExportDiagnostics says "导出…"
+// ExportDiagnostics says "导出"
 // in the language the app shows.
 func ExportDiagnostics() string { return In(i18n.Locale()).ExportDiagnostics() }
 
-// ExportDiagnostics says "导出…"
+// ExportDiagnostics says "导出"
 // in the language of msgs.
 func (msgs Messages) ExportDiagnostics() string {
 	return Catalog.Format(msgs.locale, "exportDiagnostics", nil)
@@ -1498,11 +1498,11 @@ func (msgs Messages) SystemTerminal() string {
 	return Catalog.Format(msgs.locale, "systemTerminal", nil)
 }
 
-// ChooseOtherApplication says "选择其他应用…"
+// ChooseOtherApplication says "选择其他应用"
 // in the language the app shows.
 func ChooseOtherApplication() string { return In(i18n.Locale()).ChooseOtherApplication() }
 
-// ChooseOtherApplication says "选择其他应用…"
+// ChooseOtherApplication says "选择其他应用"
 // in the language of msgs.
 func (msgs Messages) ChooseOtherApplication() string {
 	return Catalog.Format(msgs.locale, "chooseOtherApplication", nil)
@@ -2460,51 +2460,51 @@ func (msgs Messages) WorkingTreeFiles() string {
 	return Catalog.Format(msgs.locale, "workingTreeFiles", nil)
 }
 
-// BranchFromCommit says "从此提交新建分支…"
+// BranchFromCommit says "从此提交新建分支"
 // in the language the app shows.
 func BranchFromCommit() string { return In(i18n.Locale()).BranchFromCommit() }
 
-// BranchFromCommit says "从此提交新建分支…"
+// BranchFromCommit says "从此提交新建分支"
 // in the language of msgs.
 func (msgs Messages) BranchFromCommit() string {
 	return Catalog.Format(msgs.locale, "branchFromCommit", nil)
 }
 
-// TagFromCommit says "从此提交新建标签…"
+// TagFromCommit says "从此提交新建标签"
 // in the language the app shows.
 func TagFromCommit() string { return In(i18n.Locale()).TagFromCommit() }
 
-// TagFromCommit says "从此提交新建标签…"
+// TagFromCommit says "从此提交新建标签"
 // in the language of msgs.
 func (msgs Messages) TagFromCommit() string {
 	return Catalog.Format(msgs.locale, "tagFromCommit", nil)
 }
 
-// BranchFromBranch says "从此分支新建分支…"
+// BranchFromBranch says "从此分支新建分支"
 // in the language the app shows.
 func BranchFromBranch() string { return In(i18n.Locale()).BranchFromBranch() }
 
-// BranchFromBranch says "从此分支新建分支…"
+// BranchFromBranch says "从此分支新建分支"
 // in the language of msgs.
 func (msgs Messages) BranchFromBranch() string {
 	return Catalog.Format(msgs.locale, "branchFromBranch", nil)
 }
 
-// TagFromBranch says "从此分支新建标签…"
+// TagFromBranch says "从此分支新建标签"
 // in the language the app shows.
 func TagFromBranch() string { return In(i18n.Locale()).TagFromBranch() }
 
-// TagFromBranch says "从此分支新建标签…"
+// TagFromBranch says "从此分支新建标签"
 // in the language of msgs.
 func (msgs Messages) TagFromBranch() string {
 	return Catalog.Format(msgs.locale, "tagFromBranch", nil)
 }
 
-// BranchFromTag says "从此标签新建分支…"
+// BranchFromTag says "从此标签新建分支"
 // in the language the app shows.
 func BranchFromTag() string { return In(i18n.Locale()).BranchFromTag() }
 
-// BranchFromTag says "从此标签新建分支…"
+// BranchFromTag says "从此标签新建分支"
 // in the language of msgs.
 func (msgs Messages) BranchFromTag() string {
 	return Catalog.Format(msgs.locale, "branchFromTag", nil)
@@ -3806,13 +3806,13 @@ func (msgs Messages) MergeIntoBranch(branch string) string {
 	return Catalog.Format(msgs.locale, "mergeIntoBranch", map[string]any{"branch": branch})
 }
 
-// MergeBranchInto says "将 {source} 合并到 {target}…"
+// MergeBranchInto says "将 {source} 合并到 {target}"
 // in the language the app shows.
 func MergeBranchInto(source string, target string) string {
 	return In(i18n.Locale()).MergeBranchInto(source, target)
 }
 
-// MergeBranchInto says "将 {source} 合并到 {target}…"
+// MergeBranchInto says "将 {source} 合并到 {target}"
 // in the language of msgs.
 func (msgs Messages) MergeBranchInto(source string, target string) string {
 	return Catalog.Format(msgs.locale, "mergeBranchInto", map[string]any{"source": source, "target": target})
@@ -4250,11 +4250,11 @@ func (msgs Messages) NoUpstreamDetail() string {
 	return Catalog.Format(msgs.locale, "noUpstreamDetail", nil)
 }
 
-// PublishBranchMenu says "发布当前分支…"
+// PublishBranchMenu says "发布当前分支"
 // in the language the app shows.
 func PublishBranchMenu() string { return In(i18n.Locale()).PublishBranchMenu() }
 
-// PublishBranchMenu says "发布当前分支…"
+// PublishBranchMenu says "发布当前分支"
 // in the language of msgs.
 func (msgs Messages) PublishBranchMenu() string {
 	return Catalog.Format(msgs.locale, "publishBranchMenu", nil)
@@ -4290,11 +4290,11 @@ func (msgs Messages) EditRemote(name string) string {
 	return Catalog.Format(msgs.locale, "editRemote", map[string]any{"name": name})
 }
 
-// EditRemoteMenu says "编辑…"
+// EditRemoteMenu says "编辑"
 // in the language the app shows.
 func EditRemoteMenu() string { return In(i18n.Locale()).EditRemoteMenu() }
 
-// EditRemoteMenu says "编辑…"
+// EditRemoteMenu says "编辑"
 // in the language of msgs.
 func (msgs Messages) EditRemoteMenu() string {
 	return Catalog.Format(msgs.locale, "editRemoteMenu", nil)
@@ -4480,31 +4480,31 @@ func (msgs Messages) RemoteBranchTree() string {
 	return Catalog.Format(msgs.locale, "remoteBranchTree", nil)
 }
 
-// NewTagMenu says "新建标签…"
+// NewTagMenu says "新建标签"
 // in the language the app shows.
 func NewTagMenu() string { return In(i18n.Locale()).NewTagMenu() }
 
-// NewTagMenu says "新建标签…"
+// NewTagMenu says "新建标签"
 // in the language of msgs.
 func (msgs Messages) NewTagMenu() string {
 	return Catalog.Format(msgs.locale, "newTagMenu", nil)
 }
 
-// StashChangesMenu says "贮藏更改…"
+// StashChangesMenu says "贮藏更改"
 // in the language the app shows.
 func StashChangesMenu() string { return In(i18n.Locale()).StashChangesMenu() }
 
-// StashChangesMenu says "贮藏更改…"
+// StashChangesMenu says "贮藏更改"
 // in the language of msgs.
 func (msgs Messages) StashChangesMenu() string {
 	return Catalog.Format(msgs.locale, "stashChangesMenu", nil)
 }
 
-// RemoteRepositoriesMenu says "远程仓库…"
+// RemoteRepositoriesMenu says "远程仓库"
 // in the language the app shows.
 func RemoteRepositoriesMenu() string { return In(i18n.Locale()).RemoteRepositoriesMenu() }
 
-// RemoteRepositoriesMenu says "远程仓库…"
+// RemoteRepositoriesMenu says "远程仓库"
 // in the language of msgs.
 func (msgs Messages) RemoteRepositoriesMenu() string {
 	return Catalog.Format(msgs.locale, "remoteRepositoriesMenu", nil)
@@ -4530,11 +4530,11 @@ func (msgs Messages) Trash() string {
 	return Catalog.Format(msgs.locale, "trash", nil)
 }
 
-// TrashMenu says "回收站…"
+// TrashMenu says "回收站"
 // in the language the app shows.
 func TrashMenu() string { return In(i18n.Locale()).TrashMenu() }
 
-// TrashMenu says "回收站…"
+// TrashMenu says "回收站"
 // in the language of msgs.
 func (msgs Messages) TrashMenu() string {
 	return Catalog.Format(msgs.locale, "trashMenu", nil)
@@ -4620,11 +4620,11 @@ func (msgs Messages) TrashMove() string {
 	return Catalog.Format(msgs.locale, "trashMove", nil)
 }
 
-// TrashMoveMenu says "移到回收站…"
+// TrashMoveMenu says "移到回收站"
 // in the language the app shows.
 func TrashMoveMenu() string { return In(i18n.Locale()).TrashMoveMenu() }
 
-// TrashMoveMenu says "移到回收站…"
+// TrashMoveMenu says "移到回收站"
 // in the language of msgs.
 func (msgs Messages) TrashMoveMenu() string {
 	return Catalog.Format(msgs.locale, "trashMoveMenu", nil)
@@ -4640,11 +4640,11 @@ func (msgs Messages) TrashDeletePermanently() string {
 	return Catalog.Format(msgs.locale, "trashDeletePermanently", nil)
 }
 
-// TrashDeletePermanentlyMenu says "永久删除…"
+// TrashDeletePermanentlyMenu says "永久删除"
 // in the language the app shows.
 func TrashDeletePermanentlyMenu() string { return In(i18n.Locale()).TrashDeletePermanentlyMenu() }
 
-// TrashDeletePermanentlyMenu says "永久删除…"
+// TrashDeletePermanentlyMenu says "永久删除"
 // in the language of msgs.
 func (msgs Messages) TrashDeletePermanentlyMenu() string {
 	return Catalog.Format(msgs.locale, "trashDeletePermanentlyMenu", nil)
@@ -4820,11 +4820,11 @@ func (msgs Messages) TrashConflictWithoutContent() string {
 	return Catalog.Format(msgs.locale, "trashConflictWithoutContent", nil)
 }
 
-// TrashSaveAs says "另存为…"
+// TrashSaveAs says "另存为"
 // in the language the app shows.
 func TrashSaveAs() string { return In(i18n.Locale()).TrashSaveAs() }
 
-// TrashSaveAs says "另存为…"
+// TrashSaveAs says "另存为"
 // in the language of msgs.
 func (msgs Messages) TrashSaveAs() string {
 	return Catalog.Format(msgs.locale, "trashSaveAs", nil)
@@ -5082,11 +5082,11 @@ func (msgs Messages) AiGenerationOptions() string {
 	return Catalog.Format(msgs.locale, "aiGenerationOptions", nil)
 }
 
-// AiSettingsMenu says "AI 设置…"
+// AiSettingsMenu says "AI 设置"
 // in the language the app shows.
 func AiSettingsMenu() string { return In(i18n.Locale()).AiSettingsMenu() }
 
-// AiSettingsMenu says "AI 设置…"
+// AiSettingsMenu says "AI 设置"
 // in the language of msgs.
 func (msgs Messages) AiSettingsMenu() string {
 	return Catalog.Format(msgs.locale, "aiSettingsMenu", nil)
@@ -5232,11 +5232,11 @@ func (msgs Messages) OpenRepositoryFolder() string {
 	return Catalog.Format(msgs.locale, "openRepositoryFolder", nil)
 }
 
-// DownloadRelease says "下载新版本…"
+// DownloadRelease says "下载新版本"
 // in the language the app shows.
 func DownloadRelease() string { return In(i18n.Locale()).DownloadRelease() }
 
-// DownloadRelease says "下载新版本…"
+// DownloadRelease says "下载新版本"
 // in the language of msgs.
 func (msgs Messages) DownloadRelease() string {
 	return Catalog.Format(msgs.locale, "downloadRelease", nil)
@@ -5252,21 +5252,21 @@ func (msgs Messages) CredentialKeyHint() string {
 	return Catalog.Format(msgs.locale, "credentialKeyHint", nil)
 }
 
-// RemoveFromListMenu says "从列表移除…"
+// RemoveFromListMenu says "从列表移除"
 // in the language the app shows.
 func RemoveFromListMenu() string { return In(i18n.Locale()).RemoveFromListMenu() }
 
-// RemoveFromListMenu says "从列表移除…"
+// RemoveFromListMenu says "从列表移除"
 // in the language of msgs.
 func (msgs Messages) RemoveFromListMenu() string {
 	return Catalog.Format(msgs.locale, "removeFromListMenu", nil)
 }
 
-// RemoveGroupMenu says "移除仓库组…"
+// RemoveGroupMenu says "移除仓库组"
 // in the language the app shows.
 func RemoveGroupMenu() string { return In(i18n.Locale()).RemoveGroupMenu() }
 
-// RemoveGroupMenu says "移除仓库组…"
+// RemoveGroupMenu says "移除仓库组"
 // in the language of msgs.
 func (msgs Messages) RemoveGroupMenu() string {
 	return Catalog.Format(msgs.locale, "removeGroupMenu", nil)
@@ -5444,41 +5444,41 @@ func (msgs Messages) SelectLinesDetail() string {
 	return Catalog.Format(msgs.locale, "selectLinesDetail", nil)
 }
 
-// RenameBranchMenu says "重命名分支…"
+// RenameBranchMenu says "重命名分支"
 // in the language the app shows.
 func RenameBranchMenu() string { return In(i18n.Locale()).RenameBranchMenu() }
 
-// RenameBranchMenu says "重命名分支…"
+// RenameBranchMenu says "重命名分支"
 // in the language of msgs.
 func (msgs Messages) RenameBranchMenu() string {
 	return Catalog.Format(msgs.locale, "renameBranchMenu", nil)
 }
 
-// DeleteBranchMenu says "删除分支…"
+// DeleteBranchMenu says "删除分支"
 // in the language the app shows.
 func DeleteBranchMenu() string { return In(i18n.Locale()).DeleteBranchMenu() }
 
-// DeleteBranchMenu says "删除分支…"
+// DeleteBranchMenu says "删除分支"
 // in the language of msgs.
 func (msgs Messages) DeleteBranchMenu() string {
 	return Catalog.Format(msgs.locale, "deleteBranchMenu", nil)
 }
 
-// ForceDeleteBranchMenu says "强制删除分支…"
+// ForceDeleteBranchMenu says "强制删除分支"
 // in the language the app shows.
 func ForceDeleteBranchMenu() string { return In(i18n.Locale()).ForceDeleteBranchMenu() }
 
-// ForceDeleteBranchMenu says "强制删除分支…"
+// ForceDeleteBranchMenu says "强制删除分支"
 // in the language of msgs.
 func (msgs Messages) ForceDeleteBranchMenu() string {
 	return Catalog.Format(msgs.locale, "forceDeleteBranchMenu", nil)
 }
 
-// DeleteTagMenu says "删除标签…"
+// DeleteTagMenu says "删除标签"
 // in the language the app shows.
 func DeleteTagMenu() string { return In(i18n.Locale()).DeleteTagMenu() }
 
-// DeleteTagMenu says "删除标签…"
+// DeleteTagMenu says "删除标签"
 // in the language of msgs.
 func (msgs Messages) DeleteTagMenu() string {
 	return Catalog.Format(msgs.locale, "deleteTagMenu", nil)
@@ -5656,11 +5656,11 @@ func (msgs Messages) Settings() string {
 	return Catalog.Format(msgs.locale, "settings", nil)
 }
 
-// SettingsMenu says "设置…"
+// SettingsMenu says "设置"
 // in the language the app shows.
 func SettingsMenu() string { return In(i18n.Locale()).SettingsMenu() }
 
-// SettingsMenu says "设置…"
+// SettingsMenu says "设置"
 // in the language of msgs.
 func (msgs Messages) SettingsMenu() string {
 	return Catalog.Format(msgs.locale, "settingsMenu", nil)
@@ -5796,11 +5796,11 @@ func (msgs Messages) Remove() string {
 	return Catalog.Format(msgs.locale, "remove", nil)
 }
 
-// RemoveMenu says "移除…"
+// RemoveMenu says "移除"
 // in the language the app shows.
 func RemoveMenu() string { return In(i18n.Locale()).RemoveMenu() }
 
-// RemoveMenu says "移除…"
+// RemoveMenu says "移除"
 // in the language of msgs.
 func (msgs Messages) RemoveMenu() string {
 	return Catalog.Format(msgs.locale, "removeMenu", nil)
@@ -5926,11 +5926,11 @@ func (msgs Messages) CherryPick() string {
 	return Catalog.Format(msgs.locale, "cherryPick", nil)
 }
 
-// CherryPickCommitMenu says "拣选到当前分支…"
+// CherryPickCommitMenu says "拣选到当前分支"
 // in the language the app shows.
 func CherryPickCommitMenu() string { return In(i18n.Locale()).CherryPickCommitMenu() }
 
-// CherryPickCommitMenu says "拣选到当前分支…"
+// CherryPickCommitMenu says "拣选到当前分支"
 // in the language of msgs.
 func (msgs Messages) CherryPickCommitMenu() string {
 	return Catalog.Format(msgs.locale, "cherryPickCommitMenu", nil)
@@ -5946,11 +5946,11 @@ func (msgs Messages) RevertCommit() string {
 	return Catalog.Format(msgs.locale, "revertCommit", nil)
 }
 
-// RevertCommitMenu says "还原此提交…"
+// RevertCommitMenu says "还原此提交"
 // in the language the app shows.
 func RevertCommitMenu() string { return In(i18n.Locale()).RevertCommitMenu() }
 
-// RevertCommitMenu says "还原此提交…"
+// RevertCommitMenu says "还原此提交"
 // in the language of msgs.
 func (msgs Messages) RevertCommitMenu() string {
 	return Catalog.Format(msgs.locale, "revertCommitMenu", nil)
@@ -6016,11 +6016,11 @@ func (msgs Messages) RepositorySettings() string {
 	return Catalog.Format(msgs.locale, "repositorySettings", nil)
 }
 
-// RepositorySettingsMenu says "仓库设置…"
+// RepositorySettingsMenu says "仓库设置"
 // in the language the app shows.
 func RepositorySettingsMenu() string { return In(i18n.Locale()).RepositorySettingsMenu() }
 
-// RepositorySettingsMenu says "仓库设置…"
+// RepositorySettingsMenu says "仓库设置"
 // in the language of msgs.
 func (msgs Messages) RepositorySettingsMenu() string {
 	return Catalog.Format(msgs.locale, "repositorySettingsMenu", nil)
@@ -6086,11 +6086,11 @@ func (msgs Messages) AddExistingRepository() string {
 	return Catalog.Format(msgs.locale, "addExistingRepository", nil)
 }
 
-// AddExistingRepositoryMenu says "添加已有的本地仓库…"
+// AddExistingRepositoryMenu says "添加已有的本地仓库"
 // in the language the app shows.
 func AddExistingRepositoryMenu() string { return In(i18n.Locale()).AddExistingRepositoryMenu() }
 
-// AddExistingRepositoryMenu says "添加已有的本地仓库…"
+// AddExistingRepositoryMenu says "添加已有的本地仓库"
 // in the language of msgs.
 func (msgs Messages) AddExistingRepositoryMenu() string {
 	return Catalog.Format(msgs.locale, "addExistingRepositoryMenu", nil)
@@ -6116,11 +6116,11 @@ func (msgs Messages) ScanFolders() string {
 	return Catalog.Format(msgs.locale, "scanFolders", nil)
 }
 
-// ScanFoldersMenu says "扫描文件夹…"
+// ScanFoldersMenu says "扫描文件夹"
 // in the language the app shows.
 func ScanFoldersMenu() string { return In(i18n.Locale()).ScanFoldersMenu() }
 
-// ScanFoldersMenu says "扫描文件夹…"
+// ScanFoldersMenu says "扫描文件夹"
 // in the language of msgs.
 func (msgs Messages) ScanFoldersMenu() string {
 	return Catalog.Format(msgs.locale, "scanFoldersMenu", nil)
@@ -6136,11 +6136,11 @@ func (msgs Messages) NewGroup() string {
 	return Catalog.Format(msgs.locale, "newGroup", nil)
 }
 
-// NewGroupMenu says "新建仓库组…"
+// NewGroupMenu says "新建仓库组"
 // in the language the app shows.
 func NewGroupMenu() string { return In(i18n.Locale()).NewGroupMenu() }
 
-// NewGroupMenu says "新建仓库组…"
+// NewGroupMenu says "新建仓库组"
 // in the language of msgs.
 func (msgs Messages) NewGroupMenu() string {
 	return Catalog.Format(msgs.locale, "newGroupMenu", nil)
@@ -7666,11 +7666,11 @@ func (msgs Messages) LocalBranches() string {
 	return Catalog.Format(msgs.locale, "localBranches", nil)
 }
 
-// NewStash says "贮藏更改…"
+// NewStash says "贮藏更改"
 // in the language the app shows.
 func NewStash() string { return In(i18n.Locale()).NewStash() }
 
-// NewStash says "贮藏更改…"
+// NewStash says "贮藏更改"
 // in the language of msgs.
 func (msgs Messages) NewStash() string {
 	return Catalog.Format(msgs.locale, "newStash", nil)
@@ -7816,11 +7816,11 @@ func (msgs Messages) UnstageFile() string {
 	return Catalog.Format(msgs.locale, "unstageFile", nil)
 }
 
-// DiscardChangesMenu says "丢弃修改…"
+// DiscardChangesMenu says "丢弃修改"
 // in the language the app shows.
 func DiscardChangesMenu() string { return In(i18n.Locale()).DiscardChangesMenu() }
 
-// DiscardChangesMenu says "丢弃修改…"
+// DiscardChangesMenu says "丢弃修改"
 // in the language of msgs.
 func (msgs Messages) DiscardChangesMenu() string {
 	return Catalog.Format(msgs.locale, "discardChangesMenu", nil)
@@ -7876,11 +7876,11 @@ func (msgs Messages) UnstageHunk() string {
 	return Catalog.Format(msgs.locale, "unstageHunk", nil)
 }
 
-// SelectLinesMenu says "选择行…"
+// SelectLinesMenu says "选择行"
 // in the language the app shows.
 func SelectLinesMenu() string { return In(i18n.Locale()).SelectLinesMenu() }
 
-// SelectLinesMenu says "选择行…"
+// SelectLinesMenu says "选择行"
 // in the language of msgs.
 func (msgs Messages) SelectLinesMenu() string {
 	return Catalog.Format(msgs.locale, "selectLinesMenu", nil)

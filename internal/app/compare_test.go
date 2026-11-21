@@ -41,7 +41,7 @@ func TestNativeComparisonReadOnlyAndSwap(t *testing.T) {
 		app.diff.Old.Text != "原始内容\n" || app.diff.New.Text != "比较目标\n" {
 		t.Fatal("比较没有载入完整的两个版本")
 	}
-	for _, label := range []string{"暂存文件", "暂存区块", "选择行…", "丢弃修改…"} {
+	for _, label := range []string{"暂存文件", "暂存区块", "选择行", "丢弃修改"} {
 		if _, found := tester.Find(label); found {
 			t.Fatalf("只读比较显示了写操作 %s", label)
 		}

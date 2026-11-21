@@ -637,7 +637,7 @@ func TestNativeLoadingProtectsSelectedActions(t *testing.T) {
 					if err := tester.RightClick(app.repository.stashes[0].Message); err != nil {
 						t.Fatal(err)
 					}
-					if err := tester.ChooseMenuItem(label + "…"); err == nil || !strings.Contains(err.Error(), "disabled") {
+					if err := tester.ChooseMenuItem(label); err == nil || !strings.Contains(err.Error(), "disabled") {
 						t.Errorf("加载期间应禁用 %s: %v", label, err)
 					}
 					tester.CloseMenu()
@@ -646,7 +646,7 @@ func TestNativeLoadingProtectsSelectedActions(t *testing.T) {
 			if err := tester.Click("更多"); err != nil {
 				t.Fatal(err)
 			}
-			if err := tester.ChooseMenuItem("新建标签…"); err == nil || !strings.Contains(err.Error(), "disabled") {
+			if err := tester.ChooseMenuItem("新建标签"); err == nil || !strings.Contains(err.Error(), "disabled") {
 				t.Errorf("加载期间标签菜单应禁用: %v", err)
 			}
 			tester.CloseMenu()
@@ -680,7 +680,7 @@ func TestNativeStashContextMenuTargetsEntry(t *testing.T) {
 		t.Fatal(err)
 	}
 	tester.Key(ui.Shift, ui.KeyF10)
-	if err := tester.ChooseMenuItem(locales.ApplyAndDrop() + "…"); err != nil {
+	if err := tester.ChooseMenuItem(locales.ApplyAndDrop()); err != nil {
 		t.Fatal(err)
 	}
 	if app.dialog == nil || !app.dialog.danger || app.dialog.action != locales.ApplyAndDrop() {
@@ -696,7 +696,7 @@ func TestNativeStashContextMenuTargetsEntry(t *testing.T) {
 	if err := tester.RightClick(target.Message); err != nil {
 		t.Fatal(err)
 	}
-	if err := tester.ChooseMenuItem(locales.Apply() + "…"); err != nil {
+	if err := tester.ChooseMenuItem(locales.Apply()); err != nil {
 		t.Fatal(err)
 	}
 	if err := tester.Click(locales.Apply()); err != nil {
@@ -713,7 +713,7 @@ func TestNativeStashContextMenuTargetsEntry(t *testing.T) {
 		if err := tester.RightClick(target.Message); err != nil {
 			t.Fatal(err)
 		}
-		if err := tester.ChooseMenuItem(locales.Delete() + "…"); err != nil {
+		if err := tester.ChooseMenuItem(locales.Delete()); err != nil {
 			t.Fatal(err)
 		}
 		if app.dialog == nil || !app.dialog.danger || !strings.Contains(app.dialog.detail, shortHash(target.Hash)) {
@@ -740,7 +740,7 @@ func TestNativeStashContextMenuTargetsEntry(t *testing.T) {
 	if err := tester.RightClick(retained.Message); err != nil {
 		t.Fatal(err)
 	}
-	if err := tester.ChooseMenuItem(locales.ApplyAndDrop() + "…"); err != nil {
+	if err := tester.ChooseMenuItem(locales.ApplyAndDrop()); err != nil {
 		t.Fatal(err)
 	}
 	if err := tester.Click(locales.ApplyAndDrop()); err != nil {
@@ -860,7 +860,7 @@ func TestNativeRepositoryActionsMenu(t *testing.T) {
 	if err := tester.Click("更多"); err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"新建标签…", "贮藏更改…", "-", "在终端中打开", revealRepositoryLabel()}
+	want := []string{"新建标签", "贮藏更改", "-", "在终端中打开", revealRepositoryLabel()}
 	if got := tester.Menu(); !slices.Equal(got, want) || app.dialog != nil {
 		t.Fatalf("应直接展开仓库菜单，菜单=%v，弹窗=%v", got, app.dialog)
 	}
@@ -876,7 +876,7 @@ func TestNativeRepositoryActionsMenu(t *testing.T) {
 		tester.CloseMenu()
 	}
 	tester.Key(0, ui.KeyEnter)
-	if err := tester.ChooseMenuItem("新建标签…"); err != nil {
+	if err := tester.ChooseMenuItem("新建标签"); err != nil {
 		t.Fatal(err)
 	}
 	if app.dialog == nil || app.dialog.title != "新建本地标签" {
@@ -907,7 +907,7 @@ func TestNativeRepositoryActionsUnavailable(t *testing.T) {
 	if err := tester.Click("更多"); err != nil {
 		t.Fatal(err)
 	}
-	if err := tester.ChooseMenuItem("新建标签…"); err == nil || !strings.Contains(err.Error(), "disabled") {
+	if err := tester.ChooseMenuItem("新建标签"); err == nil || !strings.Contains(err.Error(), "disabled") {
 		t.Fatalf("仓库不可写时应禁用新建标签: %v", err)
 	}
 	if app.dialog != nil {

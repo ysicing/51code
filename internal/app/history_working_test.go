@@ -397,7 +397,7 @@ func TestNativeHistoryWorkingStaging(t *testing.T) {
 	app.selectCommit(app.history[0].Hash)
 	finish()
 	tester.Frame()
-	for _, label := range []string{"暂存文件", "暂存此区块", "选择行…"} {
+	for _, label := range []string{"暂存文件", "暂存此区块", "选择行"} {
 		if _, found := tester.AccessByRole(ui.RoleButton, label); found {
 			t.Fatal("已提交记录出现写操作", label)
 		}
@@ -458,7 +458,7 @@ func TestNativeHistoryWorkingPatchActions(t *testing.T) {
 			finish()
 			tester.Frame()
 		}
-		if err := tester.Click("选择行…"); err != nil {
+		if err := tester.Click("选择行"); err != nil {
 			t.Fatal(err)
 		}
 		if err := tester.Click("+new first"); err != nil {
@@ -514,7 +514,7 @@ func TestNativeHistoryWorkingWriteGuards(t *testing.T) {
 			app.readTask = &nativeRead{kind: nativeReadDiff, cancel: func() {}}
 		}
 		tester := ui.NewTester(app.view, 1800, 900)
-		for _, label := range []string{"暂存所选文件", "全部暂存", "暂存文件", "暂存此区块", "选择行…"} {
+		for _, label := range []string{"暂存所选文件", "全部暂存", "暂存文件", "暂存此区块", "选择行"} {
 			button, found := tester.AccessByRole(ui.RoleButton, label)
 			if !found || !button.Disabled {
 				t.Fatalf("%s 未禁用 %s: %+v", state, label, button)
@@ -613,7 +613,7 @@ func TestNativeHistoryWorkingCompactActions(t *testing.T) {
 		if !opened {
 			t.Fatal("窄窗口缺少差异操作溢出菜单")
 		}
-		if err := tester.ChooseMenuItem("选择行…"); err != nil {
+		if err := tester.ChooseMenuItem("选择行"); err != nil {
 			t.Fatal(err)
 		}
 		if app.dialog == nil || app.dialog.title != "选择变更行" {

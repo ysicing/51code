@@ -128,7 +128,7 @@ func TestNativeTerminalPreferences(t *testing.T) {
 		return []string{application}, nil
 	}
 	clickTerminal()
-	if err := tester.ChooseMenuItem("选择其他应用…"); err != nil {
+	if err := tester.ChooseMenuItem("选择其他应用"); err != nil {
 		t.Fatal(err)
 	}
 	restored := newNativeApp(app.service, app.stateFile)

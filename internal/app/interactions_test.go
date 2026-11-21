@@ -393,7 +393,7 @@ func TestNativeAccessibleGroupManagementAndEmptyStates(t *testing.T) {
 	}
 	app.screen = "stash"
 	tester.Frame()
-	if button, ok := tester.AccessByRole(ui.RoleButton, "贮藏更改…"); !ok || !button.Disabled {
+	if button, ok := tester.AccessByRole(ui.RoleButton, "贮藏更改"); !ok || !button.Disabled {
 		t.Fatal("干净工作区仍可发起贮藏")
 	}
 	if _, ok := tester.Find("暂无贮藏"); !ok {

@@ -34,7 +34,7 @@ func (app *nativeApp) remoteSidebar(c *ui.Context) {
 			item.Tooltip(reference + " · " + locales.RemoteHead())
 		} else {
 			item.ContextMenu(func(menu *ui.Menu) {
-				if menu.Item(locales.CheckoutRemoteBranch() + "…").Disabled(!app.writable || app.dialog != nil).Chosen() {
+				if menu.Item(locales.CheckoutRemoteBranch()).Disabled(!app.writable || app.dialog != nil).Chosen() {
 					app.checkoutDialog(reference)
 				}
 				if menu.Item(locales.MergeBranchInto(reference, app.repository.snapshot.Branch)).

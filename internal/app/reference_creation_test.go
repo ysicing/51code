@@ -26,7 +26,7 @@ func TestNativeReferenceMenusAndPinnedTargets(t *testing.T) {
 	if err := tester.RightClick("source"); err != nil {
 		t.Fatal(err)
 	}
-	for _, label := range []string{"从此分支新建分支…", "从此分支新建标签…", "重命名分支…"} {
+	for _, label := range []string{"从此分支新建分支", "从此分支新建标签", "重命名分支"} {
 		if !slices.Contains(tester.Menu(), label) {
 			t.Fatalf("branch menu missing %s: %v", label, tester.Menu())
 		}
@@ -34,7 +34,7 @@ func TestNativeReferenceMenusAndPinnedTargets(t *testing.T) {
 	if app.busy || app.repository.snapshot.Head != head {
 		t.Fatal("right click switched branch")
 	}
-	if err := tester.ChooseMenuItem("从此分支新建标签…"); err != nil {
+	if err := tester.ChooseMenuItem("从此分支新建标签"); err != nil {
 		t.Fatal(err)
 	}
 	finish()
@@ -61,7 +61,7 @@ func TestNativeReferenceMenusAndPinnedTargets(t *testing.T) {
 	if err := tester.RightClick("v1"); err != nil {
 		t.Fatal(err)
 	}
-	if err := tester.ChooseMenuItem("从此标签新建分支…"); err != nil {
+	if err := tester.ChooseMenuItem("从此标签新建分支"); err != nil {
 		t.Fatal(err)
 	}
 	finish()
@@ -98,7 +98,7 @@ func TestNativeHistoryContextUsesClickedCommit(t *testing.T) {
 	if err := tester.RightClick("初始提交"); err != nil {
 		t.Fatal(err)
 	}
-	if err := tester.ChooseMenuItem("从此提交新建分支…"); err != nil {
+	if err := tester.ChooseMenuItem("从此提交新建分支"); err != nil {
 		t.Fatal(err)
 	}
 	if app.readTask != nil {

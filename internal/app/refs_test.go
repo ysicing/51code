@@ -189,7 +189,7 @@ func TestNativeReferenceDirectories(t *testing.T) {
 	if err := tester.RightClick("origin/a/b/c"); err != nil {
 		t.Fatal(err)
 	}
-	if err := tester.ChooseMenuItem(locales.CheckoutRemoteBranch() + "…"); err != nil {
+	if err := tester.ChooseMenuItem(locales.CheckoutRemoteBranch()); err != nil {
 		t.Fatal(err)
 	}
 	if app.dialog == nil || app.dialog.detail != "origin/a/b/c" || app.dialog.fields[0].value != "a/b/c" {
@@ -212,7 +212,7 @@ func TestNativeReferenceDirectories(t *testing.T) {
 		}
 	}
 	treeItem(true)
-	if err := tester.ChooseMenuItem("重命名分支…"); err != nil {
+	if err := tester.ChooseMenuItem("重命名分支"); err != nil {
 		t.Fatal(err)
 	}
 	if app.dialog == nil || app.dialog.fields[0].value != "a/b/c" {
@@ -231,7 +231,7 @@ func TestNativeReferenceDirectories(t *testing.T) {
 		t.Fatal("嵌套标签未打开对应提交")
 	}
 	treeItem(true)
-	if err := tester.ChooseMenuItem("删除标签…"); err != nil {
+	if err := tester.ChooseMenuItem("删除标签"); err != nil {
 		t.Fatal(err)
 	}
 	if app.dialog == nil || app.dialog.detail != "a/b/c" {

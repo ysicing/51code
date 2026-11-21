@@ -229,7 +229,7 @@ func TestNativeApplicationSettingsCategories(t *testing.T) {
 			tester.SetDark(true)
 			saveNativeScreenshot(t, tester, directory, "settings-manual-updates-dark.png")
 		}
-		if err := tester.Click("下载新版本…"); err != nil {
+		if err := tester.Click("下载新版本"); err != nil {
 			t.Fatal(err)
 		}
 		if urls := tester.OpenedURLs(); len(urls) != 1 || urls[0] != "https://github.com/ysicing/51code/releases/latest" {
@@ -237,7 +237,7 @@ func TestNativeApplicationSettingsCategories(t *testing.T) {
 		}
 		tester.SetSize(780, 480)
 		tester.SetDark(false)
-		for _, label := range []string{"关闭设置", "下载新版本…"} {
+		for _, label := range []string{"关闭设置", "下载新版本"} {
 			if bounds, found := tester.Find(label); !found || bounds.W <= 0 || bounds.H <= 0 || bounds.Y+bounds.H > 480 {
 				t.Fatalf("小窗口中的设置控件不可见: %s", label)
 			}
@@ -560,7 +560,7 @@ func TestNativeRepositoryRemoteReturnsToSettings(t *testing.T) {
 	if err := tester.Click("管理 origin"); err != nil {
 		t.Fatal(err)
 	}
-	if err := tester.ChooseMenuItem("编辑…"); err != nil {
+	if err := tester.ChooseMenuItem("编辑"); err != nil {
 		t.Fatal(err)
 	}
 	if app.dialog.parent != parent || app.dialog.fields[0].value != "origin" {
@@ -572,7 +572,7 @@ func TestNativeRepositoryRemoteReturnsToSettings(t *testing.T) {
 	if err := tester.Click("管理 origin"); err != nil {
 		t.Fatal(err)
 	}
-	if err := tester.ChooseMenuItem("移除…"); err != nil {
+	if err := tester.ChooseMenuItem("移除"); err != nil {
 		t.Fatal(err)
 	}
 	if app.dialog.parent != parent || !app.dialog.danger || nativeGit(t, path, "remote") != "origin" {
@@ -584,7 +584,7 @@ func TestNativeRepositoryRemoteReturnsToSettings(t *testing.T) {
 	if err := tester.Click("管理 origin"); err != nil {
 		t.Fatal(err)
 	}
-	if err := tester.ChooseMenuItem("移除…"); err != nil {
+	if err := tester.ChooseMenuItem("移除"); err != nil {
 		t.Fatal(err)
 	}
 	app.dialog.submit(app.dialog)

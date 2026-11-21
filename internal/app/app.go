@@ -107,6 +107,7 @@ func Run(info BuildInfo) {
 		}
 		if selfUpdates() {
 			updates = updater.MenuItem()
+			updates.Label = locales.CheckUpdates()
 		}
 		app.SetMenu(mygo.NewMenu(platformMenu([]*mygo.MenuItem{
 			{Label: "51Code", Submenu: []*mygo.MenuItem{

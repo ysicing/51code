@@ -243,12 +243,12 @@ try {
   await press("暂存此区块");
   assert.equal(git("diff", "--cached", "--name-only"), "hello.txt");
   await press("取消此区块暂存");
-  await press("选择行…");
+  await press("选择行");
   await press("+原生界面变更");
   await press("应用所选行");
   assert.equal(git("show", ":hello.txt"), "原始内容\n原生界面变更");
   await press("hello.txt");
-  await press("选择行…");
+  await press("选择行");
   await press("+原生界面变更");
   await press("应用所选行");
   assert.equal(git("diff", "--cached", "--name-only"), "");
@@ -437,7 +437,7 @@ try {
   writeFileSync(join(fixture, "hello.txt"), "贮藏修改\n");
   await press("刷新");
   await press("贮藏");
-  await press("贮藏更改…");
+  await press("贮藏更改");
   await fill("说明（可选）", "原生贮藏");
   await press("贮藏");
   assert.equal(git("status", "--porcelain"), "");
@@ -456,7 +456,7 @@ try {
   await press("刷新");
   await press("文件变更");
   await press("hello.txt");
-  await press("丢弃修改…");
+  await press("丢弃修改");
   await press("丢弃修改");
   assert.equal(git("status", "--porcelain"), "");
   console.log("✓ 备份后丢弃修改");

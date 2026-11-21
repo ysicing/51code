@@ -414,7 +414,7 @@ func TestNativeAIComposerSettingsMenu(t *testing.T) {
 	if err := tester.Click("AI 生成选项"); err != nil {
 		t.Fatal(err)
 	}
-	if err := tester.ChooseMenuItem("AI 设置…"); err != nil {
+	if err := tester.ChooseMenuItem("AI 设置"); err != nil {
 		t.Fatal(err)
 	}
 	tester.Frame()

@@ -98,7 +98,7 @@ func TestNativeTagSelectionPreservesFiltersAndOffersExplicitReveal(t *testing.T)
 	if err := tester.RightClick(tag); err != nil {
 		t.Fatal(err)
 	}
-	if err := tester.ChooseMenuItem("从此标签新建分支…"); err != nil {
+	if err := tester.ChooseMenuItem("从此标签新建分支"); err != nil {
 		t.Fatal(err)
 	}
 	finish()
@@ -152,7 +152,7 @@ func TestNativeTagContextMenuUsesClickedTag(t *testing.T) {
 	if app.commitHash != selected || app.refSelected.reference != "v2" {
 		t.Fatal("右键改变了提交详情或没有标明操作对象")
 	}
-	for _, label := range []string{"复制标签名", "查看标签提交", "从此标签新建分支…", "删除标签…"} {
+	for _, label := range []string{"复制标签名", "查看标签提交", "从此标签新建分支", "删除标签"} {
 		if !slices.Contains(tester.Menu(), label) {
 			t.Fatalf("标签菜单缺少 %s: %v", label, tester.Menu())
 		}

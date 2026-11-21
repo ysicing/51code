@@ -71,10 +71,10 @@ func TestNativeRemoteSettingsCompactList(t *testing.T) {
 	if err := tester.Click("管理 origin-with-a-long-name"); err != nil {
 		t.Fatal(err)
 	}
-	if err := tester.ChooseMenuItem("编辑…"); err == nil {
+	if err := tester.ChooseMenuItem("编辑"); err == nil {
 		t.Fatal("只读仓库允许编辑远程")
 	}
-	if err := tester.ChooseMenuItem("移除…"); err == nil {
+	if err := tester.ChooseMenuItem("移除"); err == nil {
 		t.Fatal("只读仓库允许移除远程")
 	}
 	if err := tester.ChooseMenuItem("复制获取地址"); err != nil {

@@ -25,7 +25,7 @@ func TestNativeRepositoryEntryMenu(t *testing.T) {
 	if err := tester.Click(label); err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"在终端中打开", revealRepositoryLabel(), "移动到分组", locales.RelocateRepositoryMenu(), "-", "从列表移除…"}
+	want := []string{"在终端中打开", revealRepositoryLabel(), "移动到分组", locales.RelocateRepositoryMenu(), "-", "从列表移除"}
 	if app.dialog != nil || !slices.Equal(tester.Menu(), want) {
 		t.Fatalf("仓库操作未使用精简原生菜单: %v, %+v", tester.Menu(), app.dialog)
 	}
@@ -99,7 +99,7 @@ func TestNativeRepositoryEntryMenuRemove(t *testing.T) {
 		if err := tester.Click(label); err != nil {
 			t.Fatal(err)
 		}
-		if err := tester.ChooseMenuItem("从列表移除…"); err != nil {
+		if err := tester.ChooseMenuItem("从列表移除"); err != nil {
 			t.Fatal(err)
 		}
 		if app.dialog == nil || app.dialog.action != "移除" ||

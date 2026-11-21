@@ -660,14 +660,14 @@ func (app *nativeApp) stashPanel(c *ui.Context) {
 			stash := stash
 			row := listRow(c, stash.Message, app.stashHash == stash.Hash).ContextMenu(func(menu *ui.Menu) {
 				actionsDisabled := app.busy || !app.writable || app.readTask != nil || app.dialog != nil
-				if menu.Item(locales.Apply() + "…").Disabled(actionsDisabled).Chosen() {
+				if menu.Item(locales.Apply()).Disabled(actionsDisabled).Chosen() {
 					app.applyStash(stash.Hash, false)
 				}
-				if menu.Item(locales.ApplyAndDrop() + "…").Disabled(actionsDisabled).Chosen() {
+				if menu.Item(locales.ApplyAndDrop()).Disabled(actionsDisabled).Chosen() {
 					app.applyStash(stash.Hash, true)
 				}
 				menu.Separator()
-				if menu.Item(locales.Delete() + "…").Disabled(actionsDisabled).Chosen() {
+				if menu.Item(locales.Delete()).Disabled(actionsDisabled).Chosen() {
 					app.dropStash(stash.Hash)
 				}
 			})

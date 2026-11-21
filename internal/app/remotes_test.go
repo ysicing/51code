@@ -98,7 +98,7 @@ func TestNativeRemoteBranchTree(t *testing.T) {
 		if err := tester.RightClick(branch.reference); err != nil {
 			t.Fatal(err)
 		}
-		if err := tester.ChooseMenuItem(locales.CheckoutRemoteBranch() + "…"); err != nil {
+		if err := tester.ChooseMenuItem(locales.CheckoutRemoteBranch()); err != nil {
 			t.Fatal(err)
 		}
 		if app.dialog == nil || app.dialog.detail != branch.reference || app.dialog.fields[0].value != branch.name {

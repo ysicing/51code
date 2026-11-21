@@ -268,7 +268,7 @@ func TestNativePatchSnapshotNeverStagesUnseenChanges(t *testing.T) {
 	if !app.fileViewer.contextChanged {
 		t.Fatal("未识别展示内容和可操作区块来自不同版本")
 	}
-	for _, label := range []string{"暂存此区块", "选择行…"} {
+	for _, label := range []string{"暂存此区块", "选择行"} {
 		if field, found := tester.AccessByRole(ui.RoleButton, label); found && !field.Disabled {
 			t.Fatal("不一致的区块操作仍可用", label)
 		}

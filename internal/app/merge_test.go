@@ -45,7 +45,7 @@ func TestNativeBranchContextMergeModes(t *testing.T) {
 				if err := tester.RightClick(source); err != nil {
 					t.Fatal(err)
 				}
-				label := "将 " + source + " 合并到 main…"
+				label := "将 " + source + " 合并到 main"
 				if !slices.Contains(tester.Menu(), label) {
 					t.Fatalf("missing merge entry: %v", tester.Menu())
 				}
@@ -138,7 +138,7 @@ func TestNativeBranchMergeMenuAvailability(t *testing.T) {
 				if err := tester.RightClick(source); err != nil {
 					t.Fatal(err)
 				}
-				label := "将 " + source + " 合并到 main…"
+				label := "将 " + source + " 合并到 main"
 				if state != "busy" && !slices.Contains(tester.Menu(), label) {
 					t.Fatalf("missing merge entry in %s: %v", state, tester.Menu())
 				}
@@ -166,7 +166,7 @@ func TestNativeBranchMergeMenuAvailability(t *testing.T) {
 	if err := tester.RightClick("main"); err != nil {
 		t.Fatal(err)
 	}
-	if slices.Contains(tester.Menu(), "将 main 合并到 main…") {
+	if slices.Contains(tester.Menu(), "将 main 合并到 main") {
 		t.Fatal("current branch exposes a self merge")
 	}
 	tester.Key(0, ui.KeyEscape)
@@ -176,7 +176,7 @@ func TestNativeBranchMergeMenuAvailability(t *testing.T) {
 	if err := tester.RightClick("origin/HEAD"); err != nil {
 		t.Fatal(err)
 	}
-	if slices.Contains(tester.Menu(), "将 origin/HEAD 合并到 main…") || app.dialog != nil {
+	if slices.Contains(tester.Menu(), "将 origin/HEAD 合并到 main") || app.dialog != nil {
 		t.Fatal("symbolic remote HEAD exposes a merge entry")
 	}
 	tester.Key(0, ui.KeyEscape)
