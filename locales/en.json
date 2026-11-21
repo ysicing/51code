@@ -472,6 +472,7 @@
   "trashLoading": "Reading Trash…",
   "trashSearch": "Search files or repositories",
   "trashEmpty": "Trash is empty",
+  "repositoryTrashEmpty": "This repository’s trash is empty",
   "trashNoMatches": "No matching files",
   "trashWasDeleted": "{name} (previously deleted)",
   "trashRestore": "Restore",

@@ -79,7 +79,7 @@ func TestTrashRestoresWorkingCopyAndPreservesLaterEdits(t *testing.T) {
 	if err != nil || string(got) != "later work\n" {
 		t.Fatalf("working=%q, %v", got, err)
 	}
-	items, err := DiscardBackups(ctx, trash, item.Created)
+	items, err := DiscardBackups(ctx, trash, "", item.Created)
 	if err != nil || len(items) != 0 {
 		t.Fatalf("expired entries = %+v, %v", items, err)
 	}
@@ -118,7 +118,7 @@ func TestTrashRestoresUntrackedFileAndSupportsPermanentDeletion(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, "new file")); !os.IsNotExist(err) {
 		t.Fatalf("permanently deleted file still exists: %v", err)
 	}
-	items, err := DiscardBackups(ctx, trash, time.Time{})
+	items, err := DiscardBackups(ctx, trash, "", time.Time{})
 	if err != nil || len(items) != 1 || items[0].ID != item.ID {
 		t.Fatalf("retained entries = %+v, %v", items, err)
 	}

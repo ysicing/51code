@@ -42,7 +42,7 @@ func (service *RepositoryService) DiscardPermanently(ctx context.Context, path, 
 	return repo.DiscardPermanently(ctx, file, token)
 }
 
-func (service *RepositoryService) DiscardBackups(ctx context.Context, days int) ([]gitrepo.DiscardBackup, error) {
+func (service *RepositoryService) DiscardBackups(ctx context.Context, repository string, days int) ([]gitrepo.DiscardBackup, error) {
 	directory, err := discardBackupDirectory()
 	if err != nil {
 		return nil, err
@@ -51,7 +51,7 @@ func (service *RepositoryService) DiscardBackups(ctx context.Context, days int) 
 	if days > 0 {
 		cutoff = time.Now().AddDate(0, 0, -days)
 	}
-	return gitrepo.DiscardBackups(ctx, directory, cutoff)
+	return gitrepo.DiscardBackups(ctx, directory, repository, cutoff)
 }
 
 func (service *RepositoryService) RestoreDiscardBackup(ctx context.Context, id string) (gitrepo.DiscardBackup, error) {

@@ -6,6 +6,7 @@ package app
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -70,12 +71,26 @@ func TestNativeTrashListAndSettings(t *testing.T) {
 }
 
 func TestNativeTrashSidebarEntry(t *testing.T) {
-	app, _, finish := nativeFixture(t)
+	app, path, finish := nativeFixture(t)
+	other, otherPath, _ := nativeFixture(t)
 	mygo.App.SetPath(mygo.PathUserData, t.TempDir())
 	t.Cleanup(func() { mygo.App.SetPath(mygo.PathUserData, "") })
+	discard := func(window *nativeApp, name string) {
+		t.Helper()
+		dir := window.repository.snapshot.Path
+		writeNativeFile(t, dir, name, "recover me")
+		preview, err := window.service.DiscardPreview(t.Context(), dir, name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := window.service.Discard(t.Context(), dir, name, preview.Token); err != nil {
+			t.Fatal(err)
+		}
+	}
+	discard(other, "other.txt")
 	tester := ui.NewTester(app.view, 1024, 680)
 	worktrees, found := tester.Find(locales.Worktrees())
-	trash, accessible := tester.AccessByRole(ui.RoleButton, locales.Trash())
+	trash, accessible := tester.AccessByRole(ui.RoleTreeItem, locales.Trash())
 	if !found || !accessible || trash.Offscreen || trash.Bounds.Y < worktrees.Y+worktrees.H {
 		t.Fatalf("回收站入口未显示在工作树下方: 工作树=%+v 回收站=%+v", worktrees, trash)
 	}
@@ -84,20 +99,42 @@ func TestNativeTrashSidebarEntry(t *testing.T) {
 	}
 	finish()
 	tester.Frame()
-	if app.dialog == nil || app.dialog.title != locales.Trash() || app.screen != "changes" || !tester.HasText(locales.TrashEmpty()) {
-		t.Fatal("侧栏未在当前工作区打开全局回收站空状态")
-	}
-	tester.Key(0, ui.KeyEscape)
-	if app.dialog != nil {
-		t.Fatal("Esc 未关闭回收站")
+	if app.dialog != nil || app.screen != "trash" || !tester.HasText(locales.RepositoryTrashEmpty()) || tester.HasText("other.txt") {
+		t.Fatal("当前仓库的空回收站不应显示其他仓库的条目或打开弹窗")
 	}
 	app.prefs.SidebarItems.Worktrees = false
 	app.prefs.Trash.Disabled = true
 	tester.SetDark(true)
 	tester.Frame()
-	trash, accessible = tester.AccessByRole(ui.RoleButton, locales.Trash())
-	if !accessible || trash.Disabled || trash.Offscreen {
+	trash, accessible = tester.AccessByRole(ui.RoleTreeItem, locales.Trash())
+	if !accessible || !trash.Selected || trash.Disabled || trash.Offscreen {
 		t.Fatalf("关闭工作树或回收站备份后仍应能打开回收站: %+v", trash)
+	}
+	discard(app, "mine.txt")
+	app.refresh()
+	finish()
+	tester.Frame()
+	if !tester.HasText("mine.txt") || tester.HasText("other.txt") {
+		t.Fatal("仓库页面刷新后应只显示本仓库的副本")
+	}
+	if err := tester.Click(locales.TrashRestore()); err != nil {
+		t.Fatal(err)
+	}
+	finish()
+	finish()
+	tester.Frame()
+	content, err := os.ReadFile(filepath.Join(path, "mine.txt"))
+	if err != nil || string(content) != "recover me" || app.screen != "trash" || !tester.HasText(locales.TrashRestored()) {
+		t.Fatalf("仓库页恢复结果不正确: %q, %v", content, err)
+	}
+	if _, err := os.Stat(filepath.Join(otherPath, "other.txt")); !os.IsNotExist(err) {
+		t.Fatalf("其他仓库的工作区发生变化: %v", err)
+	}
+	app.showTrash("")
+	finish()
+	tester.Frame()
+	if app.dialog == nil || !tester.HasText("mine.txt") || !tester.HasText("other.txt") {
+		t.Fatal("全局回收站应包含两个仓库的副本")
 	}
 }
 

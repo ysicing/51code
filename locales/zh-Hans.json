@@ -472,6 +472,7 @@
   "trashLoading": "正在读取回收站…",
   "trashSearch": "搜索文件或仓库",
   "trashEmpty": "回收站为空",
+  "repositoryTrashEmpty": "当前仓库的回收站为空",
   "trashNoMatches": "没有匹配的文件",
   "trashWasDeleted": "{name}（原状态为已删除）",
   "trashRestore": "恢复",

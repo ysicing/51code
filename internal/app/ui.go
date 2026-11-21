@@ -163,6 +163,8 @@ func (app *nativeApp) view(c *ui.Context) {
 						app.browserWorkspace(c)
 					case "worktrees":
 						app.worktreePanel(c)
+					case "trash":
+						app.repositoryTrashPanel(c)
 					default:
 						ui.Split(c, &app.prefs.Files, func() { app.repositoryPanel(c) }, func() { app.diffPanel(c) }).Grow(1).MinHeight(0).FillWidth()
 					}
@@ -266,16 +268,7 @@ func (app *nativeApp) sidebar(c *ui.Context) {
 				if app.prefs.SidebarItems.Worktrees {
 					ui.SidebarItem(c, "screen:worktrees", nil, locales.Worktrees()).Height(26).Padding(0, 8, 0, 40).FontSize(12)
 				}
-				c.Key("workspace:trash")
-				trash := ui.ButtonBase(c).Label(locales.Trash()).Disabled(app.dialog != nil).
-					FillWidth().Height(26).Padding(0, 8, 0, 40).AlignItems(ui.Center).Radius(c.Theme().Radius)
-				if trash.Hovered() || trash.Pressed() {
-					trash.Background(c.Theme().SurfaceHover)
-				}
-				trash.Children(func() {
-					ui.Text(c, locales.Trash()).Grow(1).SingleLine().FontSize(12)
-				})
-				trash.OnClick(func() { app.showTrash("") })
+				ui.SidebarItem(c, "screen:trash", nil, locales.Trash()).Height(26).Padding(0, 8, 0, 40).FontSize(12)
 			})
 			app.localBranchSidebar(c)
 			app.tagSidebar(c)
@@ -289,6 +282,8 @@ func (app *nativeApp) sidebar(c *ui.Context) {
 					app.group = ""
 					if screen == "worktrees" {
 						app.loadWorktrees()
+					} else if screen == "trash" {
+						app.loadRepositoryTrash()
 					} else if screen == "history" && !app.historyLoaded {
 						app.searchHistory(false)
 					} else if (screen == "history" || screen == "search" && app.searchMode == nativeSearchCommits && app.historyLoaded) &&

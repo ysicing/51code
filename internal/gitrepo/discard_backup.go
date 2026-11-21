@@ -111,7 +111,7 @@ func openDiscardBackup(root *os.Root, id string) (*os.Root, DiscardBackup, error
 	return result, item, nil
 }
 
-func DiscardBackups(ctx context.Context, directory string, expireBefore time.Time) ([]DiscardBackup, error) {
+func DiscardBackups(ctx context.Context, directory, repository string, expireBefore time.Time) ([]DiscardBackup, error) {
 	root, err := os.OpenRoot(directory)
 	if os.IsNotExist(err) {
 		return nil, nil
@@ -143,6 +143,9 @@ func DiscardBackups(ctx context.Context, directory string, expireBefore time.Tim
 			continue
 		}
 		backup.Close()
+		if repository != "" && item.Repository != repository {
+			continue
+		}
 		if item.Version == 1 && !expireBefore.IsZero() && !item.Created.After(expireBefore) {
 			if err := root.RemoveAll(item.ID); err == nil {
 				continue

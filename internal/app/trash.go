@@ -51,7 +51,7 @@ func (desktop *nativeDesktop) startTrashCleanup() {
 		}
 		days := desktop.prefs.Trash.days()
 		go func() {
-			if _, err := desktop.service.DiscardBackups(context.Background(), days); err != nil {
+			if _, err := desktop.service.DiscardBackups(context.Background(), "", days); err != nil {
 				log.Printf("清理回收站：%v", err)
 			}
 		}()
@@ -218,7 +218,7 @@ func (app *nativeApp) trashUndoNotice(c *ui.Context) {
 func (app *nativeApp) showTrash(selected string) {
 	days := app.prefs.Trash.days()
 	app.run(locales.TrashLoading(), func(ctx context.Context) (func(), error) {
-		items, err := app.service.DiscardBackups(ctx, days)
+		items, err := app.service.DiscardBackups(ctx, "", days)
 		return func() {
 			if err == nil {
 				app.trashDialog(items, selected)
@@ -227,15 +227,40 @@ func (app *nativeApp) showTrash(selected string) {
 	})
 }
 
+type nativeTrashList struct {
+	items    []gitrepo.DiscardBackup
+	query    string
+	restored map[string]bool
+}
+
+func (app *nativeApp) loadRepositoryTrash() {
+	path, days := app.repository.snapshot.Path, app.prefs.Trash.days()
+	app.repositoryTrash = nativeTrashList{restored: make(map[string]bool)}
+	app.runTask(locales.TrashLoading(), true, func(ctx context.Context) (func(), error) {
+		items, err := app.service.DiscardBackups(ctx, path, days)
+		return func() { app.repositoryTrash.items = items }, err
+	})
+}
+
+func (app *nativeApp) repositoryTrashPanel(c *ui.Context) {
+	list := &app.repositoryTrash
+	ui.Column(c).Fill().Padding(10).Gap(8).Children(func() {
+		ui.TextInput(c, &list.query).Label(locales.FilterRepositoryFiles()).Placeholder(locales.FilterRepositoryFiles()).FillWidth()
+		if app.busy && len(list.items) == 0 {
+			return
+		}
+		app.trashRows(c, list, "", nil)
+	})
+}
+
 func (app *nativeApp) trashDialog(items []gitrepo.DiscardBackup, selected string) {
 	dialog := &nativeDialog{
 		title: locales.Trash(), width: 670, height: 454, dismiss: locales.Close(),
 	}
-	query := ""
-	restored := make(map[string]bool)
+	list := nativeTrashList{items: items, restored: make(map[string]bool)}
 	dialog.body = func(c *ui.Context) {
 		ui.Row(c).FillWidth().Gap(10).Children(func() {
-			ui.TextInput(c, &query).Label(locales.TrashSearch()).Placeholder(locales.TrashSearch()).Grow(1).MinWidth(0).AutoFocus()
+			ui.TextInput(c, &list.query).Label(locales.TrashSearch()).Placeholder(locales.TrashSearch()).Grow(1).MinWidth(0).AutoFocus()
 			ui.MenuButton(c, locales.More(), func(menu *ui.Menu) {
 				if menu.Item(locales.OpenBackupFolder()).Chosen() {
 					app.run(locales.TrashLoading(), func(context.Context) (func(), error) {
@@ -244,53 +269,64 @@ func (app *nativeApp) trashDialog(items []gitrepo.DiscardBackup, selected string
 				}
 			})
 		})
-		needle := strings.ToLower(strings.TrimSpace(query))
-		ui.Scroll(c).Grow(1).MinHeight(0).FillWidth().Children(func() {
-			found := false
-			for _, item := range items {
-				if !strings.Contains(strings.ToLower(item.Repository+" "+item.Path), needle) {
-					continue
-				}
-				found = true
-				c.Key(item.ID)
-				row := ui.Row(c).FillWidth().Padding(7, 9).Gap(10).AlignItems(ui.Center)
-				if selected == item.ID {
-					row.Background(c.Theme().Accent.Alpha(0.12))
-				}
-				row.Children(func() {
-					ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
-						title := filepath.Base(item.Path)
-						if !item.Present {
-							title = locales.TrashWasDeleted(title)
-						}
-						ui.Text(c, title).FontSize(13).Bold().MaxLines(1).Tooltip(item.Path)
-						location := filepath.Base(item.Repository) + " · " + item.Path
-						ui.Text(c, location).FontSize(11).TextColor(c.Theme().TextMuted).MaxLines(1).
-							Tooltip(filepath.Join(item.Repository, filepath.FromSlash(item.Path)))
-					})
-					ui.Text(c, item.Created.Local().Format("2006-01-02 15:04")).FontSize(11).TextColor(c.Theme().TextMuted).Shrink(0)
-					if restored[item.ID] {
-						ui.Text(c, locales.TrashRestored()).FontSize(12).TextColor(c.Theme().TextMuted)
-					} else {
-						ui.Button(c, locales.TrashRestore()).Disabled(!item.Restorable()).OnClick(func() {
-							app.restoreTrash(item.ID, item.Present, dialog, func() { restored[item.ID] = true })
-						})
-					}
-				})
-				ui.Divider(c)
-			}
-			if !found {
-				label := locales.TrashEmpty()
-				if needle != "" {
-					label = locales.TrashNoMatches()
-				}
-				ui.Row(c).FillWidth().Padding(24).Justify(ui.Center).Children(func() {
-					ui.Text(c, label).TextColor(c.Theme().TextMuted)
-				})
-			}
-		})
+		app.trashRows(c, &list, selected, dialog)
 	}
 	app.dialog = dialog
+}
+
+func (app *nativeApp) trashRows(c *ui.Context, list *nativeTrashList, selected string, dialog *nativeDialog) {
+	needle := strings.ToLower(strings.TrimSpace(list.query))
+	ui.Scroll(c).Grow(1).MinHeight(0).FillWidth().Children(func() {
+		found := false
+		for _, item := range list.items {
+			location, searchable := item.Path, item.Path
+			if dialog != nil {
+				location = filepath.Base(item.Repository) + " · " + item.Path
+				searchable = item.Repository + " " + item.Path
+			}
+			if !strings.Contains(strings.ToLower(searchable), needle) {
+				continue
+			}
+			found = true
+			c.Key(item.ID)
+			row := ui.Row(c).FillWidth().Padding(7, 9).Gap(10).AlignItems(ui.Center)
+			if selected == item.ID {
+				row.Background(c.Theme().Accent.Alpha(0.12))
+			}
+			row.Children(func() {
+				ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
+					title := filepath.Base(item.Path)
+					if !item.Present {
+						title = locales.TrashWasDeleted(title)
+					}
+					ui.Text(c, title).FontSize(13).Bold().MaxLines(1).Tooltip(item.Path)
+					ui.Text(c, location).FontSize(11).TextColor(c.Theme().TextMuted).MaxLines(1).
+						Tooltip(filepath.Join(item.Repository, filepath.FromSlash(item.Path)))
+				})
+				ui.Text(c, item.Created.Local().Format("2006-01-02 15:04")).FontSize(11).TextColor(c.Theme().TextMuted).Shrink(0)
+				if list.restored[item.ID] {
+					ui.Text(c, locales.TrashRestored()).FontSize(12).TextColor(c.Theme().TextMuted)
+				} else {
+					ui.Button(c, locales.TrashRestore()).Disabled(!item.Restorable() || dialog == nil && !app.writable).OnClick(func() {
+						app.restoreTrash(item.ID, item.Present, dialog, func() { list.restored[item.ID] = true })
+					})
+				}
+			})
+			ui.Divider(c)
+		}
+		if !found {
+			label := locales.TrashEmpty()
+			if dialog == nil {
+				label = locales.RepositoryTrashEmpty()
+			}
+			if needle != "" {
+				label = locales.TrashNoMatches()
+			}
+			ui.Row(c).FillWidth().Padding(24).Justify(ui.Center).Children(func() {
+				ui.Text(c, label).TextColor(c.Theme().TextMuted)
+			})
+		}
+	})
 }
 
 func (app *nativeApp) restoreTrash(id string, hasContent bool, parent *nativeDialog, completed func()) {
@@ -310,6 +346,9 @@ func (app *nativeApp) restoreTrash(id string, hasContent bool, parent *nativeDia
 				completed()
 			}
 			if app.repository != nil && app.repository.snapshot.Path == item.Repository && !app.conflictDirty() {
+				if app.screen == "trash" && app.repositoryTrash.restored != nil {
+					app.repositoryTrash.restored[id] = true
+				}
 				app.refresh()
 			}
 		}, err

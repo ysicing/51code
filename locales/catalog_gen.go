@@ -4792,6 +4792,16 @@ func (msgs Messages) TrashEmpty() string {
 	return Catalog.Format(msgs.locale, "trashEmpty", nil)
 }
 
+// RepositoryTrashEmpty says "当前仓库的回收站为空"
+// in the language the app shows.
+func RepositoryTrashEmpty() string { return In(i18n.Locale()).RepositoryTrashEmpty() }
+
+// RepositoryTrashEmpty says "当前仓库的回收站为空"
+// in the language of msgs.
+func (msgs Messages) RepositoryTrashEmpty() string {
+	return Catalog.Format(msgs.locale, "repositoryTrashEmpty", nil)
+}
+
 // TrashNoMatches says "没有匹配的文件"
 // in the language the app shows.
 func TrashNoMatches() string { return In(i18n.Locale()).TrashNoMatches() }

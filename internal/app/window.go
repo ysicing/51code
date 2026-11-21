@@ -150,6 +150,7 @@ type nativeApp struct {
 	hunk                  int
 	dialog                *nativeDialog
 	trashUndo             nativeTrashUndo
+	repositoryTrash       nativeTrashList
 	scanResult            *workspace.ScanResult
 	scanSelected          map[string]bool
 	prefs                 *nativePreferences
@@ -501,6 +502,7 @@ func (app *nativeApp) adopt(result *repositoryView) {
 		app.searchMode = nativeSearchCommits
 		app.contentSearch, app.pathSearch = nativeWorktreeSearch{}, nativeWorktreeSearch{}
 		app.worktrees = nil
+		app.repositoryTrash = nativeTrashList{}
 		app.insights = nil
 	}
 	app.repository, app.writable = result, true
@@ -621,6 +623,7 @@ func (app *nativeApp) mutateFormResult(dialog *nativeDialog, label string, opera
 	}
 	path, screen, file, staged := app.repository.snapshot.Path, app.screen, app.selectedFile, app.staged
 	wasWorking := screen == "history" && app.historyWorking
+	trashDays := app.prefs.Trash.days()
 	historyRequest := app.historyRequest()
 	historyScreen := screen == "history" || screen == "search" && app.historyLoaded
 	if screen == "search" || wasWorking {
@@ -668,6 +671,10 @@ func (app *nativeApp) mutateFormResult(dialog *nativeDialog, label string, opera
 		var worktreeItems []gitrepo.Worktree
 		if refreshErr == nil && screen == "worktrees" {
 			worktreeItems, detailErr = app.service.Worktrees(ctx, path)
+		}
+		var trashItems []gitrepo.DiscardBackup
+		if refreshErr == nil && screen == "trash" {
+			trashItems, detailErr = app.service.DiscardBackups(ctx, path, trashDays)
 		}
 		restoreWorking := wasWorking && refreshErr == nil && historyOffset == 0 &&
 			historyRequest.query == "" && historyRequest.file == ""
@@ -729,6 +736,9 @@ func (app *nativeApp) mutateFormResult(dialog *nativeDialog, label string, opera
 			app.writable = refreshErr == nil
 			if screen == "worktrees" && refreshErr == nil && detailErr == nil && app.worktrees != nil {
 				app.worktrees.setItems(worktreeItems)
+			}
+			if screen == "trash" && refreshErr == nil && detailErr == nil {
+				app.repositoryTrash.items = trashItems
 			}
 			if historyScreen && refreshErr == nil {
 				app.history, app.historyMore = history, historyMore

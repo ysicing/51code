@@ -472,6 +472,7 @@
   "trashLoading": "正在讀取垃圾桶…",
   "trashSearch": "搜尋檔案或儲存庫",
   "trashEmpty": "垃圾桶是空的",
+  "repositoryTrashEmpty": "目前儲存庫的垃圾桶是空的",
   "trashNoMatches": "沒有符合的檔案",
   "trashWasDeleted": "{name}（原狀態為已刪除）",
   "trashRestore": "還原",
