@@ -42,6 +42,7 @@ async function fixture(run) {
     }
     for (const [target, name, data] of [
       ["windows-amd64", "51code-setup-1.2.3-amd64.exe", "MZ test installer"],
+      ["windows-amd64", "51code-1.2.3-windows-amd64-portable.zip", Buffer.from("504b0304", "hex")],
       ["linux-amd64", "51code_1.2.3_amd64.deb", "!<arch>\ndebian-binary test package"],
       ["linux-arm64", "51code_1.2.3_arm64.deb", "!<arch>\ndebian-binary test package"],
       ["linux-amd64", "51code-1.2.3-1.x86_64.rpm", Buffer.from([0xed, 0xab, 0xee, 0xdb, 3, 0])],
@@ -136,6 +137,21 @@ test("requires valid Windows and Linux installers without sending them to the CD
     await expect(releasePlan(root)).rejects.toThrow("不是有效的安装包");
     await rm(installer);
     await expect(releasePlan(root)).rejects.toThrow();
+  });
+});
+
+test("requires a Windows portable ZIP for GitHub Releases only", async () => {
+  await fixture(async (root) => {
+    const name = "51code-1.2.3-windows-amd64-portable.zip";
+    const path = join(root, "build", "windows-amd64", name);
+    const plan = await releasePlan(root);
+    expect(plan.github.packages).toContainEqual({ name, path, hash: createHash("sha256").update(await readFile(path)).digest("hex") });
+    expect(plan.artifacts.some((file) => file.name === name)).toBe(false);
+    expect(plan.gemfury.packages.some((file) => file.name === name)).toBe(false);
+    await writeFile(path, "not a ZIP");
+    await expect(releasePlan(root)).rejects.toThrow(name);
+    await rm(path);
+    await expect(releasePlan(root)).rejects.toThrow(name);
   });
 });
 
@@ -299,7 +315,7 @@ function github(plan, options = {}) {
   };
 }
 
-test("publishes DMGs and Windows/Linux installers on the existing version tag after verifying uploaded digests", async () => {
+test("publishes installers and the Windows portable ZIP on the existing tag after verifying digests", async () => {
   await fixture(async (root) => {
     const plan = await releasePlan(root);
     const fake = github(plan);
@@ -308,7 +324,8 @@ test("publishes DMGs and Windows/Linux installers on the existing version tag af
     expect(fake.current.draft).toBe(false);
     expect(fake.current.assets.map((file) => file.name)).toEqual([
       "51code-1.2.3-arm64.dmg", "51code-1.2.3-amd64.dmg",
-      "51code-setup-1.2.3-amd64.exe", "51code_1.2.3_amd64.deb", "51code-1.2.3-1.x86_64.rpm",
+      "51code-setup-1.2.3-amd64.exe", "51code-1.2.3-windows-amd64-portable.zip",
+      "51code_1.2.3_amd64.deb", "51code-1.2.3-1.x86_64.rpm",
       "51code_1.2.3_arm64.deb", "51code-1.2.3-1.aarch64.rpm",
     ]);
     expect(fake.events.every((args) => args.includes("github.com") ||
@@ -328,10 +345,10 @@ test("resumes partial drafts and skips matching assets on already published rele
     ]) {
       const fake = github(plan, options);
       await release.publishGitHubRelease(plan, fake);
-      expect(fake.current.assets).toHaveLength(7);
+      expect(fake.current.assets).toHaveLength(8);
       expect(fake.current.draft).toBe(false);
       expect(fake.events.some((args) => args[1] === "create")).toBe(false);
-      expect(fake.events.filter((args) => args[1] === "upload")).toHaveLength(options.partial ? 6 : 0);
+      expect(fake.events.filter((args) => args[1] === "upload")).toHaveLength(options.partial ? 7 : 0);
       expect(fake.events.filter((args) => args[1] === "edit")).toHaveLength(options.draft ? 1 : 0);
     }
   });
@@ -390,7 +407,7 @@ test("reports failed starter uploads and resumes after the operator removes only
     fake.current.assets.splice(0, 1);
     options.starterFailure = false;
     await release.publishGitHubRelease(plan, fake);
-    expect(fake.current.assets).toHaveLength(7);
+    expect(fake.current.assets).toHaveLength(8);
     expect(fake.current.draft).toBe(false);
   });
 });

@@ -34,9 +34,11 @@ Releases are Developer ID-signed and Apple-notarized, with in-app updates.
 </details>
 
 <details>
-<summary>Windows · Installer</summary>
+<summary>Windows · Installer and portable ZIP</summary>
 
 Choose `51code-setup-<version>-amd64.exe` from the download page. In-app updates are supported; no separate Git installation is required. The installer is not yet Authenticode-signed.
+
+If the release offers `51code-<version>-windows-amd64-portable.zip`, extract the entire ZIP to a folder and run `51Code.exe`. The ZIP includes Git, SSH, and Git LFS. App settings are stored in the current user's data directory.
 
 </details>
 

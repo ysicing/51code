@@ -7,10 +7,11 @@ import { expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { build as buildWithGit } from "./build.mjs";
 
-const build = (root, args, run) => buildWithGit(root, args, run, async () => async () => {});
+const build = (root, args, run) => buildWithGit(root, args.length ? args : ["-platform", "darwin/arm64"],
+  run, async () => async () => {});
 
 test("Git resources are prepared before packaging and cleaned on failure", async () => {
   await fixture(async (root) => {
@@ -24,6 +25,47 @@ test("Git resources are prepared before packaging and cleaned on failure", async
     })).rejects.toThrow("构建失败");
     expect(events).toEqual(["prepare", "build", "cleanup"]);
     await expect(stat(join(root, ".mygo", "build.lock"))).rejects.toThrow();
+  });
+});
+
+test("Windows builds ZIP the installed files without including other release artifacts", async () => {
+  await fixture(async (root) => {
+    const directory = join(root, "custom output", "windows-amd64");
+    const installed = {
+      "51Code.exe": "MZ app",
+      ".mygo-files": "51Code.exe\nextra\n.git-metadata\ngit\n",
+      ".git-metadata": "hidden app resource",
+      "extra/nested/file.txt": "resource",
+      "git/cmd/git.exe": "MZ git",
+      "git/cmd/git-lfs.exe": "MZ git lfs",
+      "git/usr/bin/ssh.exe": "MZ ssh",
+      "git/usr/bin/sh.exe": "MZ sh",
+      "git/ucrt64/bin/git-credential-manager.exe": "MZ credential manager",
+      "git/ucrt64/etc/ssl/certs/ca-bundle.crt": "CA bundle",
+      "git/LICENSE.txt": "Git license",
+      "git/lfs-distribution/LICENSE.md": "Git LFS license",
+    };
+    for (const [name, content] of Object.entries({
+      ...installed, "install.ps1": "setup script", "51code-setup-1.2.3-amd64.exe": "MZ installer",
+      "51code-1.2.3-windows-amd64.tar.gz": "signed update", "update-windows-amd64.json": "{}",
+    })) {
+      const path = join(directory, name);
+      await mkdir(dirname(path), { recursive: true });
+      await writeFile(path, content);
+    }
+    await build(root, ["-platform=windows/amd64", "--o=custom output"], () => ({ status: 0 }));
+    const zip = join(directory, "51code-1.2.3-windows-amd64-portable.zip");
+    const windows = process.platform === "win32";
+    const extractor = windows ? join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe") : "unzip";
+    const listing = execFileSync(extractor, [windows ? "-tf" : "-Z1", zip], { encoding: "utf8" });
+    expect(listing.trim().split(/\r?\n/).filter((path) => !path.endsWith("/")).sort()).toEqual(Object.keys(installed).sort());
+    const extracted = execFileSync(extractor,
+      [windows ? "-xOf" : "-p", zip, "git/cmd/git-lfs.exe"], { encoding: "utf8" });
+    expect(extracted).toBe(installed["git/cmd/git-lfs.exe"]);
+    await rm(join(directory, "git/cmd/git-lfs.exe"));
+    await expect(build(root, ["-platform", "windows/amd64", "-o", "custom output"], () => ({ status: 0 })))
+      .rejects.toThrow("git/cmd/git-lfs.exe");
+    expect(JSON.parse(await readFile(join(root, ".mygo", "build-info.json"), "utf8")).number).toBe(1);
   });
 });
 

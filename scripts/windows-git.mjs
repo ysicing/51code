@@ -23,6 +23,12 @@ const lfsLicense = {
   sha256: "4fae9062ab5cdd5fb15486b728534d8aded8b4ae9d84b6d66a956f5162c366b6",
 };
 
+export const windowsGitFiles = [
+  "cmd/git.exe", "cmd/git-lfs.exe", "usr/bin/ssh.exe", "usr/bin/sh.exe",
+  "ucrt64/bin/git-credential-manager.exe", "ucrt64/etc/ssl/certs/ca-bundle.crt",
+  "LICENSE.txt", "lfs-distribution/LICENSE.md",
+];
+
 export function needsWindowsGit(args, platform = process.platform, architecture = process.arch) {
   let target = `${platform === "win32" ? "windows" : platform}/${architecture === "x64" ? "amd64" : architecture}`;
   for (let index = 0; index < args.length; index++) {
@@ -102,8 +108,7 @@ export async function prepareWindowsGit(root, args, { download = fetch, unpack =
       recursive: true, filter: (path) => !path.endsWith("git-lfs.exe"),
     });
     await cp(license, join(contents, "lfs-distribution", "LICENSE.md"));
-    for (const path of ["cmd/git.exe", "cmd/git-lfs.exe", "usr/bin/ssh.exe", "usr/bin/sh.exe",
-      "ucrt64/bin/git-credential-manager.exe", "ucrt64/etc/ssl/certs/ca-bundle.crt", "LICENSE.txt"]) {
+    for (const path of windowsGitFiles) {
       if (!(await stat(join(contents, path))).isFile()) throw new Error(`内置 Git 缺少 ${path}`);
     }
     await mkdir(join(root, "resources", "windows-amd64"), { recursive: true });

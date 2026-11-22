@@ -8,7 +8,8 @@ import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { binaryPath } from "mygo-cli";
-import { prepareWindowsGit } from "./windows-git.mjs";
+import { needsWindowsGit, prepareWindowsGit } from "./windows-git.mjs";
+import { buildWindowsPortable } from "./windows-portable.mjs";
 
 export async function build(root, args = [], run = spawnSync, prepareGit = prepareWindowsGit) {
   const state = resolve(root, ".mygo");
@@ -65,6 +66,14 @@ export async function build(root, args = [], run = spawnSync, prepareGit = prepa
     });
     if (result.error || result.status !== 0) {
       throw new Error(`构建失败，未递增构建号${result.error ? `：${result.error.message}` : ""}`);
+    }
+    if (needsWindowsGit(args)) {
+      let directory = "build";
+      for (let index = 0; index < args.length; index++) {
+        const match = /^--?o(?:=(.*))?$/.exec(args[index]);
+        if (match) directory = (match[1] ?? args[++index]) || "build";
+      }
+      await buildWindowsPortable(resolve(root, directory, "windows-amd64"), version);
     }
     await writeFile(`${path}.tmp`, JSON.stringify(info, null, 2) + "\n");
     await rename(`${path}.tmp`, path);

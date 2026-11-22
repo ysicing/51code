@@ -9,6 +9,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { windowsPortableName } from "./windows-portable.mjs";
 
 const sha256 = (data) => createHash("sha256").update(data).digest("hex");
 
@@ -89,12 +90,13 @@ export async function releasePlan(root, directory = "build") {
     throw new Error("install.sh 与当前更新地址或公钥不一致，请用当前配置重新构建");
   }
   scripts.push(artifact("install.sh", installPath, install));
-  // GitHub Release 附件：双架构 DMG 加 Windows 及 Linux 双架构 deb/rpm 安装包，安装包不进 CDN。
+  // GitHub Release 附件额外包含 Windows 安装器、免安装 ZIP 和 Linux deb/rpm。
   const packages = artifacts.filter((file) => file.name.endsWith(".dmg"));
   const deb = Buffer.from("!<arch>\ndebian-binary");
   const rpm = Buffer.from([0xed, 0xab, 0xee, 0xdb]);
   for (const [target, name, magic] of [
     ["windows-amd64", `51code-setup-${version}-amd64.exe`, Buffer.from("MZ")],
+    ["windows-amd64", windowsPortableName(version), Buffer.from("504b0304", "hex")],
     // 文件名沿用 mygo 的命名：deb 用 Debian 架构名，rpm 用 RPM 架构名且 release 固定为 1。
     ...[["amd64", "x86_64"], ["arm64", "aarch64"]].flatMap(([arch, rpmArch]) => [
       [`linux-${arch}`, `51code_${version}_${arch}.deb`, deb],
@@ -103,9 +105,9 @@ export async function releasePlan(root, directory = "build") {
   ]) {
     const path = resolve(root, directory, target, name);
     const data = await readFile(path);
-    // 只做格式头检查，防止空文件或误放的其他平台产物被当作安装包上传。
+    // 检查格式头，防止空文件或误放的其他平台产物被上传。
     if (!data.subarray(0, magic.length).equals(magic)) {
-      throw new Error(`${name} 不是有效的安装包，请重新构建`);
+      throw new Error(`${name} 不是有效的${name.endsWith(".zip") ? "免安装 ZIP" : "安装包"}，请重新构建`);
     }
     packages.push({ name, path, hash: sha256(data) });
   }
@@ -410,7 +412,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     if (args.includes("--dry-run")) {
       console.log(`已校验 ${plan.version} 的全平台更新签名，以及 macOS 的 Developer ID、公证与 Gatekeeper；将先上传并回读以下对象，再发布更新清单和 install.sh：`);
       console.log([...plan.artifacts, ...plan.feeds, ...plan.scripts].map((file) => file.object).join("\n"));
-      console.log(`随后发布 GitHub Release：${plan.github.repository} v${plan.version}，附加以下安装包：`);
+      console.log(`随后发布 GitHub Release：${plan.github.repository} v${plan.version}，附加以下安装包和免安装包：`);
       console.log(plan.github.packages.map((file) => file.name).join("\n"));
       await publishGemfuryRelease(plan, { dryRun: true });
     } else {
@@ -418,7 +420,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       console.log(`已发布 51Code ${plan.version}，全平台 CDN 文件、更新清单及 install.sh 回读通过`);
       try {
         const url = await publishGitHubRelease(plan);
-        console.log(`GitHub Release 与 macOS、Windows、Linux 安装包已发布并校验：${url}`);
+        console.log(`GitHub Release、全平台安装包和 Windows 免安装包已发布并校验：${url}`);
       } catch (error) {
         throw new Error(`CDN 与更新清单已发布，GitHub Release 尚未完成；请保留同一产物目录重试：${error.message}`);
       }

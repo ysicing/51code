@@ -34,9 +34,11 @@ brew install --cask ysicing/tap/51code
 </details>
 
 <details>
-<summary>Windows · 安装器</summary>
+<summary>Windows · 安装器与免安装版</summary>
 
 从下载页选择 `51code-setup-<版本>-amd64.exe`，安装后支持应用内更新，无需另行安装 Git。安装器暂未提供 Authenticode 签名。
+
+如果该版本提供 `51code-<版本>-windows-amd64-portable.zip`，可将它完整解压到一个目录后运行 `51Code.exe`。免安装包同样内置 Git、SSH 和 Git LFS，应用设置仍保存在当前用户的数据目录。
 
 </details>
 
