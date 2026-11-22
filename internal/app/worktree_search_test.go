@@ -5,6 +5,7 @@ package app
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -130,18 +131,33 @@ func TestNativeQuickOpenRanksAndOpensFilesByKeyboard(t *testing.T) {
 	app, path, finish := nativeFixture(t)
 	writeNativeFile(t, path, "browser.go", "package app\n")
 	writeNativeFile(t, path, "binary-write.go", "package app\n")
+	trace := filepath.Join(t.TempDir(), "git-trace")
+	t.Setenv("GIT_TRACE", trace)
+	checkPathReads := func(want int) {
+		t.Helper()
+		log, err := os.ReadFile(trace)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if count := strings.Count(string(log), "ls-files -z --cached --others --exclude-standard --"); count != want {
+			t.Fatalf("path list reads = %d, want %d: %s", count, want, log)
+		}
+	}
 	app.openQuickSearch()
 	tester := ui.NewTester(app.view, 1024, 680)
 	if err := tester.Click(locales.FilterRepositoryFiles()); err != nil {
 		t.Fatal(err)
 	}
-	tester.Type("brw .go")
+	tester.Type("brw")
+	finish()
+	writeNativeFile(t, path, "new-browser-window.go", "package app\n")
+	tester.Type(" .go")
 	finish()
 	tester.Frame()
 	if len(app.pathSearch.results) != 2 || app.pathSearch.results[0].Path != "browser.go" {
 		t.Fatalf("quick open results = %+v", app.pathSearch.results)
 	}
-	writeNativeFile(t, path, "new-browser-window.go", "package app\n")
+	checkPathReads(1)
 	app.refresh()
 	for app.busy || app.readTask != nil {
 		finish()
@@ -150,6 +166,7 @@ func TestNativeQuickOpenRanksAndOpensFilesByKeyboard(t *testing.T) {
 	if len(app.pathSearch.results) != 3 || app.pathSearch.query != "brw .go" {
 		t.Fatalf("refresh did not update quick open results: %+v", app.pathSearch.results)
 	}
+	checkPathReads(2)
 	if directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); directory != "" {
 		saveNativeScreenshot(t, tester, directory, "quick-open.png")
 	}

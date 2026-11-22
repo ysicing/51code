@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 )
@@ -32,16 +33,24 @@ func (repo *Repository) Submodules(ctx context.Context) ([]Submodule, error) {
 	if err := repo.lockHistory(ctx); err != nil {
 		return nil, err
 	}
-	defer repo.mu.Unlock()
 	items, err := repo.submoduleIndex(ctx, "")
+	// 索引目标取自同一次读取，子模块检查只用于展示。更新时会在写锁内重读索引和子模块状态。
+	repo.mu.Unlock()
 	if err != nil {
 		return nil, err
 	}
-	for index := range items {
-		repo.inspectSubmodule(ctx, &items[index])
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
+	var scans sync.WaitGroup
+	workers := min(len(items), 2)
+	for worker := range workers {
+		scans.Go(func() {
+			for index := worker; index < len(items) && ctx.Err() == nil; index += workers {
+				repo.inspectSubmodule(ctx, &items[index])
+			}
+		})
+	}
+	scans.Wait()
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	return items, nil
 }
@@ -122,29 +131,34 @@ func (repo *Repository) submoduleDirectory(path string) (string, error) {
 	return directory, nil
 }
 
-func (repo *Repository) submoduleRepository(ctx context.Context, path string) (*Repository, error) {
+func (repo *Repository) submoduleRepository(ctx context.Context, path string) (*Repository, string, error) {
 	directory, err := repo.submoduleDirectory(path)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	info, err := os.Lstat(filepath.Join(directory, ".git"))
 	if os.IsNotExist(err) {
-		return nil, nil
+		return nil, "", nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	if !info.IsDir() && !info.Mode().IsRegular() {
-		return nil, errors.New("子模块 Git 目录无效")
+		return nil, "", errors.New("子模块 Git 目录无效")
 	}
-	child, err := Open(ctx, directory)
+	child := &Repository{Path: directory}
+	paths, err := child.revParsePaths(ctx, "--is-inside-work-tree", "--show-toplevel", "--absolute-git-dir")
+	if err != nil || paths[0] != "true" || paths[1] == "" {
+		return nil, "", errors.New("所选目录不是 Git 工作区")
+	}
+	child.Path, err = filepath.EvalSymlinks(paths[1])
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	if !worktreeSamePath(child.Path, directory) {
-		return nil, errors.New("子模块目录未指向独立仓库")
+		return nil, "", errors.New("子模块目录未指向独立仓库")
 	}
-	return child, nil
+	return child, paths[2], nil
 }
 
 func checkEmptySubmoduleDirectory(path string) error {
@@ -167,7 +181,7 @@ func checkEmptySubmoduleDirectory(path string) error {
 }
 
 func (repo *Repository) inspectSubmodule(ctx context.Context, item *Submodule) *Repository {
-	child, err := repo.submoduleRepository(ctx, item.Path)
+	child, gitDirectory, err := repo.submoduleRepository(ctx, item.Path)
 	if err != nil {
 		item.Problem = err.Error()
 		return nil
@@ -178,13 +192,14 @@ func (repo *Repository) inspectSubmodule(ctx context.Context, item *Submodule) *
 		}
 		return nil
 	}
+	// Dirty 只关心是否存在变更；未跟踪目录本身就足以阻止更新覆盖。
 	branch, files, err := child.streamStatus(ctx, []string{
-		"status", "--porcelain=v2", "-z", "--branch", "--no-ahead-behind", "--untracked-files=all", "--ignore-submodules=none",
+		"status", "--porcelain=v2", "-z", "--branch", "--no-ahead-behind", "--untracked-files=normal", "--ignore-submodules=none",
 	})
 	if err == nil {
 		item.Head, item.Dirty, item.Detached = branch.head, len(files) != 0, branch.detached
 		var operation Operation
-		operation, err = child.operation(ctx)
+		operation, err = child.operationAt(ctx, gitDirectory, &branch.head)
 		item.InProgress = operation.Kind != ""
 	}
 	if err != nil {
@@ -208,7 +223,7 @@ func (repo *Repository) SubmodulePath(ctx context.Context, path string) (string,
 	if len(items) != 1 {
 		return "", errors.New("索引中没有此子模块，请刷新")
 	}
-	child, err := repo.submoduleRepository(ctx, path)
+	child, _, err := repo.submoduleRepository(ctx, path)
 	if err != nil {
 		return "", err
 	}
@@ -261,7 +276,7 @@ func (repo *Repository) UpdateSubmodule(ctx context.Context, expected Submodule)
 	if err := repo.runRemote(ctx, "-c", "submodule.recurse=false", "submodule", "update", "--init", "--checkout", "--", current.Path); err != nil {
 		return err
 	}
-	child, err = repo.submoduleRepository(ctx, current.Path)
+	child, _, err = repo.submoduleRepository(ctx, current.Path)
 	if err != nil {
 		return err
 	}

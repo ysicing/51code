@@ -597,6 +597,7 @@ func (app *nativeApp) refresh() {
 			state = &app.pathSearch
 		}
 		app.leaveConflict(func() {
+			app.pathSearch.invalidateQuickPaths()
 			app.mutateFormResult(nil, locales.Refreshing(), nil, func(error) {
 				if app.writable && (paths || state.submitted) {
 					app.startWorktreeSearch(state, paths, false)
@@ -747,7 +748,7 @@ func (app *nativeApp) mutateFormResult(dialog *nativeDialog, label string, opera
 				app.submodules.items, app.submodules.refreshError = submodules, ""
 			}
 			if screen == "trash" && refreshErr == nil && detailErr == nil {
-				app.repositoryTrash.items = trashItems
+				app.repositoryTrash.setItems(trashItems)
 			}
 			if historyScreen && refreshErr == nil {
 				app.history, app.historyMore = history, historyMore

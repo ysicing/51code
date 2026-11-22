@@ -23,7 +23,12 @@ type nativePathScore struct {
 	score int
 }
 
-func rankQuickPaths(ctx context.Context, paths []string, query string) []nativePathScore {
+type nativeQuickPath struct {
+	path  string
+	chars util.Chars
+}
+
+func rankQuickPaths(ctx context.Context, paths []nativeQuickPath, query string) []nativePathScore {
 	initializeSearchRanking()
 	tokens := strings.Fields(strings.ToLower(query))
 	slab := util.MakeSlab(32*1024, 2048)
@@ -32,14 +37,14 @@ func rankQuickPaths(ctx context.Context, paths []string, query string) []nativeP
 		patterns[index] = []rune(token)
 	}
 	var ranked []nativePathScore
-	for _, path := range paths {
+	for index := range paths {
 		if ctx.Err() != nil {
 			return nil
 		}
-		text := util.ToChars([]byte(path))
+		path := &paths[index]
 		score := 0
 		for _, pattern := range patterns {
-			result, _ := algo.FuzzyMatchV2(false, false, true, &text, pattern, false, slab)
+			result, _ := algo.FuzzyMatchV2(false, false, true, &path.chars, pattern, false, slab)
 			if result.Start < 0 {
 				score = -1
 				break
@@ -47,7 +52,7 @@ func rankQuickPaths(ctx context.Context, paths []string, query string) []nativeP
 			score += result.Score
 		}
 		if score >= 0 {
-			ranked = append(ranked, nativePathScore{path: path, score: score})
+			ranked = append(ranked, nativePathScore{path: path.path, score: score})
 		}
 	}
 	slices.SortFunc(ranked, func(first, second nativePathScore) int {

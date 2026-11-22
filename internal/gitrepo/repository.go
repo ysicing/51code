@@ -20,7 +20,8 @@ type Repository struct {
 	mu   sync.Mutex
 	// 文件列表缓存只在持有 mu 时访问；blob 缓存见 read_cache.go，跨仓库共享总量上限。
 	// 内容均由不可变的对象 ID 决定。
-	changes changeCache
+	changes        changeCache
+	branchTracking map[branchOIDPair]branchTrackingCounts
 }
 
 type File struct {
@@ -428,9 +429,9 @@ func (repo *Repository) History(ctx context.Context, skip int) ([]Commit, error)
 	return commits, nil
 }
 
-// branchFormat 的字段顺序由 parseBranches 解析，References 在其后追加完整对象 ID。
-const branchFormat = "%(refname)%00%(objectname:short)%00%(HEAD)%00%(upstream:short)%00%(symref)%00%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream:track,nobracket)"
-const branchFieldCount = 8
+// branchFormat 保留用于展示的短名称，并用完整引用名和对象 ID 查找同步计数。
+const branchFormat = "%(refname)%00%(objectname:short)%00%(HEAD)%00%(upstream:short)%00%(symref)%00%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream)%00%(objectname)"
+const branchFieldCount = 9
 
 // refRecords 按行拆分 for-each-ref 输出；引用名不能含换行或 NUL。
 func refRecords(output string, count int, invalid string) ([][]string, error) {
@@ -451,15 +452,8 @@ func refRecords(output string, count int, invalid string) ([][]string, error) {
 func (repo *Repository) Branches(ctx context.Context) ([]Branch, error) {
 	repo.mu.Lock()
 	defer repo.mu.Unlock()
-	output, err := repo.git(ctx, "for-each-ref", "--format="+branchFormat, "refs/heads", "refs/remotes")
-	if err != nil {
-		return nil, err
-	}
-	records, err := refRecords(output, branchFieldCount, "无法解析分支")
-	if err != nil {
-		return nil, err
-	}
-	return parseBranches(records), nil
+	refs, err := repo.readReferences(ctx, false)
+	return refs.Branches, err
 }
 
 // References 是刷新所需的全部引用。
@@ -469,7 +463,7 @@ type References struct {
 	Stashes  []Stash
 }
 
-// References 用一次 for-each-ref 读取分支和标签，结果与分别调用 Branches、Tags 一致；
+// References 合并读取分支和标签，结果与分别调用 Branches、Tags 一致；
 // 与 git stash list 相同，refs/stash 不存在时没有贮藏，不再启动进程读取。
 func (repo *Repository) References(ctx context.Context) (References, error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
@@ -478,30 +472,44 @@ func (repo *Repository) References(ctx context.Context) (References, error) {
 		return References{}, err
 	}
 	defer repo.mu.Unlock()
-	output, err := repo.git(ctx, "for-each-ref", "--format="+branchFormat+"%00%(objectname)",
-		"refs/heads", "refs/remotes", "refs/tags", "refs/stash")
+	return repo.readReferences(ctx, true)
+}
+
+func (repo *Repository) readReferences(ctx context.Context, all bool) (References, error) {
+	args := []string{"for-each-ref", "--format=" + branchFormat, "refs/heads", "refs/remotes", "refs/replace"}
+	if all {
+		args = append(args, "refs/tags", "refs/stash")
+	}
+	output, err := repo.git(ctx, args...)
 	if err != nil {
 		return References{}, err
 	}
-	records, err := refRecords(output, branchFieldCount+1, "无法解析引用")
+	records, err := refRecords(output, branchFieldCount, "无法解析引用")
 	if err != nil {
 		return References{}, err
 	}
 	refs := References{Tags: []Tag{}, Stashes: []Stash{}}
 	var branches [][]string
-	stash := false
+	oids := make(map[string]string, len(records))
+	stash, replacements := false, false
 	// for-each-ref 默认按引用名排序，按前缀拆分后各类内部顺序与单独读取时相同。
 	for _, fields := range records {
+		oids[fields[0]] = fields[8]
 		switch name := fields[0]; {
 		case strings.HasPrefix(name, "refs/heads/"), strings.HasPrefix(name, "refs/remotes/"):
-			branches = append(branches, fields[:branchFieldCount])
+			branches = append(branches, fields)
 		case strings.HasPrefix(name, "refs/tags/"):
-			refs.Tags = append(refs.Tags, Tag{Name: strings.TrimPrefix(name, "refs/tags/"), Hash: fields[branchFieldCount]})
+			refs.Tags = append(refs.Tags, Tag{Name: strings.TrimPrefix(name, "refs/tags/"), Hash: fields[8]})
+		case strings.HasPrefix(name, "refs/replace/"):
+			replacements = true
 		case name == "refs/stash":
 			stash = true
 		}
 	}
 	refs.Branches = parseBranches(branches)
+	if err := repo.fillBranchTracking(ctx, refs.Branches, branches, oids, replacements); err != nil {
+		return References{}, err
+	}
 	if stash {
 		if refs.Stashes, err = repo.stashes(ctx); err != nil {
 			return References{}, err
@@ -518,11 +526,9 @@ func parseBranches(records [][]string) []Branch {
 	for _, fields := range records {
 		remote := strings.HasPrefix(fields[0], "refs/remotes/")
 		name := strings.TrimPrefix(strings.TrimPrefix(fields[0], "refs/heads/"), "refs/remotes/")
-		ahead, behind := branchDivergence(fields[7])
 		branches = append(branches, Branch{
 			Name: name, Hash: fields[1], Current: fields[2] == "*", Remote: remote, Upstream: fields[3],
 			UpstreamRemote: fields[5], UpstreamBranch: strings.TrimPrefix(fields[6], "refs/heads/"),
-			Ahead: ahead, Behind: behind,
 		})
 		if remote && strings.HasSuffix(fields[0], "/HEAD") && fields[4] != "" {
 			prefix := strings.TrimSuffix(fields[0], "HEAD")

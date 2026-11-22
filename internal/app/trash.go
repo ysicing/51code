@@ -230,7 +230,14 @@ func (app *nativeApp) showTrash(selected string) {
 type nativeTrashList struct {
 	items    []gitrepo.DiscardBackup
 	query    string
+	filter   string
+	visible  []int
+	rows     ui.ListState
 	restored map[string]bool
+}
+
+func (list *nativeTrashList) setItems(items []gitrepo.DiscardBackup) {
+	list.items, list.visible = items, nil
 }
 
 func (app *nativeApp) loadRepositoryTrash() {
@@ -238,7 +245,7 @@ func (app *nativeApp) loadRepositoryTrash() {
 	app.repositoryTrash = nativeTrashList{restored: make(map[string]bool)}
 	app.runTask(locales.TrashLoading(), true, func(ctx context.Context) (func(), error) {
 		items, err := app.service.DiscardBackups(ctx, path, days)
-		return func() { app.repositoryTrash.items = items }, err
+		return func() { app.repositoryTrash.setItems(items) }, err
 	})
 }
 
@@ -276,19 +283,47 @@ func (app *nativeApp) trashDialog(items []gitrepo.DiscardBackup, selected string
 
 func (app *nativeApp) trashRows(c *ui.Context, list *nativeTrashList, selected string, dialog *nativeDialog) {
 	needle := strings.ToLower(strings.TrimSpace(list.query))
-	ui.Scroll(c).Grow(1).MinHeight(0).FillWidth().Children(func() {
-		found := false
-		for _, item := range list.items {
-			location, searchable := item.Path, item.Path
-			if dialog != nil {
-				location = filepath.Base(item.Repository) + " · " + item.Path
-				searchable = item.Repository + " " + item.Path
-			}
-			if !strings.Contains(strings.ToLower(searchable), needle) {
+	if list.visible == nil || list.filter != needle {
+		list.visible, list.filter = make([]int, 0, len(list.items)), needle
+		for index, item := range list.items {
+			if needle == "" {
+				list.visible = append(list.visible, index)
 				continue
 			}
-			found = true
-			c.Key(item.ID)
+			searchable := item.Path
+			if dialog != nil {
+				searchable = item.Repository + " " + item.Path
+			}
+			if strings.Contains(strings.ToLower(searchable), needle) {
+				list.visible = append(list.visible, index)
+			}
+		}
+	}
+	visible, items := list.visible, list.items
+	if len(visible) == 0 {
+		label := locales.TrashEmpty()
+		if dialog == nil {
+			label = locales.RepositoryTrashEmpty()
+		}
+		if needle != "" {
+			label = locales.TrashNoMatches()
+		}
+		ui.Column(c).Grow(1).MinHeight(0).FillWidth().Children(func() {
+			ui.Row(c).FillWidth().Padding(24).Justify(ui.Center).Children(func() {
+				ui.Text(c, label).TextColor(c.Theme().TextMuted)
+			})
+		})
+		return
+	}
+	list.rows.KeepOffset = true
+	ui.List(c, &list.rows, len(visible)).Grow(1).MinHeight(0).FillWidth().
+		ItemKey(func(index int) any { return items[visible[index]].ID }).Rows(func(entry ui.ListRow) {
+		item := items[visible[entry.Index]]
+		location := item.Path
+		if dialog != nil {
+			location = filepath.Base(item.Repository) + " · " + item.Path
+		}
+		ui.Column(c).FillWidth().Children(func() {
 			row := ui.Row(c).FillWidth().Padding(7, 9).Gap(10).AlignItems(ui.Center)
 			if selected == item.ID {
 				row.Background(c.Theme().Accent.Alpha(0.12))
@@ -313,19 +348,7 @@ func (app *nativeApp) trashRows(c *ui.Context, list *nativeTrashList, selected s
 				}
 			})
 			ui.Divider(c)
-		}
-		if !found {
-			label := locales.TrashEmpty()
-			if dialog == nil {
-				label = locales.RepositoryTrashEmpty()
-			}
-			if needle != "" {
-				label = locales.TrashNoMatches()
-			}
-			ui.Row(c).FillWidth().Padding(24).Justify(ui.Center).Children(func() {
-				ui.Text(c, label).TextColor(c.Theme().TextMuted)
-			})
-		}
+		})
 	})
 }
 

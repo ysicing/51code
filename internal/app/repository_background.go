@@ -284,6 +284,7 @@ func (app *nativeApp) queueRepositoryRefresh(state *nativeRepositoryBackground, 
 		return
 	}
 	if observed.After(state.refreshNeed) {
+		app.pathSearch.invalidateQuickPaths()
 		state.refreshNeed = observed
 	}
 	if state.refreshTimer != nil {

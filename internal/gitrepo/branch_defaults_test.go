@@ -5,7 +5,10 @@ package gitrepo
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -134,5 +137,58 @@ func TestBranchesReportDivergenceFromOwnUpstream(t *testing.T) {
 		if !ok || [2]int{branch.Ahead, branch.Behind} != expected {
 			t.Errorf("%s ahead/behind = %d/%d, want %v", branch.Name, branch.Ahead, branch.Behind, expected)
 		}
+	}
+}
+
+func TestBranchTrackingCacheFollowsLocalAndUpstreamOIDs(t *testing.T) {
+	repo, path := fixture(t)
+	git(t, path, "commit", "--allow-empty", "-m", "base")
+	git(t, path, "remote", "add", "origin", t.TempDir())
+	git(t, path, "update-ref", "refs/remotes/origin/main", "HEAD")
+	git(t, path, "branch", "--set-upstream-to=origin/main", "main")
+	git(t, path, "commit", "--allow-empty", "-m", "local")
+	trace := filepath.Join(t.TempDir(), "git-trace")
+	t.Setenv("GIT_TRACE", trace)
+
+	check := func(all bool, ahead, behind, scans int) {
+		t.Helper()
+		if err := os.WriteFile(trace, nil, 0600); err != nil {
+			t.Fatal(err)
+		}
+		var branches []Branch
+		var err error
+		if all {
+			var refs References
+			refs, err = repo.References(t.Context())
+			branches = refs.Branches
+		} else {
+			branches, err = repo.Branches(t.Context())
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		index := slices.IndexFunc(branches, func(branch Branch) bool { return branch.Current })
+		if index < 0 || branches[index].Ahead != ahead || branches[index].Behind != behind {
+			t.Fatalf("current branch ahead/behind = %+v, want %d/%d", branches, ahead, behind)
+		}
+		log, err := os.ReadFile(trace)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if count := strings.Count(string(log), "%(upstream:track,nobracket)"); count != scans {
+			t.Fatalf("tracking scans = %d, want %d: %s", count, scans, log)
+		}
+	}
+	check(false, 1, 0, 1)
+	check(true, 1, 0, 0)
+	git(t, path, "commit", "--allow-empty", "-m", "local again")
+	check(true, 2, 0, 1)
+	git(t, path, "update-ref", "refs/remotes/origin/main", "HEAD^")
+	check(false, 1, 0, 1)
+	check(true, 1, 0, 0)
+	git(t, path, "update-ref", "-d", "refs/remotes/origin/main")
+	check(true, 0, 0, 0)
+	if len(repo.branchTracking) != 0 {
+		t.Fatalf("tracking cache kept obsolete OIDs: %+v", repo.branchTracking)
 	}
 }

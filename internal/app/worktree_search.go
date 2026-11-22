@@ -15,6 +15,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
+	"github.com/junegunn/fzf/src/util"
 )
 
 const (
@@ -26,6 +27,8 @@ const (
 type nativeWorktreeSearch struct {
 	query        string
 	results      []gitrepo.WorktreeSearchMatch
+	quickPaths   []nativeQuickPath
+	pathsVersion uint64
 	generation   uint64
 	submitted    bool
 	searched     bool
@@ -68,8 +71,11 @@ func (app *nativeApp) setSearchMode(mode int) {
 	}
 	app.cancelRead()
 	app.searchMode = mode
-	if mode == nativeSearchPaths && !app.pathSearch.searched {
-		app.startWorktreeSearch(&app.pathSearch, true, false)
+	if mode == nativeSearchPaths {
+		app.pathSearch.invalidateQuickPaths()
+		if !app.pathSearch.searched {
+			app.startWorktreeSearch(&app.pathSearch, true, false)
+		}
 	}
 }
 
@@ -79,7 +85,12 @@ func (app *nativeApp) openQuickSearch() {
 	}
 	app.leaveConflict(func() {
 		app.switchWorkspace("search")
-		app.setSearchMode(nativeSearchPaths)
+		if app.searchMode == nativeSearchPaths {
+			app.cancelRead()
+			app.pathSearch.invalidateQuickPaths()
+		} else {
+			app.setSearchMode(nativeSearchPaths)
+		}
 		app.pathSearch.focus = true
 		if app.readTask == nil {
 			app.startWorktreeSearch(&app.pathSearch, true, false)
@@ -117,6 +128,10 @@ func (app *nativeApp) worktreeSearchPanel(c *ui.Context, state *nativeWorktreeSe
 			Grow(1).MinWidth(0).AutoFocus().OnChange(func() {
 			state.resetResults()
 			if app.readTask != nil && app.readTask.kind == nativeReadWorktreeSearch {
+				// 路径列表仍在读取时保留任务，完成后用同一份快照处理最新的输入。
+				if paths && state.quickPaths == nil {
+					return
+				}
 				app.cancelRead()
 			}
 			if paths {
@@ -202,6 +217,11 @@ func (state *nativeWorktreeSearch) resetResults() {
 	state.selected, state.list = -1, ui.ListState{}
 }
 
+func (state *nativeWorktreeSearch) invalidateQuickPaths() {
+	state.quickPaths = nil
+	state.pathsVersion++
+}
+
 func (app *nativeApp) startWorktreeSearch(state *nativeWorktreeSearch, paths, debounce bool) {
 	if app.repository == nil || app.busy || app.closed || app.screen != "search" {
 		return
@@ -213,6 +233,7 @@ func (app *nativeApp) startWorktreeSearch(state *nativeWorktreeSearch, paths, de
 	state.resetResults()
 	state.submitted = true
 	generation := state.generation
+	quickPaths, pathsVersion := state.quickPaths, state.pathsVersion
 	repository, post := app.repository, app.post
 	path := repository.snapshot.Path
 	app.load(locales.WorktreeSearch(), nativeReadWorktreeSearch, func(ctx context.Context) (func(), error) {
@@ -230,8 +251,20 @@ func (app *nativeApp) startWorktreeSearch(state *nativeWorktreeSearch, paths, de
 			return nil, err
 		}
 		if paths {
-			results, err := quickWorktreeFiles(ctx, repo, query)
+			results, snapshot, err := quickWorktreeFiles(ctx, repo, quickPaths, query)
 			return func() {
+				// 监听事件可能在读取期间使快照失效。
+				if state.pathsVersion == pathsVersion {
+					state.quickPaths = snapshot
+				}
+				if state.generation != generation {
+					if err == nil {
+						open := state.openOnResult
+						app.startWorktreeSearch(state, true, false)
+						state.openOnResult = open && app.readTask != nil
+					}
+					return
+				}
 				state.results, state.searched = results, err == nil
 				if len(results) > 0 {
 					state.selected = 0
@@ -263,22 +296,31 @@ func (app *nativeApp) startWorktreeSearch(state *nativeWorktreeSearch, paths, de
 	})
 }
 
-func quickWorktreeFiles(ctx context.Context, repo *gitrepo.Repository, query string) ([]gitrepo.WorktreeSearchMatch, error) {
+func quickWorktreeFiles(ctx context.Context, repo *gitrepo.Repository, snapshot []nativeQuickPath, query string) ([]gitrepo.WorktreeSearchMatch, []nativeQuickPath, error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	paths, err := repo.WorktreeSearchPaths(ctx)
-	if err != nil {
-		return nil, err
+	if snapshot == nil {
+		paths, err := repo.WorktreeSearchPaths(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		snapshot = make([]nativeQuickPath, len(paths))
+		for index, path := range paths {
+			if err := ctx.Err(); err != nil {
+				return nil, nil, err
+			}
+			snapshot[index] = nativeQuickPath{path: path, chars: util.ToChars([]byte(path))}
+		}
 	}
 	root, err := os.OpenRoot(repo.Path)
 	if err != nil {
-		return nil, err
+		return nil, snapshot, err
 	}
 	defer root.Close()
 	var results []gitrepo.WorktreeSearchMatch
-	for _, ranked := range rankQuickPaths(ctx, paths, query) {
+	for _, ranked := range rankQuickPaths(ctx, snapshot, query) {
 		if err := ctx.Err(); err != nil {
-			return nil, err
+			return nil, snapshot, err
 		}
 		info, err := root.Lstat(ranked.path)
 		if err == nil && !info.IsDir() {
@@ -288,7 +330,7 @@ func quickWorktreeFiles(ctx context.Context, repo *gitrepo.Repository, query str
 			}
 		}
 	}
-	return results, ctx.Err()
+	return results, snapshot, ctx.Err()
 }
 
 func (app *nativeApp) openWorktreeSearchMatch(match gitrepo.WorktreeSearchMatch) {

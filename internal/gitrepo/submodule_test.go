@@ -77,6 +77,17 @@ func TestSubmoduleLifecycle(t *testing.T) {
 		t.Fatalf("local draft = %q, %v", content, err)
 	}
 	git(t, module, "restore", "file")
+	write(t, module, "untracked/nested/draft.txt", "untracked draft\n")
+	if !read(first, second).Dirty || repo.UpdateSubmodule(ctx, item) == nil {
+		t.Fatal("an untracked directory did not protect the submodule from update")
+	}
+	content, err = os.ReadFile(filepath.Join(module, "untracked/nested/draft.txt"))
+	if err != nil || string(content) != "untracked draft\n" {
+		t.Fatalf("untracked draft = %q, %v", content, err)
+	}
+	if err := os.RemoveAll(filepath.Join(module, "untracked")); err != nil {
+		t.Fatal(err)
+	}
 	excludes := filepath.Join(t.TempDir(), "excludes")
 	if err := os.WriteFile(excludes, []byte("ignored.txt\n"), 0600); err != nil {
 		t.Fatal(err)
