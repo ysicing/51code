@@ -33,6 +33,9 @@ type nativeBrowser struct {
 	pending    bool
 	blame      *nativeBrowserLineBlame
 	shownBlame *nativeBrowserLineBlame
+	image      nativeBrowserImage
+	showSource bool
+	actualSize bool
 }
 
 type nativeBrowserJump struct {
@@ -45,6 +48,7 @@ type nativeBrowserResult struct {
 	revision string
 	file     string
 	diff     gitrepo.Diff
+	image    nativeBrowserImage
 }
 
 func newNativeBrowser() *nativeBrowser {
@@ -69,12 +73,15 @@ func (state *nativeBrowser) visibleFiles() []gitrepo.CommitFile {
 	return state.filtered
 }
 
-func (app *nativeApp) readBrowser(ctx context.Context, path, revision, file string) (*nativeBrowserResult, error) {
+func (app *nativeApp) readBrowser(ctx context.Context, path, revision, file string, allowMissingFile bool) (*nativeBrowserResult, error) {
 	files, err := app.service.BrowseFiles(ctx, path, revision)
 	if err != nil {
 		return nil, err
 	}
 	result := &nativeBrowserResult{files: files, revision: revision, file: file}
+	if allowMissingFile && file != "" && !slices.Contains(files, file) {
+		result.file = ""
+	}
 	return app.readBrowserContent(ctx, path, result)
 }
 
@@ -88,7 +95,8 @@ func (app *nativeApp) readBrowserContent(ctx context.Context, path string, resul
 	if err != nil {
 		return nil, err
 	}
-	return result, nil
+	result.image = decodeBrowserImage(result.diff.New)
+	return result, ctx.Err()
 }
 
 func (state *nativeBrowser) apply(result *nativeBrowserResult) bool {
@@ -98,6 +106,12 @@ func (state *nativeBrowser) apply(result *nativeBrowserResult) bool {
 	if !slices.Equal(state.files, result.files) {
 		state.files = result.files
 		state.filtered = nil
+	}
+	if state.file != result.file || state.revision != result.revision {
+		state.showSource, state.actualSize = false, false
+	}
+	if changed {
+		state.image = result.image
 	}
 	state.revision, state.file = result.revision, result.file
 	state.pending, state.outline.pinned = false, false
@@ -116,6 +130,7 @@ func (app *nativeApp) loadBrowser(revision, file string, position *editor.Pos) {
 	state, path := app.browser, app.repository.snapshot.Path
 	state.pending = true
 	files := state.files
+	versionChanged := revision != state.revision
 	contentOnly := file != "" && file != state.file && revision == state.revision && files != nil && position == nil
 	app.load(locales.RepositoryFiles(), nativeReadDiff, func(ctx context.Context) (func(), error) {
 		var result *nativeBrowserResult
@@ -123,7 +138,7 @@ func (app *nativeApp) loadBrowser(revision, file string, position *editor.Pos) {
 		if contentOnly {
 			result, err = app.readBrowserContent(ctx, path, &nativeBrowserResult{files: files, revision: revision, file: file})
 		} else {
-			result, err = app.readBrowser(ctx, path, revision, file)
+			result, err = app.readBrowser(ctx, path, revision, file, versionChanged && position == nil)
 		}
 		if err != nil {
 			return nil, err
@@ -135,6 +150,9 @@ func (app *nativeApp) loadBrowser(revision, file string, position *editor.Pos) {
 			state.apply(result)
 			if position != nil {
 				state.viewer.side = 1
+				if content := state.viewer.sources[1]; content != nil && content.ImageFormat == "svg" {
+					state.showSource = true
+				}
 				if viewer := state.viewer.state(1); viewer.Buffer != nil {
 					viewer.GoTo(*position)
 				}
@@ -160,8 +178,8 @@ func (app *nativeApp) browserVersionMenu(menu *ui.Menu) {
 		label := fileVersionLabel(&gitrepo.FileContent{Revision: revision})
 		if menu.Item(label).Radio(state.revision == revision).Chosen() {
 			file := state.file
-			// 更换版本时新文件可能不存在，先显示版本的目录，再由用户选文件。
-			if state.revision != revision {
+			source := state.viewer.sources[state.viewer.side]
+			if state.revision != revision && (source == nil || source.ImageFormat == "") {
 				file = ""
 			}
 			app.loadBrowser(revision, file, nil)
@@ -233,12 +251,45 @@ func (app *nativeApp) browserFilePanel(c *ui.Context) {
 				})
 			}
 		})
-		viewer := state.viewer.state(state.viewer.side)
-		ui.Row(c).FillWidth().Padding(0, 12, 6).Children(func() {
-			ui.Button(c, locales.FindInFile()).Disabled(viewer.Buffer == nil).
-				OnClick(func() { viewer.Run(editor.Find) })
-		})
+		source := state.viewer.sources[state.viewer.side]
+		isImage := source != nil && source.Present && !source.Unsupported && source.ImageFormat != ""
+		showImage := isImage && !state.showSource
+		showSourceToggle := isImage && source.ImageFormat == "svg" && !source.Binary && !source.Truncated
+		showSizeToggle := showImage && source.ImageFormat != "svg" && state.image.picture != nil
+		var viewer *editor.State
+		if !showImage {
+			viewer = state.viewer.state(state.viewer.side)
+		}
+		if !showImage || showSourceToggle || showSizeToggle {
+			ui.Row(c).FillWidth().Padding(0, 12, 6).Gap(8).Children(func() {
+				if showSourceToggle {
+					label := locales.ViewImageSource()
+					if state.showSource {
+						label = locales.ViewImage()
+					}
+					ui.Button(c, label).OnClick(func() {
+						state.cancelBlame()
+						state.showSource = !state.showSource
+					})
+				}
+				if showSizeToggle {
+					label := locales.ImageActualSize()
+					if state.actualSize {
+						label = locales.ImageFitToView()
+					}
+					ui.Button(c, label).OnClick(func() { state.actualSize = !state.actualSize })
+				}
+				if !showImage {
+					ui.Button(c, locales.FindInFile()).Disabled(viewer.Buffer == nil).
+						OnClick(func() { viewer.Run(editor.Find) })
+				}
+			})
+		}
 		ui.Divider(c)
+		if showImage {
+			state.image.view(c, state.file, state.actualSize)
+			return
+		}
 		if viewer.Buffer != nil && state.file != "" {
 			viewer.SoftWrap = app.prefs.Wrap
 			viewer.ContextMenu = func(menu *ui.Menu) { app.browserBlameMenu(state, viewer, menu) }
@@ -247,7 +298,7 @@ func (app *nativeApp) browserFilePanel(c *ui.Context) {
 			return
 		}
 		message := locales.SelectFileOrCommit()
-		if source := state.viewer.sources[state.viewer.side]; state.file != "" && source != nil {
+		if state.file != "" && source != nil {
 			message = locales.AbsentVersion()
 			switch {
 			case source.Unsupported:

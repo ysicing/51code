@@ -865,6 +865,13 @@
   "absentVersion": "This file does not exist in this version.",
   "automaticDiff": "Auto",
   "findInFile": "Find",
+  "viewImageSource": "View Source",
+  "viewImage": "View Image",
+  "imageActualSize": "Actual Size",
+  "imageFitToView": "Fit to Window",
+  "imagePreviewUnavailable": "This image can’t be previewed",
+  "imagePreviewTooLarge": "This image is too large to preview",
+  "imagePreviewPartialSVG": "Some parts of this SVG can’t be shown",
   "fileContentTooLarge": "The full file exceeds 1 MiB. Open it in an external editor.",
   "fileContentUnsupported": "Full-file previews are unavailable for symbolic links, submodules, and special files.",
   "diffContextChanged": "The file no longer matches the diff. Original hunks are preserved. Refresh to retry."

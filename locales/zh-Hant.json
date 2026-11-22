@@ -865,6 +865,13 @@
   "absentVersion": "此版本不存在該檔案",
   "automaticDiff": "自動",
   "findInFile": "尋找",
+  "viewImageSource": "檢視原始碼",
+  "viewImage": "檢視圖片",
+  "imageActualSize": "原始大小",
+  "imageFitToView": "配合視窗",
+  "imagePreviewUnavailable": "無法預覽此圖片",
+  "imagePreviewTooLarge": "圖片過大，無法預覽",
+  "imagePreviewPartialSVG": "此 SVG 的部分內容無法預覽",
   "fileContentTooLarge": "完整檔案超過 1 MiB，請使用外部編輯器檢視。",
   "fileContentUnsupported": "符號連結、子模組及特殊檔案不提供全文預覽。",
   "diffContextChanged": "檔案內容與差異不一致，已保留原始區塊。請重新整理後再試。"

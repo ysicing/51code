@@ -8734,6 +8734,76 @@ func (msgs Messages) FindInFile() string {
 	return Catalog.Format(msgs.locale, "findInFile", nil)
 }
 
+// ViewImageSource says "查看源码"
+// in the language the app shows.
+func ViewImageSource() string { return In(i18n.Locale()).ViewImageSource() }
+
+// ViewImageSource says "查看源码"
+// in the language of msgs.
+func (msgs Messages) ViewImageSource() string {
+	return Catalog.Format(msgs.locale, "viewImageSource", nil)
+}
+
+// ViewImage says "查看图片"
+// in the language the app shows.
+func ViewImage() string { return In(i18n.Locale()).ViewImage() }
+
+// ViewImage says "查看图片"
+// in the language of msgs.
+func (msgs Messages) ViewImage() string {
+	return Catalog.Format(msgs.locale, "viewImage", nil)
+}
+
+// ImageActualSize says "原始大小"
+// in the language the app shows.
+func ImageActualSize() string { return In(i18n.Locale()).ImageActualSize() }
+
+// ImageActualSize says "原始大小"
+// in the language of msgs.
+func (msgs Messages) ImageActualSize() string {
+	return Catalog.Format(msgs.locale, "imageActualSize", nil)
+}
+
+// ImageFitToView says "适应窗口"
+// in the language the app shows.
+func ImageFitToView() string { return In(i18n.Locale()).ImageFitToView() }
+
+// ImageFitToView says "适应窗口"
+// in the language of msgs.
+func (msgs Messages) ImageFitToView() string {
+	return Catalog.Format(msgs.locale, "imageFitToView", nil)
+}
+
+// ImagePreviewUnavailable says "无法预览此图片"
+// in the language the app shows.
+func ImagePreviewUnavailable() string { return In(i18n.Locale()).ImagePreviewUnavailable() }
+
+// ImagePreviewUnavailable says "无法预览此图片"
+// in the language of msgs.
+func (msgs Messages) ImagePreviewUnavailable() string {
+	return Catalog.Format(msgs.locale, "imagePreviewUnavailable", nil)
+}
+
+// ImagePreviewTooLarge says "图片过大，无法预览"
+// in the language the app shows.
+func ImagePreviewTooLarge() string { return In(i18n.Locale()).ImagePreviewTooLarge() }
+
+// ImagePreviewTooLarge says "图片过大，无法预览"
+// in the language of msgs.
+func (msgs Messages) ImagePreviewTooLarge() string {
+	return Catalog.Format(msgs.locale, "imagePreviewTooLarge", nil)
+}
+
+// ImagePreviewPartialSVG says "此 SVG 的部分内容无法预览"
+// in the language the app shows.
+func ImagePreviewPartialSVG() string { return In(i18n.Locale()).ImagePreviewPartialSVG() }
+
+// ImagePreviewPartialSVG says "此 SVG 的部分内容无法预览"
+// in the language of msgs.
+func (msgs Messages) ImagePreviewPartialSVG() string {
+	return Catalog.Format(msgs.locale, "imagePreviewPartialSVG", nil)
+}
+
 // FileContentTooLarge says "完整文件超过 1 MiB，请使用外部编辑器查看。"
 // in the language the app shows.
 func FileContentTooLarge() string { return In(i18n.Locale()).FileContentTooLarge() }

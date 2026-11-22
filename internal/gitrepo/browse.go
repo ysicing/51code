@@ -63,6 +63,11 @@ func (repo *Repository) BrowseFileContent(ctx context.Context, path, revision st
 	if err != nil {
 		return nil, err
 	}
+	side := &FileContent{Path: path, Revision: revision, blameBase: hash}
+	switch extension := strings.ToLower(filepath.Ext(path)); extension {
+	case ".svg", ".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp":
+		side.ImageFormat = extension[1:]
+	}
 	switch revision {
 	case "WORKTREE":
 		output, err := repo.git(ctx, "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", path)
@@ -93,13 +98,9 @@ func (repo *Repository) BrowseFileContent(ctx context.Context, path, revision st
 		if !member {
 			return nil, errors.New("文件不在仓库浏览范围内")
 		}
-		content, err := repo.worktreeFileContent(ctx, path)
-		if content != nil {
-			content.blameBase = hash
-		}
-		return content, err
+		return repo.readWorktreeFileContent(ctx, side)
 	case "INDEX":
-		content, err := repo.indexFileContent(ctx, path)
+		content, err := repo.readIndexFileContent(ctx, side)
 		if err == nil && !content.Present {
 			return nil, errors.New("暂存区不存在该文件")
 		}
@@ -108,11 +109,7 @@ func (repo *Repository) BrowseFileContent(ctx context.Context, path, revision st
 		}
 		return content, err
 	default:
-		content, err := repo.treeFileContent(ctx, path, revision, hash)
-		if content != nil {
-			content.blameBase = hash
-		}
-		return content, err
+		return repo.readTreeFileContent(ctx, side, hash)
 	}
 }
 

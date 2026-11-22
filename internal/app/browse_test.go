@@ -4,7 +4,11 @@
 package app
 
 import (
+	"bytes"
 	"fmt"
+	"image"
+	"image/color"
+	"image/png"
 	"os"
 	"path/filepath"
 	"slices"
@@ -191,6 +195,156 @@ func TestNativeBrowserPreviewFollowsVersionMenu(t *testing.T) {
 			t.Fatal("preview has an independent version selector")
 		}
 	}
+}
+
+func TestNativeBrowserImagePreviewFollowsVersion(t *testing.T) {
+	app, path, finish := nativeFixture(t)
+	const name = "image [draft].PNG"
+	writeImage := func(fill color.RGBA) {
+		t.Helper()
+		picture := image.NewRGBA(image.Rect(0, 0, 32, 24))
+		for y := range 24 {
+			for x := range 32 {
+				picture.SetRGBA(x, y, fill)
+			}
+		}
+		var data bytes.Buffer
+		if err := png.Encode(&data, picture); err != nil {
+			t.Fatal(err)
+		}
+		writeNativeFile(t, path, name, data.String())
+	}
+	historical := color.RGBA{R: 255, G: 255, A: 255}
+	head := color.RGBA{R: 255, A: 255}
+	staged := color.RGBA{G: 255, A: 255}
+	working := color.RGBA{B: 255, A: 255}
+	writeImage(historical)
+	nativeGit(t, path, "add", "--", name)
+	nativeGit(t, path, "commit", "-m", "first image")
+	first := nativeGit(t, path, "rev-parse", "HEAD")
+	writeImage(head)
+	nativeGit(t, path, "commit", "-am", "update image")
+	writeImage(staged)
+	nativeGit(t, path, "add", "--", name)
+	writeImage(working)
+	app.switchWorkspace("files")
+	finish()
+	app.selectBrowserFile(name)
+	finish()
+	tester := ui.NewTester(app.browserWorkspace, 1024, 680)
+	assertImage := func(want color.RGBA) {
+		t.Helper()
+		tester.Frame()
+		preview, found := tester.AccessByRole(ui.RoleImage, name)
+		if !found || preview.Offscreen {
+			t.Fatal("找不到图片预览")
+		}
+		x, y := int(preview.Bounds.X+preview.Bounds.W/2), int(preview.Bounds.Y+preview.Bounds.H/2)
+		if got := tester.Image().RGBAAt(x, y); got != want {
+			t.Fatalf("图片中心颜色为 %v，预期 %v", got, want)
+		}
+	}
+	assertImage(working)
+	if err := tester.Click("原始大小"); err != nil {
+		t.Fatal(err)
+	}
+	preview, found := tester.AccessByRole(ui.RoleImage, name)
+	if !found || preview.Bounds.W != 32 || preview.Bounds.H != 24 {
+		t.Fatalf("原始大小预览 = %+v", preview)
+	}
+	assertImage(working)
+	if err := tester.Click("适应窗口"); err != nil {
+		t.Fatal(err)
+	}
+	switchVersion := func(label string) {
+		t.Helper()
+		menu, found := tester.AccessByRole(ui.RoleMenuButton, locales.RepositoryFiles())
+		if !found {
+			t.Fatal("找不到版本菜单")
+		}
+		tester.ClickAt(menu.Bounds.X+menu.Bounds.W/2, menu.Bounds.Y+menu.Bounds.H/2)
+		if err := tester.ChooseMenuItem(label); err != nil {
+			t.Fatal(err)
+		}
+		finish()
+	}
+	for _, choice := range []struct {
+		label string
+		fill  color.RGBA
+	}{
+		{"HEAD", head},
+		{locales.IndexVersion(), staged},
+		{locales.WorkingVersion(), working},
+	} {
+		switchVersion(choice.label)
+		assertImage(choice.fill)
+	}
+	replacement := color.RGBA{R: 255, B: 255, A: 255}
+	writeImage(replacement)
+	app.refreshRepositoryView(false)
+	finish()
+	assertImage(replacement)
+	app.loadBrowser(first, name, nil)
+	finish()
+	assertImage(historical)
+	switchVersion(locales.WorkingVersion())
+	current := filepath.Join(path, name)
+	if err := os.Rename(current, filepath.Join(path, "untracked.png")); err != nil {
+		t.Fatal(err)
+	}
+	app.selectBrowserFile("untracked.png")
+	finish()
+	switchVersion("HEAD")
+	tester.Frame()
+	if app.problem != "" || app.browser.revision != "HEAD" || app.browser.file != "" {
+		t.Fatalf("HEAD 不存在的图片应清除预览：%q, %q, %q", app.problem, app.browser.revision, app.browser.file)
+	}
+}
+
+func TestNativeBrowserSVGCanSwitchBetweenPreviewAndSource(t *testing.T) {
+	app, path, finish := nativeFixture(t)
+	const name = "icon.svg"
+	const source = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 24"><path fill="#1177ff" d="M4 20L16 4l12 16Z"/></svg>`
+	const broken = `<svg><`
+	writeNativeFile(t, path, name, source)
+	writeNativeFile(t, path, "broken.svg", broken)
+	app.switchWorkspace("files")
+	finish()
+	app.selectBrowserFile(name)
+	finish()
+	tester := ui.NewTester(app.browserWorkspace, 1024, 680)
+	if _, found := tester.AccessByRole(ui.RoleImage, name); !found {
+		t.Fatal("SVG 没有默认显示图片")
+	}
+	if directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); directory != "" {
+		saveNativeScreenshot(t, tester, directory, "browser-image-light.png")
+		tester.SetDark(true)
+		saveNativeScreenshot(t, tester, directory, "browser-image-dark.png")
+	}
+	assertSource := func(want string) {
+		t.Helper()
+		if err := tester.Click("查看源码"); err != nil {
+			t.Fatal(err)
+		}
+		field, found := tester.AccessByRole(ui.RoleTextField, locales.FileContentLabel())
+		if !found || field.Value != want || !field.ReadOnly {
+			t.Fatalf("SVG 源码预览 = %+v", field)
+		}
+	}
+	assertSource(source)
+	if err := tester.Click("查看图片"); err != nil {
+		t.Fatal(err)
+	}
+	if _, found := tester.AccessByRole(ui.RoleImage, name); !found {
+		t.Fatal("切换回图片后未显示 SVG")
+	}
+	app.selectBrowserFile("broken.svg")
+	finish()
+	tester.Frame()
+	if _, found := tester.Find("无法预览此图片"); !found {
+		t.Fatal("无效 SVG 没有显示预览失败提示")
+	}
+	assertSource(broken)
 }
 
 func TestNativeBrowserEmptyAndNoFilterMatchStates(t *testing.T) {

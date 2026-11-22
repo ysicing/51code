@@ -15,7 +15,10 @@ import (
 	"unicode/utf8"
 )
 
-const fileContentLimit = 1 << 20
+const (
+	fileContentLimit  = 1 << 20
+	browserImageLimit = 12 << 20
+)
 
 // FileContent 描述 diff 一侧的只读完整版本；不可预览时 Text 为空，不能当作空文件。
 type FileContent struct {
@@ -26,6 +29,8 @@ type FileContent struct {
 	Binary      bool   `json:"binary"`
 	Truncated   bool   `json:"truncated"`
 	Unsupported bool   `json:"unsupported"`
+	ImageFormat string `json:"-"`
+	ImageData   string `json:"-"`
 	blameBase   string
 }
 
@@ -90,7 +95,11 @@ func (repo *Repository) commitFileContents(ctx context.Context, diff Diff, selec
 }
 
 func (repo *Repository) treeFileContent(ctx context.Context, path, revision, hash string) (*FileContent, error) {
-	side := &FileContent{Path: path, Revision: revision}
+	return repo.readTreeFileContent(ctx, &FileContent{Path: path, Revision: revision}, hash)
+}
+
+func (repo *Repository) readTreeFileContent(ctx context.Context, side *FileContent, hash string) (*FileContent, error) {
+	path := side.Path
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -127,7 +136,11 @@ func (repo *Repository) treeFileContent(ctx context.Context, path, revision, has
 }
 
 func (repo *Repository) indexFileContent(ctx context.Context, path string) (*FileContent, error) {
-	side := &FileContent{Path: path, Revision: "INDEX"}
+	return repo.readIndexFileContent(ctx, &FileContent{Path: path, Revision: "INDEX"})
+}
+
+func (repo *Repository) readIndexFileContent(ctx context.Context, side *FileContent) (*FileContent, error) {
+	path := side.Path
 	output, err := repo.git(ctx, "ls-files", "--stage", "-z", "--", path)
 	if err != nil {
 		return nil, err
@@ -163,16 +176,17 @@ func (repo *Repository) blobFileContentSized(ctx context.Context, side *FileCont
 		return side, nil
 	}
 	if content, ok := repo.cachedBlob(hash); ok {
-		setFileContentText(side, content)
+		side.setContent(content)
 		return side, nil
 	}
-	if size > fileContentLimit {
+	limit := side.readLimit()
+	if size > int64(limit) {
 		side.Truncated = true
 		return side, nil
 	}
-	// 大小未知时不再单独 cat-file -s：带上限读取，超过 fileContentLimit 即结束进程，
+	// 大小未知时不再单独 cat-file -s：带上限读取，超过预览上限即结束进程，
 	// 同样不会把大 blob 载入内存；对象消失或读取失败仍向上报错。
-	content, truncated, err := runCapped(ctx, repo.Path, "", 30*time.Second, fileContentLimit, "cat-file", "blob", hash)
+	content, truncated, err := runCapped(ctx, repo.Path, "", 30*time.Second, limit, "cat-file", "blob", hash)
 	if err != nil {
 		return nil, err
 	}
@@ -181,13 +195,25 @@ func (repo *Repository) blobFileContentSized(ctx context.Context, side *FileCont
 		return side, nil
 	}
 	repo.rememberBlob(hash, content)
-	setFileContentText(side, content)
+	side.setContent(content)
 	return side, nil
 }
 
-func setFileContentText(side *FileContent, content string) {
-	if len(content) > fileContentLimit {
+func (side *FileContent) readLimit() int {
+	if side.ImageFormat != "" && side.ImageFormat != "svg" {
+		return browserImageLimit
+	}
+	return fileContentLimit
+}
+
+func (side *FileContent) setContent(content string) {
+	if len(content) > side.readLimit() {
 		side.Truncated = true
+		return
+	}
+	if side.ImageFormat != "" && side.ImageFormat != "svg" {
+		side.ImageData = content
+		side.Binary = true
 		return
 	}
 	side.Binary = strings.ContainsRune(content, 0) || !utf8.ValidString(content)
@@ -197,7 +223,11 @@ func setFileContentText(side *FileContent, content string) {
 }
 
 func (repo *Repository) worktreeFileContent(ctx context.Context, path string) (*FileContent, error) {
-	side := &FileContent{Path: path, Revision: "WORKTREE"}
+	return repo.readWorktreeFileContent(ctx, &FileContent{Path: path, Revision: "WORKTREE"})
+}
+
+func (repo *Repository) readWorktreeFileContent(ctx context.Context, side *FileContent) (*FileContent, error) {
+	path := side.Path
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -226,7 +256,8 @@ func (repo *Repository) worktreeFileContent(ctx context.Context, path string) (*
 		side.Unsupported = true
 		return side, nil
 	}
-	if info.Size() > fileContentLimit {
+	limit := int64(side.readLimit())
+	if info.Size() > limit {
 		side.Truncated = true
 		return side, nil
 	}
@@ -235,14 +266,14 @@ func (repo *Repository) worktreeFileContent(ctx context.Context, path string) (*
 		return nil, err
 	}
 	defer file.Close()
-	content, err := io.ReadAll(io.LimitReader(file, fileContentLimit+1))
+	content, err := io.ReadAll(io.LimitReader(file, limit+1))
 	if err != nil {
 		return nil, err
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	setFileContentText(side, string(content))
+	side.setContent(string(content))
 	return side, nil
 }
 
