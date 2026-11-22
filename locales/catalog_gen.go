@@ -6628,14 +6628,46 @@ func (msgs Messages) ShortcutLabel(label string) string {
 	return Catalog.Format(msgs.locale, "shortcutLabel", map[string]any{"label": label})
 }
 
-// DuplicateShortcuts says "快捷键不能重复，请为每项选择不同组合。"
+// RecordShortcut says "按下快捷键"
+// in the language the app shows.
+func RecordShortcut() string { return In(i18n.Locale()).RecordShortcut() }
+
+// RecordShortcut says "按下快捷键"
+// in the language of msgs.
+func (msgs Messages) RecordShortcut() string {
+	return Catalog.Format(msgs.locale, "recordShortcut", nil)
+}
+
+// ReservedShortcut says "此快捷键已被系统、菜单或编辑器保留。"
+// in the language the app shows.
+func ReservedShortcut() string { return In(i18n.Locale()).ReservedShortcut() }
+
+// ReservedShortcut says "此快捷键已被系统、菜单或编辑器保留。"
+// in the language of msgs.
+func (msgs Messages) ReservedShortcut() string {
+	return Catalog.Format(msgs.locale, "reservedShortcut", nil)
+}
+
+// DuplicateShortcuts says "此快捷键已分配给其他操作。"
 // in the language the app shows.
 func DuplicateShortcuts() string { return In(i18n.Locale()).DuplicateShortcuts() }
 
-// DuplicateShortcuts says "快捷键不能重复，请为每项选择不同组合。"
+// DuplicateShortcuts says "此快捷键已分配给其他操作。"
 // in the language of msgs.
 func (msgs Messages) DuplicateShortcuts() string {
 	return Catalog.Format(msgs.locale, "duplicateShortcuts", nil)
+}
+
+// UnsupportedShortcut says "不支持此组合，请使用 {modifier} 加主键。"
+// in the language the app shows.
+func UnsupportedShortcut(modifier string) string {
+	return In(i18n.Locale()).UnsupportedShortcut(modifier)
+}
+
+// UnsupportedShortcut says "不支持此组合，请使用 {modifier} 加主键。"
+// in the language of msgs.
+func (msgs Messages) UnsupportedShortcut(modifier string) string {
+	return Catalog.Format(msgs.locale, "unsupportedShortcut", map[string]any{"modifier": modifier})
 }
 
 // AppearanceError says "无法应用外观：{error}"

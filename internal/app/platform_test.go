@@ -16,12 +16,21 @@ import (
 
 func TestPlatformShortcutLabels(t *testing.T) {
 	for _, platform := range []string{"darwin", "windows", "linux"} {
-		want := "Ctrl+Shift+Enter"
-		if platform == "darwin" {
-			want = "⌘⇧↩"
-		}
-		if got := shortcutLabelForPlatform("⌘⇧↩", platform); got != want {
-			t.Fatalf("%s shortcut = %q, want %q", platform, got, want)
+		for _, combo := range []struct{ accelerator, mac, pc string }{
+			{"CmdOrCtrl+Shift+Enter", "⇧⌘↩", "Ctrl+Shift+Enter"},
+			{"CmdOrCtrl+Shift+Alt+F12", "⌥⇧⌘F12", "Ctrl+Shift+Alt+F12"},
+			{"CmdOrCtrl+Alt+`", "⌥⌘`", "Ctrl+Alt+`"},
+			{"CmdOrCtrl+Alt+R", "⌥⌘R", "Ctrl+Alt+R"},
+			{"CmdOrCtrl+,", "⌘,", "Ctrl+,"},
+		} {
+			want := combo.pc
+			if platform == "darwin" {
+				want = combo.mac
+			}
+			label := shortcutLabelForPlatform(combo.accelerator, platform)
+			if label != want || shortcutAccelerator(label) != combo.accelerator {
+				t.Fatalf("%s shortcut %q displays as %q, want %q", platform, combo.accelerator, label, want)
+			}
 		}
 	}
 }
@@ -85,6 +94,23 @@ func TestPlatformMenuPreservesCommands(t *testing.T) {
 		}
 		if platform == "darwin" && len(application) != 11 {
 			t.Fatal("macOS menu changed")
+		}
+	}
+}
+
+func TestNativeApplicationMenuPreservesRefreshShortcut(t *testing.T) {
+	refresh := &mygo.MenuItem{ID: shortcutRefresh, Accelerator: defaultNativeShortcuts().Refresh}
+	view := &mygo.MenuItem{Role: mygo.RoleViewMenu}
+	menu := newNativeApplicationMenu([]*mygo.MenuItem{
+		{Submenu: []*mygo.MenuItem{refresh}},
+		view,
+	})
+	if menu.ItemByID(shortcutRefresh).Accelerator != "CmdOrCtrl+R" {
+		t.Fatal("仓库刷新丢失默认快捷键")
+	}
+	for _, item := range view.Submenu {
+		if (item.Role == mygo.RoleReload || item.Role == mygo.RoleForceReload) && item.Accelerator != "" {
+			t.Fatalf("网页重载角色 %s 仍占用快捷键 %q", item.Role, item.Accelerator)
 		}
 	}
 }

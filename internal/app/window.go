@@ -158,7 +158,7 @@ type nativeApp struct {
 	stateFile             string
 	settingsError         string
 	memoryDiagnostics     nativeMemoryDiagnostics
-	shortcutDraft         nativeShortcuts
+	shortcutRecording     *string
 	settingsAutoChecks    bool
 	settingsAutoDownloads bool
 	availableVersion      string
@@ -322,6 +322,7 @@ func (app *nativeApp) open() {
 	})
 	protectWindowClose(app.win, app)
 	app.win.OnClosed(func() {
+		app.stopShortcutRecording()
 		app.closed = true
 		app.stopRepositoryBackground()
 		app.cancelRead()

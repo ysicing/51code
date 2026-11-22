@@ -4,9 +4,7 @@
 package app
 
 import (
-	"runtime"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/ysicing/51code/locales"
@@ -21,33 +19,7 @@ const (
 	appearanceSystem = "跟随系统"
 	appearanceLight  = "浅色"
 	appearanceDark   = "深色"
-
-	shortcutLibrary = "shortcut-library"
-	shortcutAddRepo = "shortcut-add-repository"
-	shortcutScan    = "shortcut-scan"
-	shortcutRefresh = "shortcut-refresh"
-	shortcutCommit  = "shortcut-commit"
 )
-
-type nativeShortcuts struct {
-	Library       string `json:"library"`
-	AddRepository string `json:"addRepository"`
-	Scan          string `json:"scan"`
-	Refresh       string `json:"refresh"`
-	Commit        string `json:"commit"`
-}
-
-var nativeShortcutChoices = []string{
-	shortcutLabel("⌘⇧L"),
-	shortcutLabel("⌘O"),
-	shortcutLabel("⌘⇧O"),
-	shortcutLabel("⌘R"),
-	shortcutLabel("⌘↩"),
-	shortcutLabel("⌘⇧R"),
-	shortcutLabel("⌘⇧↩"),
-	shortcutLabel("⌥⌘L"),
-	shortcutLabel("⌥⌘R"),
-}
 
 var nativeUpdateCheckFrequencies = []string{"每小时", "每 6 小时", "每天", "每周"}
 
@@ -61,13 +33,6 @@ func nativeUpdateCheckInterval(frequency string) time.Duration {
 		return 7 * 24 * time.Hour
 	default:
 		return 24 * time.Hour
-	}
-}
-
-func defaultNativeShortcuts() nativeShortcuts {
-	return nativeShortcuts{
-		Library: shortcutLabel("⌘⇧L"), AddRepository: shortcutLabel("⌘O"), Scan: shortcutLabel("⌘⇧O"),
-		Refresh: shortcutLabel("⌘R"), Commit: shortcutLabel("⌘↩"),
 	}
 }
 
@@ -109,95 +74,7 @@ func normalizeNativePreferences(prefs *nativePreferences) {
 	if prefs.Appearance != appearanceSystem && prefs.Appearance != appearanceLight && prefs.Appearance != appearanceDark {
 		prefs.Appearance = appearanceSystem
 	}
-	defaults := defaultNativeShortcuts()
-	for _, value := range []*string{
-		&prefs.Shortcuts.Library, &prefs.Shortcuts.AddRepository, &prefs.Shortcuts.Scan,
-		&prefs.Shortcuts.Refresh, &prefs.Shortcuts.Commit,
-	} {
-		*value = shortcutLabel(*value)
-	}
-	if prefs.Shortcuts.Library == "" {
-		prefs.Shortcuts.Library = defaults.Library
-	}
-	if prefs.Shortcuts.AddRepository == "" {
-		prefs.Shortcuts.AddRepository = defaults.AddRepository
-	}
-	if prefs.Shortcuts.Scan == "" {
-		prefs.Shortcuts.Scan = defaults.Scan
-	}
-	if prefs.Shortcuts.Refresh == "" {
-		prefs.Shortcuts.Refresh = defaults.Refresh
-	}
-	if prefs.Shortcuts.Commit == "" {
-		prefs.Shortcuts.Commit = defaults.Commit
-	}
-	if !shortcutsAvailable(prefs.Shortcuts) || !shortcutsUnique(prefs.Shortcuts) {
-		prefs.Shortcuts = defaults
-	}
-}
-
-func shortcutAccelerator(shortcut string) string {
-	return strings.NewReplacer(
-		"⌘", "CmdOrCtrl+",
-		"⇧", "Shift+",
-		"⌥", "Alt+",
-		"↩", "Enter",
-	).Replace(shortcut)
-}
-
-func shortcutsUnique(shortcuts nativeShortcuts) bool {
-	values := []string{
-		shortcuts.Library, shortcuts.AddRepository, shortcuts.Scan, shortcuts.Refresh, shortcuts.Commit,
-	}
-	seen := make(map[string]struct{}, len(values))
-	for _, value := range values {
-		if value == "" {
-			continue
-		}
-		if _, exists := seen[value]; exists {
-			return false
-		}
-		seen[value] = struct{}{}
-	}
-	return true
-}
-
-func shortcutsAvailable(shortcuts nativeShortcuts) bool {
-	available := make(map[string]struct{}, len(nativeShortcutChoices))
-	for _, choice := range nativeShortcutChoices {
-		available[choice] = struct{}{}
-	}
-	for _, value := range []string{
-		shortcuts.Library, shortcuts.AddRepository, shortcuts.Scan, shortcuts.Refresh, shortcuts.Commit,
-	} {
-		if _, exists := available[value]; !exists {
-			return false
-		}
-	}
-	return true
-}
-
-func applyNativeShortcuts(shortcuts nativeShortcuts) {
-	menu := mygo.App.Menu()
-	if menu == nil {
-		return
-	}
-	values := map[string]string{
-		shortcutLibrary: shortcutAccelerator(shortcuts.Library),
-		shortcutAddRepo: shortcutAccelerator(shortcuts.AddRepository),
-		shortcutScan:    shortcutAccelerator(shortcuts.Scan),
-		shortcutRefresh: shortcutAccelerator(shortcuts.Refresh),
-		shortcutCommit:  shortcutAccelerator(shortcuts.Commit),
-	}
-	for id, accelerator := range values {
-		if item := menu.ItemByID(id); item != nil {
-			item.SetAccelerator(accelerator)
-		}
-	}
-	if runtime.GOOS != "darwin" {
-		// MyGo 0.9 的 Windows/GTK 后端仅在安装菜单时重建原生快捷键绑定。
-		mygo.App.SetMenu(menu)
-	}
+	prefs.Shortcuts = normalizeNativeShortcuts(prefs.Shortcuts)
 }
 
 func (app *nativeApp) settingsDialog() {
@@ -227,7 +104,6 @@ func (app *nativeApp) settingsDialogAt(initialTab int) {
 	}
 	app.settingsAutoChecks = updater.AutomaticChecks()
 	app.settingsAutoDownloads = updater.AutomaticDownloads()
-	app.shortcutDraft = app.prefs.Shortcuts
 	app.settingsError = ""
 	dialog := &nativeDialog{title: locales.ApplicationSettings(), titleText: locales.ApplicationSettings, width: 620, height: 620, dismiss: locales.Cancel(), applicationSettings: true}
 	tab := initialTab
@@ -236,6 +112,7 @@ func (app *nativeApp) settingsDialogAt(initialTab int) {
 	ai := &nativeAISettings{manual: app.prefs.AI.Endpoint != "" || app.prefs.AI.Protocol != ""}
 	app.aiEditor = ai
 	dialog.onClose = func() {
+		app.stopShortcutRecording()
 		if ai.keySaving {
 			return
 		}
@@ -261,6 +138,9 @@ func (app *nativeApp) settingsDialogAt(initialTab int) {
 		ui.Column(c).Fill().MinHeight(0).Gap(16).Children(func() {
 			if ui.Tabs(c, &tab, categories...).Label(locales.SettingsCategories()).Disabled(ai.keySaving || ai.key != "").Changed() {
 				dialog.problem = ""
+				if tab != 2 {
+					app.stopShortcutRecording()
+				}
 				if tab != 4 {
 					ai.stop()
 				}
@@ -293,17 +173,19 @@ func (app *nativeApp) settingsDialogAt(initialTab int) {
 							ui.Divider(c)
 							app.lfsExecutablePreferences(c, identity, dialog)
 						case 2:
-							shortcutPreference(app, c, locales.LocalRepositories(), &app.shortcutDraft.Library)
-							shortcutPreference(app, c, locales.AddLocalRepository(), &app.shortcutDraft.AddRepository)
-							shortcutPreference(app, c, locales.ScanFolders(), &app.shortcutDraft.Scan)
-							shortcutPreference(app, c, locales.Refresh(), &app.shortcutDraft.Refresh)
-							shortcutPreference(app, c, locales.Commit(), &app.shortcutDraft.Commit)
+							app.shortcutPreference(c, locales.LocalRepositories(), &app.prefs.Shortcuts.Library)
+							app.shortcutPreference(c, locales.AddLocalRepository(), &app.prefs.Shortcuts.AddRepository)
+							app.shortcutPreference(c, locales.ScanFolders(), &app.prefs.Shortcuts.Scan)
+							app.shortcutPreference(c, locales.Refresh(), &app.prefs.Shortcuts.Refresh)
+							app.shortcutPreference(c, locales.Commit(), &app.prefs.Shortcuts.Commit)
+							app.shortcutPreference(c, locales.QuickOpen(), &app.prefs.Shortcuts.QuickOpen)
 							ui.Divider(c)
 							ui.Row(c).FillWidth().Justify(ui.End).Children(func() {
-								if ui.Button(c, locales.RestoreShortcuts()).Clicked() {
-									app.shortcutDraft = defaultNativeShortcuts()
-									app.applyShortcutDraft()
-								}
+								ui.Button(c, locales.RestoreShortcuts()).OnClick(func() {
+									previous := app.prefs.Shortcuts
+									app.prefs.Shortcuts = defaultNativeShortcuts()
+									app.saveShortcutChanges(previous)
+								})
 							})
 						case 3:
 							if !selfUpdates() {
@@ -510,32 +392,8 @@ func (app *nativeApp) applyAppearance() {
 	app.win.SetWindowButtonsTheme(appearanceThemeSource(app.prefs.Appearance))
 }
 
-func (app *nativeApp) shortcutDraftChanged() {
-	if !shortcutsUnique(app.shortcutDraft) {
-		app.settingsError = locales.DuplicateShortcuts()
-		return
-	}
-	app.prefs.Shortcuts = app.shortcutDraft
-	app.settingsError = ""
-	applyNativeShortcuts(app.prefs.Shortcuts)
-	app.saveSettings()
-}
-
-func (app *nativeApp) applyShortcutDraft() {
-	app.shortcutDraftChanged()
-}
-
 func (app *nativeApp) saveSettings() {
 	if err := app.savePreferences(); err != nil {
 		app.settingsError = locales.SaveSettingsError(err.Error())
 	}
-}
-
-func shortcutPreference(app *nativeApp, c *ui.Context, label string, value *string) {
-	settingsRow(c, label, func() {
-		choice := ui.Select(c, value, nativeShortcutChoices).Label(locales.ShortcutLabel(label)).Width(210)
-		if choice.Changed() {
-			app.shortcutDraftChanged()
-		}
-	})
 }

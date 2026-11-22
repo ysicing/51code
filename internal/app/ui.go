@@ -139,7 +139,7 @@ func (app *nativeApp) view(c *ui.Context) {
 			})
 			app.toolbar(c)
 			ui.Toolbar(c, func() {
-				if iconButton(c, locales.Settings(), nativeIcons["settings"]).Tooltip(locales.Settings() + "（" + shortcutLabel("⌘,") + "）").Disabled(app.busy || app.dialog != nil).Clicked() {
+				if iconButton(c, locales.Settings(), nativeIcons["settings"]).Tooltip(locales.Settings() + "（" + shortcutLabel(settingsShortcut) + "）").Disabled(app.busy || app.dialog != nil).Clicked() {
 					app.settingsDialog()
 				}
 			}).Label(locales.ApplicationActions()).Padding(0).Shrink(0)

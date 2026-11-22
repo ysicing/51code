@@ -70,7 +70,7 @@ func TestNativeSettingsKeepsBoundsAcrossCategories(t *testing.T) {
 						continue
 					}
 					switch control.Role {
-					case ui.RoleTextField, ui.RolePopUpButton, ui.RoleMenuButton, ui.RoleCheckBox:
+					case ui.RoleTextField, ui.RolePopUpButton, ui.RoleMenuButton, ui.RoleCheckBox, ui.RoleButton:
 						if control.Bounds.X < panel.Bounds.X || control.Bounds.X+control.Bounds.W > panel.Bounds.X+panel.Bounds.W {
 							t.Fatalf("%s 控件超出设置面板: %+v", category, control)
 						}
@@ -630,5 +630,32 @@ func TestNativeSettingsParentShowsRefreshFailure(t *testing.T) {
 	dismissNativeError(t, app)
 	if app.dialog != parent || parent.problem == "" || app.writable {
 		t.Fatal("返回设置页时隐藏了刷新失败，或未禁止后续写入")
+	}
+}
+
+func TestNativeQuickOpenShortcutIsConfigurableAndUnique(t *testing.T) {
+	// 旧版设置文件没有快速打开，补默认值时保留用户已改过的其他快捷键。
+	prefs := nativePreferences{Shortcuts: defaultNativeShortcuts()}
+	prefs.Shortcuts.Refresh, prefs.Shortcuts.QuickOpen = "⌥⌘R", ""
+	normalizeNativePreferences(&prefs)
+	if prefs.Shortcuts.QuickOpen != "CmdOrCtrl+P" || prefs.Shortcuts.Refresh != "CmdOrCtrl+Alt+R" {
+		t.Fatalf("legacy shortcuts = %+v", prefs.Shortcuts)
+	}
+	if got := shortcutAccelerator(defaultNativeShortcuts().QuickOpen); got != "CmdOrCtrl+P" {
+		t.Fatalf("quick open accelerator = %q", got)
+	}
+
+	app, tester := shortcutSettingsTester(t)
+	clickNativeSettingsControl(t, tester, ui.RoleButton, locales.ShortcutLabel(locales.Refresh()))
+	tester.Key(ui.Cmd, ui.KeyP)
+	if app.settingsError != locales.DuplicateShortcuts() || app.prefs.Shortcuts != defaultNativeShortcuts() {
+		t.Fatalf("duplicate quick open shortcut was accepted: %q %+v", app.settingsError, app.prefs.Shortcuts)
+	}
+	checkShortcutMenu(t, app.prefs.Shortcuts)
+	conflicting := nativePreferences{Shortcuts: defaultNativeShortcuts()}
+	conflicting.Shortcuts.Commit = conflicting.Shortcuts.QuickOpen
+	normalizeNativePreferences(&conflicting)
+	if conflicting.Shortcuts != defaultNativeShortcuts() {
+		t.Fatalf("conflicting stored shortcuts = %+v", conflicting.Shortcuts)
 	}
 }

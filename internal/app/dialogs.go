@@ -95,6 +95,9 @@ func (app *nativeApp) closeDialog(dialog *nativeDialog) {
 
 func (app *nativeApp) dialogView(c *ui.Context) {
 	dialog := app.dialog
+	if dialog == nil || !dialog.applicationSettings || app.busy {
+		app.stopShortcutRecording()
+	}
 	if dialog == nil {
 		return
 	}

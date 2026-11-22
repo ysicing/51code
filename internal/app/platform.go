@@ -5,6 +5,7 @@ package app
 
 import (
 	"runtime"
+	"slices"
 	"strings"
 
 	"github.com/ysicing/51code/locales"
@@ -14,15 +15,48 @@ import (
 
 const desktopReleasesURL = "https://github.com/ysicing/51code/releases/latest"
 
+var pcShortcutLabels = strings.NewReplacer("CmdOrCtrl+", "Ctrl+")
+
 func shortcutLabelForPlatform(shortcut, platform string) string {
-	if platform == "darwin" {
-		return shortcut
+	if platform != "darwin" {
+		return pcShortcutLabels.Replace(shortcut)
 	}
-	return strings.NewReplacer("⌥", "Alt+", "⌘", "Ctrl+", "⇧", "Shift+", "↩", "Enter").Replace(shortcut)
+	// macOS 按系统惯例以 ⌃⌥⇧⌘ 的顺序显示修饰键，与存储顺序无关。
+	parts := strings.Split(shortcut, "+")
+	mods, key := parts[:len(parts)-1], parts[len(parts)-1]
+	var label string
+	for _, mod := range []struct{ name, symbol string }{
+		{"Ctrl", "⌃"}, {"Alt", "⌥"}, {"Shift", "⇧"}, {"CmdOrCtrl", "⌘"},
+	} {
+		if slices.Contains(mods, mod.name) {
+			label += mod.symbol
+		}
+	}
+	if key == "Enter" {
+		key = "↩"
+	}
+	return label + key
 }
 
 func shortcutLabel(shortcut string) string {
 	return shortcutLabelForPlatform(shortcut, runtime.GOOS)
+}
+
+func newNativeApplicationMenu(items []*mygo.MenuItem) *mygo.Menu {
+	items = platformMenu(items, runtime.GOOS)
+	menu := mygo.NewMenu(items)
+	for _, item := range items {
+		if item.Role == mygo.RoleViewMenu {
+			for _, child := range item.Submenu {
+				if child.Role == mygo.RoleReload || child.Role == mygo.RoleForceReload {
+					// 原生窗口没有网页可重载（MyGo 对原生窗口忽略这两个角色），
+					// 释放 ⌘R／⌘⇧R 给仓库刷新等可配置操作。
+					child.SetAccelerator("")
+				}
+			}
+		}
+	}
+	return menu
 }
 
 func platformMenu(items []*mygo.MenuItem, platform string) []*mygo.MenuItem {

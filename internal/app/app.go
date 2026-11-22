@@ -49,7 +49,6 @@ func Run(info BuildInfo) {
 			return
 		}
 		desktop.showLibrary()
-		applyNativeShortcuts(desktop.prefs.Shortcuts)
 	}
 	command := func(action func(*nativeApp)) func(*mygo.MenuItem, *mygo.Window) {
 		return func(_ *mygo.MenuItem, win *mygo.Window) {
@@ -97,6 +96,13 @@ func Run(info BuildInfo) {
 	})
 	app.OnQuitCanceled(func() { desktop.quitting = false })
 	setMenu := func() {
+		shortcuts := desktop.prefs.Shortcuts
+		for _, window := range desktop.windows() {
+			if window.shortcutRecording != nil {
+				shortcuts = nativeShortcuts{}
+				break
+			}
+		}
 		updates := &mygo.MenuItem{
 			Label: locales.DownloadRelease(),
 			Click: command(func(desktop *nativeApp) {
@@ -109,13 +115,13 @@ func Run(info BuildInfo) {
 			updates = updater.MenuItem()
 			updates.Label = locales.CheckUpdates()
 		}
-		app.SetMenu(mygo.NewMenu(platformMenu([]*mygo.MenuItem{
+		app.SetMenu(newNativeApplicationMenu([]*mygo.MenuItem{
 			{Label: "51Code", Submenu: []*mygo.MenuItem{
 				{Label: locales.About(), Click: func(_ *mygo.MenuItem, _ *mygo.Window) {
 					showNativeAbout()
 				}},
 				updates,
-				{ID: "settings", Label: locales.SettingsMenu(), Accelerator: "CmdOrCtrl+,", Click: command(func(desktop *nativeApp) { desktop.settingsDialog() })},
+				{ID: "settings", Label: locales.SettingsMenu(), Accelerator: settingsShortcut, Click: command(func(desktop *nativeApp) { desktop.settingsDialog() })},
 				mygo.Separator(),
 				{Role: mygo.RoleServices},
 				mygo.Separator(),
@@ -126,9 +132,9 @@ func Run(info BuildInfo) {
 				{Role: mygo.RoleQuit},
 			}},
 			{Label: locales.FilesMenu(), Submenu: []*mygo.MenuItem{
-				{ID: shortcutLibrary, Label: locales.LocalRepositories(), Accelerator: shortcutAccelerator(defaultNativeShortcuts().Library), Click: func(_ *mygo.MenuItem, _ *mygo.Window) { open() }},
-				{ID: shortcutAddRepo, Label: locales.AddExistingRepositoryMenu(), Accelerator: shortcutAccelerator(defaultNativeShortcuts().AddRepository), Click: libraryCommand(func(desktop *nativeApp) { desktop.chooseLocal() })},
-				{ID: shortcutScan, Label: locales.ScanFoldersMenu(), Accelerator: shortcutAccelerator(defaultNativeShortcuts().Scan), Click: libraryCommand(func(desktop *nativeApp) { desktop.chooseScan() })},
+				{ID: shortcutLibrary, Label: locales.LocalRepositories(), Accelerator: shortcuts.Library, Click: func(_ *mygo.MenuItem, _ *mygo.Window) { open() }},
+				{ID: shortcutAddRepo, Label: locales.AddExistingRepositoryMenu(), Accelerator: shortcuts.AddRepository, Click: libraryCommand(func(desktop *nativeApp) { desktop.chooseLocal() })},
+				{ID: shortcutScan, Label: locales.ScanFoldersMenu(), Accelerator: shortcuts.Scan, Click: libraryCommand(func(desktop *nativeApp) { desktop.chooseScan() })},
 				{Label: locales.NewGroupMenu(), Click: libraryCommand(func(desktop *nativeApp) { desktop.groupDialog("") })},
 				mygo.Separator(),
 				{Label: locales.TrashMenu(), Click: command(func(window *nativeApp) { window.showTrash("") })},
@@ -137,17 +143,16 @@ func Run(info BuildInfo) {
 			}},
 			{Role: mygo.RoleEditMenu},
 			{Label: locales.Repository(), Submenu: []*mygo.MenuItem{
-				{Label: locales.QuickOpen(), Accelerator: "CmdOrCtrl+P", Click: command(func(desktop *nativeApp) { desktop.openQuickSearch() })},
-				{ID: shortcutRefresh, Label: locales.Refresh(), Accelerator: shortcutAccelerator(defaultNativeShortcuts().Refresh), Click: command(func(desktop *nativeApp) { desktop.refresh() })},
-				{ID: shortcutCommit, Label: locales.Commit(), Accelerator: shortcutAccelerator(defaultNativeShortcuts().Commit), Click: command(func(desktop *nativeApp) { desktop.commit() })},
+				{ID: shortcutQuick, Label: locales.QuickOpen(), Accelerator: shortcuts.QuickOpen, Click: command(func(desktop *nativeApp) { desktop.openQuickSearch() })},
+				{ID: shortcutRefresh, Label: locales.Refresh(), Accelerator: shortcuts.Refresh, Click: command(func(desktop *nativeApp) { desktop.refresh() })},
+				{ID: shortcutCommit, Label: locales.Commit(), Accelerator: shortcuts.Commit, Click: command(func(desktop *nativeApp) { desktop.commit() })},
 				{Label: locales.FindLostCommits(), Click: command(func(window *nativeApp) { window.lostCommitsDialog() })},
 				mygo.Separator(),
 				{Label: locales.RepositorySettingsMenu(), Click: command(func(desktop *nativeApp) { desktop.repositorySettingsDialog() })},
 			}},
 			{Role: mygo.RoleViewMenu},
 			{Role: mygo.RoleWindowMenu},
-		}, runtime.GOOS)))
-		applyNativeShortcuts(desktop.prefs.Shortcuts)
+		}))
 	}
 	app.WhenReady(func() {
 		setMenu()
