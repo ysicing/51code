@@ -4682,6 +4682,38 @@ func (msgs Messages) CheckoutBranchOrOpenWorktree() string {
 	return Catalog.Format(msgs.locale, "checkoutBranchOrOpenWorktree", nil)
 }
 
+// ConfirmBranchSwitch says "确认分支切换"
+// in the language the app shows.
+func ConfirmBranchSwitch() string { return In(i18n.Locale()).ConfirmBranchSwitch() }
+
+// ConfirmBranchSwitch says "确认分支切换"
+// in the language of msgs.
+func (msgs Messages) ConfirmBranchSwitch() string {
+	return Catalog.Format(msgs.locale, "confirmBranchSwitch", nil)
+}
+
+// ConfirmBranchSwitchDetail says "确定将当前工作树切换到「{name}」？"
+// in the language the app shows.
+func ConfirmBranchSwitchDetail(name string) string {
+	return In(i18n.Locale()).ConfirmBranchSwitchDetail(name)
+}
+
+// ConfirmBranchSwitchDetail says "确定将当前工作树切换到「{name}」？"
+// in the language of msgs.
+func (msgs Messages) ConfirmBranchSwitchDetail(name string) string {
+	return Catalog.Format(msgs.locale, "confirmBranchSwitchDetail", map[string]any{"name": name})
+}
+
+// StashLocalChanges says "贮藏本地更改"
+// in the language the app shows.
+func StashLocalChanges() string { return In(i18n.Locale()).StashLocalChanges() }
+
+// StashLocalChanges says "贮藏本地更改"
+// in the language of msgs.
+func (msgs Messages) StashLocalChanges() string {
+	return Catalog.Format(msgs.locale, "stashLocalChanges", nil)
+}
+
 // ReadOnlyBranchCheckout says "当前仓库为只读，无法检出分支。请刷新仓库后重试。"
 // in the language the app shows.
 func ReadOnlyBranchCheckout() string { return In(i18n.Locale()).ReadOnlyBranchCheckout() }

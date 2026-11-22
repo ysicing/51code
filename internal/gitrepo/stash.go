@@ -86,11 +86,17 @@ func (repo *Repository) StashDiff(ctx context.Context, hash string) (Diff, error
 	return Diff{Text: output, Binary: strings.Contains(output, "Binary files ")}, err
 }
 
+var errNoStashChanges = errors.New("没有可贮藏的更改")
+
 func (repo *Repository) CreateStash(ctx context.Context, message string, includeUntracked bool) error {
 	if err := repo.lockHistory(ctx); err != nil {
 		return err
 	}
 	defer repo.mu.Unlock()
+	return repo.createStash(ctx, message, includeUntracked)
+}
+
+func (repo *Repository) createStash(ctx context.Context, message string, includeUntracked bool) error {
 	if strings.ContainsRune(message, 0) || len(message) > 64<<10 {
 		return errors.New("贮藏说明无效或过长")
 	}
@@ -115,7 +121,7 @@ func (repo *Repository) CreateStash(ctx context.Context, message string, include
 		}
 	}
 	if !changed {
-		return errors.New("没有可贮藏的更改")
+		return errNoStashChanges
 	}
 	before, err := repo.stashes(ctx)
 	if err != nil {

@@ -303,7 +303,11 @@ func (app *nativeApp) localBranchSidebar(c *ui.Context) {
 				app.deleteBranch(name, true)
 			}
 		})
-		item.OnClick(func() { app.selectHistoryReference("本地分支", name, false) })
+		if !branch.Current && item.DoubleClicked() {
+			app.openLocalBranch(name)
+		} else {
+			item.OnClick(func() { app.selectHistoryReference("本地分支", name, false) })
+		}
 	})
 }
 
@@ -321,17 +325,30 @@ func (app *nativeApp) openLocalBranch(name string) {
 			if worktree != "" {
 				app.openRepository(worktree)
 			} else if app.writable {
-				app.leaveConflict(func() {
-					app.mutate(locales.SwitchingBranch(), func(ctx context.Context, path string) error {
-						return app.service.SwitchBranch(ctx, path, name)
-					})
-				})
+				app.confirmBranchSwitch(name)
 			} else {
 				app.problem = locales.ReadOnlyBranchCheckout()
 				app.showProblemDetails(app.problem)
 			}
 		}, nil
 	})
+}
+
+func (app *nativeApp) confirmBranchSwitch(name string) {
+	app.dialog = &nativeDialog{
+		title: locales.ConfirmBranchSwitch(), detail: locales.ConfirmBranchSwitchDetail(name),
+		action: locales.Checkout(), checkLabel: locales.StashLocalChanges(), confirmation: true, width: 380,
+		canSubmit: func() bool { return app.writable },
+		submit: func(dialog *nativeDialog) {
+			stash := dialog.check
+			app.leaveConflict(func() {
+				app.dialog = dialog
+				app.mutateForm(dialog, locales.SwitchingBranch(), func(ctx context.Context, path string) error {
+					return app.service.SwitchBranch(ctx, path, name, stash)
+				})
+			})
+		},
+	}
 }
 
 func (app *nativeApp) tagSidebar(c *ui.Context) {

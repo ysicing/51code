@@ -602,6 +602,49 @@ func (repo *Repository) SwitchBranch(ctx context.Context, name string) error {
 	if err := repo.validateBranch(ctx, name); err != nil {
 		return err
 	}
+	return repo.switchBranch(ctx, name)
+}
+
+func (repo *Repository) SwitchBranchWithStash(ctx context.Context, name string) error {
+	_, unlock, err := repo.lockWorktree(ctx)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	if err := repo.validateBranch(ctx, name); err != nil {
+		return err
+	}
+	ref := "refs/heads/" + name
+	if _, err := repo.git(ctx, "show-ref", "--verify", "--quiet", ref); err != nil {
+		if exitCode(err, 1) {
+			return errors.New("本地分支不存在")
+		}
+		return err
+	}
+	worktrees, err := repo.worktreeEntries(ctx)
+	if err != nil {
+		return err
+	}
+	for _, state := range worktrees {
+		if state.Worktree.Branch == ref {
+			if state.Worktree.Current {
+				return nil
+			}
+			return errors.New("分支已被其他工作树占用")
+		}
+	}
+	stashErr := repo.createStash(ctx, "", true)
+	if stashErr != nil && stashErr != errNoStashChanges {
+		return stashErr
+	}
+	err = repo.switchBranch(ctx, name)
+	if err != nil && stashErr == nil {
+		return fmt.Errorf("已贮藏本地更改，但切换分支失败：%w", err)
+	}
+	return err
+}
+
+func (repo *Repository) switchBranch(ctx context.Context, name string) error {
 	_, err := run(ctx, repo.Path, "", checkoutTimeout, "switch", "--no-guess", "--no-overwrite-ignore", "--", name)
 	return err
 }

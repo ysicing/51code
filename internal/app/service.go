@@ -286,10 +286,13 @@ func (service *RepositoryService) References(ctx context.Context, path string) (
 	return repo.References(ctx)
 }
 
-func (service *RepositoryService) SwitchBranch(ctx context.Context, path, name string) error {
+func (service *RepositoryService) SwitchBranch(ctx context.Context, path, name string, stash bool) error {
 	repo, err := service.manager.Get(path)
 	if err != nil {
 		return err
+	}
+	if stash {
+		return repo.SwitchBranchWithStash(ctx, name)
 	}
 	return repo.SwitchBranch(ctx, name)
 }

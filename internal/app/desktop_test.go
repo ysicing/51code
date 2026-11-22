@@ -112,7 +112,7 @@ func TestNativeBranchViewAndWorktreeCheckout(t *testing.T) {
 	source.historyFilter.CurrentBranch = true
 	source.searchHistory(false)
 	runBackgroundUpdates(t, updates, func() bool { return source.readTask == nil })
-	tester.Frame()
+	tester.Advance(time.Second)
 	if err := tester.Click("occupied"); err != nil {
 		t.Fatal(err)
 	}
@@ -139,12 +139,23 @@ func TestNativeBranchViewAndWorktreeCheckout(t *testing.T) {
 		!fileExists(source.repository.snapshot.Files, "hello.txt", false) {
 		t.Fatal("打开工作树改变了来源分支或丢失未提交的文件状态")
 	}
-	checkoutBranch("occupied", "")
+	tester.Advance(time.Second)
+	for range 2 {
+		if err := tester.Click("occupied"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	runBackgroundUpdates(t, updates, func() bool { return !source.busy })
 	if desktop.repositories[linkedPath] != target || desktop.active != target || len(desktop.repositories) != 2 {
-		t.Fatal("重复点击没有激活原来的工作树窗口")
+		t.Fatal("双击没有激活原来的工作树窗口")
 	}
 	source.writable = true
 	checkoutBranch("available", "")
+	tester.Frame()
+	if err := tester.Click(locales.Checkout()); err != nil {
+		t.Fatal(err)
+	}
+	runBackgroundUpdates(t, updates, func() bool { return !source.busy })
 	if source.repository.snapshot.Branch != "available" ||
 		nativeGit(t, linked, "branch", "--show-current") != "occupied" {
 		t.Fatal("检出空闲分支未在来源工作树切换，或影响了另一个工作树")
@@ -153,6 +164,68 @@ func TestNativeBranchViewAndWorktreeCheckout(t *testing.T) {
 	checkoutBranch("main", locales.ReadOnlyBranchCheckout())
 	if source.dialog == nil || source.dialog.errorDetails == nil || nativeGit(t, path, "branch", "--show-current") != "available" {
 		t.Fatal("只读检出应提示原因并保留当前分支")
+	}
+}
+
+func TestNativeDoubleClickConfirmsLocalBranchCheckout(t *testing.T) {
+	desktop, path, updates, _ := desktopFixture(t)
+	nativeGit(t, path, "branch", "feature")
+	writeNativeFile(t, path, "hello.txt", "tracked draft\n")
+	nativeGit(t, path, "add", "hello.txt")
+	writeNativeFile(t, path, "draft.txt", "untracked draft\n")
+	source := openDesktopRepository(t, desktop, updates, path)
+	tester := ui.NewTester(source.view, 1024, 680)
+	clickBranch := func() {
+		t.Helper()
+		if err := tester.Click("feature"); err != nil {
+			t.Fatal(err)
+		}
+		runBackgroundUpdates(t, updates, func() bool { return !source.busy && source.readTask == nil })
+		tester.Frame()
+	}
+	clickBranch()
+	if source.dialog != nil || source.screen != "history" || source.repository.snapshot.Branch != "main" {
+		t.Fatal("单击分支应查看历史")
+	}
+	clickBranch()
+	if source.dialog == nil || !source.dialog.confirmation || !strings.Contains(source.dialog.detail, "feature") ||
+		source.dialog.checkLabel == "" || source.dialog.check || nativeGit(t, path, "branch", "--show-current") != "main" {
+		t.Fatal("双击应显示目标分支和默认未勾选的贮藏选项，等待确认")
+	}
+	if directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); directory != "" {
+		tester.SetDark(false)
+		saveNativeScreenshot(t, tester, directory, "branch-checkout-light.png")
+		tester.SetDark(true)
+		saveNativeScreenshot(t, tester, directory, "branch-checkout-dark.png")
+	}
+	if err := tester.Click(locales.Cancel()); err != nil {
+		t.Fatal(err)
+	}
+	if source.dialog != nil || nativeGit(t, path, "branch", "--show-current") != "main" ||
+		nativeGit(t, path, "stash", "list") != "" || nativeGit(t, path, "diff", "--cached", "--name-only") != "hello.txt" {
+		t.Fatal("取消时应保留分支、索引和贮藏")
+	}
+
+	tester.Advance(time.Second)
+	clickBranch()
+	clickBranch()
+	if source.dialog == nil {
+		t.Fatal("再次双击时应显示切换确认")
+	}
+	if err := tester.Click(source.dialog.checkLabel); err != nil {
+		t.Fatal(err)
+	}
+	if err := tester.Click(locales.Checkout()); err != nil {
+		t.Fatal(err)
+	}
+	runBackgroundUpdates(t, updates, func() bool { return !source.busy })
+	if source.dialog != nil || source.problem != "" || source.repository.snapshot.Branch != "feature" ||
+		nativeGit(t, path, "status", "--porcelain") != "" || len(source.repository.stashes) != 1 {
+		t.Fatalf("确认后应先贮藏再切换分支，错误：%s", source.problem)
+	}
+	stashed := nativeGit(t, path, "stash", "show", "--include-untracked", "--patch")
+	if !strings.Contains(stashed, "+tracked draft") || !strings.Contains(stashed, "+untracked draft") {
+		t.Fatalf("贮藏缺少本地更改：%s", stashed)
 	}
 }
 

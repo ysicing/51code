@@ -98,6 +98,31 @@ func TestSwitchingBranchesDoesNotOverwriteIgnoredFiles(t *testing.T) {
 	assertFile(t, filepath.Join(dir, ".env"), "local\n")
 }
 
+func TestSwitchBranchWithStashPreservesChangesWhenCheckoutFails(t *testing.T) {
+	repo, dir := ignoredTrackingFixture(t)
+	write(t, dir, "base.txt", "local draft\n")
+	err := repo.SwitchBranchWithStash(context.Background(), "other")
+	if err == nil || !strings.Contains(err.Error(), "已贮藏本地更改") {
+		t.Fatalf("expected checkout failure after stashing: %v", err)
+	}
+	assertFile(t, filepath.Join(dir, ".env"), "local\n")
+	if branch := git(t, dir, "branch", "--show-current"); branch != "main" {
+		t.Fatalf("failed checkout changed branch: %s", branch)
+	}
+	if diff := git(t, dir, "stash", "show", "--patch"); !strings.Contains(diff, "+local draft") {
+		t.Fatalf("stash did not preserve the draft: %s", diff)
+	}
+	if err := os.Remove(filepath.Join(dir, ".env")); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.SwitchBranchWithStash(context.Background(), "other"); err != nil {
+		t.Fatalf("retry with a clean worktree: %v", err)
+	}
+	if branch := git(t, dir, "branch", "--show-current"); branch != "other" || len(stashHashes(t, repo)) != 1 {
+		t.Fatal("retry should switch branches and keep the original stash")
+	}
+}
+
 func TestDivergedWorktreeMergeDoesNotOverwriteIgnoredTargetData(t *testing.T) {
 	repo, dir, path := worktreeFixture(t)
 	write(t, path, "ignored/keep", "committed")
