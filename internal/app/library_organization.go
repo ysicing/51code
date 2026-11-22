@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"slices"
 
 	"github.com/ysicing/51code/internal/gitrepo"
 	"github.com/ysicing/51code/internal/workspace"
@@ -22,6 +23,34 @@ func (service *RepositoryService) MarkRepositoryOpened(ctx context.Context, path
 
 func (service *RepositoryService) RelocateRepository(ctx context.Context, expected workspace.LocalRepository, path string) (workspace.Library, error) {
 	return service.manager.Relocate(ctx, expected, path)
+}
+
+func (app *nativeApp) repositoryOpenFailure(path string, err error) (func(), error) {
+	missing := errors.Is(err, gitrepo.ErrWorktreeAbsent)
+	if !missing && !errors.Is(err, gitrepo.ErrNotWorktree) {
+		return nil, err
+	}
+	return func() {
+		if app.screen != "library" || app.dialog != nil ||
+			!slices.ContainsFunc(app.service.Library().Repositories, func(entry workspace.LocalRepository) bool { return entry.Path == path }) {
+			app.problem = err.Error()
+			app.showProblemDetails(app.problem)
+			return
+		}
+		title := locales.RepositoryNotWorktree()
+		if missing {
+			title = locales.RepositoryDirectoryMissing()
+		}
+		app.dialog = &nativeDialog{
+			title: title, subject: path, detail: locales.KeepDiskFiles(),
+			action: locales.RemoveFromListMenu(), dismiss: locales.Close(), confirmation: true, danger: true, width: 480,
+			submit: func(_ *nativeDialog) {
+				app.libraryChange(locales.RemovingRecord(), func(context.Context) (workspace.Library, error) {
+					return app.service.RemoveRepository(path)
+				})
+			},
+		}
+	}, nil
 }
 
 func (app *nativeApp) libraryOrderMenu(menu *ui.Menu) {

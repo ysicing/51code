@@ -529,7 +529,7 @@ func (app *nativeApp) openRepository(path string) {
 		app.run(locales.OpeningRepository(), func(ctx context.Context) (func(), error) {
 			result, err := app.readRepository(ctx, path, true)
 			if err != nil {
-				return nil, err
+				return app.repositoryOpenFailure(path, err)
 			}
 			var directories []string
 			var watchErr error

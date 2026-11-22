@@ -60,6 +60,80 @@ func openDesktopRepository(t *testing.T, desktop *nativeDesktop, updates <-chan 
 	return nil
 }
 
+func TestNativeLibraryOffersToRemoveInvalidRepositoryRecord(t *testing.T) {
+	for _, scenario := range []string{"not-a-worktree", "missing", "broken-config"} {
+		t.Run(scenario, func(t *testing.T) {
+			desktop, path, updates, _ := desktopFixture(t)
+			library := desktop.library
+			switch scenario {
+			case "not-a-worktree":
+				if err := os.Rename(filepath.Join(path, ".git"), filepath.Join(path, ".saved-git")); err != nil {
+					t.Fatal(err)
+				}
+			case "missing":
+				pathCopy := filepath.Join(t.TempDir(), "moved")
+				if err := os.Rename(path, pathCopy); err != nil {
+					t.Fatal(err)
+				}
+			case "broken-config":
+				writeNativeFile(t, path, filepath.Join(".git", "config"), "[broken\n")
+			}
+			tester := ui.NewTester(library.view, 1024, 680)
+			clickRepository := func() {
+				t.Helper()
+				if err := tester.Click(filepath.Base(path)); err != nil {
+					t.Fatal(err)
+				}
+				runBackgroundUpdates(t, updates, func() bool { return !library.busy })
+				tester.Frame()
+			}
+			clickRepository()
+			if scenario == "broken-config" {
+				if !tester.HasText(locales.OperationFailed()) || !strings.Contains(library.problem, "bad config") {
+					t.Fatal("Git 配置错误应显示原始失败原因", library.problem)
+				}
+				if _, found := tester.AccessByRole(ui.RoleButton, locales.RemoveFromListMenu()); found {
+					t.Fatal("Git 配置错误不应提供移除入口")
+				}
+				return
+			}
+			if !tester.Focused(locales.Close()) || !tester.HasText(locales.KeepDiskFiles()) || !tester.HasText(path) {
+				t.Fatal("失效仓库应显示路径和文件保留说明，并默认聚焦关闭")
+			}
+			title := locales.RepositoryNotWorktree()
+			if scenario == "missing" {
+				title = locales.RepositoryDirectoryMissing()
+			}
+			if !tester.HasText(title) {
+				t.Fatal("提示未区分目录不存在和非 Git 工作区")
+			}
+			if directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); directory != "" && scenario == "not-a-worktree" {
+				saveNativeScreenshot(t, tester, directory, "invalid-library-repository-light.png")
+				tester.SetDark(true)
+				saveNativeScreenshot(t, tester, directory, "invalid-library-repository-dark.png")
+			}
+			tester.Key(0, ui.KeyEnter)
+			if library.dialog != nil || len(library.service.Library().Repositories) != 1 {
+				t.Fatal("关闭提示应保留仓库记录")
+			}
+			tester.Advance(time.Second)
+			clickRepository()
+			if err := tester.Click(locales.RemoveFromListMenu()); err != nil {
+				t.Fatal(err)
+			}
+			runBackgroundUpdates(t, updates, func() bool { return !library.busy })
+			if library.dialog != nil || len(library.service.Library().Repositories) != 0 {
+				t.Fatal("移除后应关闭提示并移除列表记录", library.problem)
+			}
+			if scenario == "not-a-worktree" {
+				if contents, err := os.ReadFile(filepath.Join(path, "hello.txt")); err != nil || string(contents) != "原始内容\n" {
+					t.Fatalf("移除列表记录改变了磁盘文件：%q, %v", contents, err)
+				}
+			}
+		})
+	}
+}
+
 func TestNativeBranchViewAndWorktreeCheckout(t *testing.T) {
 	desktop, path, updates, _ := desktopFixture(t)
 	linked := filepath.Join(t.TempDir(), "linked")

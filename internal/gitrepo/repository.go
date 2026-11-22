@@ -70,6 +70,11 @@ type Commit struct {
 	Refs          string   `json:"refs"`
 }
 
+var (
+	ErrNotWorktree    = errors.New("所选目录不是 Git 工作区")
+	ErrWorktreeAbsent = errors.New("仓库目录不存在")
+)
+
 func Open(ctx context.Context, path string) (*Repository, error) {
 	if strings.TrimSpace(path) == "" {
 		return nil, errors.New("请选择仓库目录")
@@ -80,9 +85,23 @@ func Open(ctx context.Context, path string) (*Repository, error) {
 	}
 	// 一次读取两项；不在工作区（含 .git 目录内）时 --show-toplevel 会失败，同样视为非工作区。
 	output, err := run(ctx, absolute, "", 15*time.Second, "rev-parse", "--is-inside-work-tree", "--show-toplevel")
+	if err != nil {
+		if exitCode(err, 128) {
+			info, statErr := os.Stat(absolute)
+			switch {
+			case errors.Is(statErr, os.ErrNotExist):
+				return nil, ErrWorktreeAbsent
+			case statErr == nil && (!info.IsDir() ||
+				strings.HasPrefix(err.Error(), "fatal: not a git repository") ||
+				strings.HasSuffix(err.Error(), "fatal: this operation must be run in a work tree")):
+				return nil, ErrNotWorktree
+			}
+		}
+		return nil, err
+	}
 	inside, root, _ := strings.Cut(output, "\n")
-	if err != nil || inside != "true" || root == "" {
-		return nil, errors.New("所选目录不是 Git 工作区")
+	if inside != "true" || root == "" {
+		return nil, ErrNotWorktree
 	}
 	// 根路径可能含换行，只去掉 Git 追加的末尾换行。
 	canonical, err := filepath.EvalSymlinks(strings.TrimSuffix(root, "\n"))

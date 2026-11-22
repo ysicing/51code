@@ -554,6 +554,8 @@
   "removeGroupDetail": "儲存庫將保留在本機列表中，不會刪除磁碟檔案。",
   "removeRepositoryTitle": "移除儲存庫記錄？",
   "keepDiskFiles": "磁碟檔案不會刪除。",
+  "repositoryNotWorktree": "此目錄不是 Git 工作區",
+  "repositoryDirectoryMissing": "儲存庫目錄不存在",
   "scan": "掃描",
   "scanLimit": "掃描已達上限",
   "selectRepositories": "選擇要新增的儲存庫",

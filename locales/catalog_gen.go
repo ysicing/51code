@@ -5616,6 +5616,26 @@ func (msgs Messages) KeepDiskFiles() string {
 	return Catalog.Format(msgs.locale, "keepDiskFiles", nil)
 }
 
+// RepositoryNotWorktree says "此目录不是 Git 工作区"
+// in the language the app shows.
+func RepositoryNotWorktree() string { return In(i18n.Locale()).RepositoryNotWorktree() }
+
+// RepositoryNotWorktree says "此目录不是 Git 工作区"
+// in the language of msgs.
+func (msgs Messages) RepositoryNotWorktree() string {
+	return Catalog.Format(msgs.locale, "repositoryNotWorktree", nil)
+}
+
+// RepositoryDirectoryMissing says "仓库目录不存在"
+// in the language the app shows.
+func RepositoryDirectoryMissing() string { return In(i18n.Locale()).RepositoryDirectoryMissing() }
+
+// RepositoryDirectoryMissing says "仓库目录不存在"
+// in the language of msgs.
+func (msgs Messages) RepositoryDirectoryMissing() string {
+	return Catalog.Format(msgs.locale, "repositoryDirectoryMissing", nil)
+}
+
 // Scan says "扫描"
 // in the language the app shows.
 func Scan() string { return In(i18n.Locale()).Scan() }

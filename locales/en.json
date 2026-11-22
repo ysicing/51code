@@ -554,6 +554,8 @@
   "removeGroupDetail": "Repositories stay in the local list. No files will be deleted from disk.",
   "removeRepositoryTitle": "Remove repository record?",
   "keepDiskFiles": "No files will be deleted from disk.",
+  "repositoryNotWorktree": "This folder is not a Git worktree",
+  "repositoryDirectoryMissing": "Repository folder is missing",
   "scan": "Scan",
   "scanLimit": "Scan limit reached",
   "selectRepositories": "Select Repositories to Add",

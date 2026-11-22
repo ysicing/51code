@@ -554,6 +554,8 @@
   "removeGroupDetail": "仓库将保留在本地列表中，不会删除磁盘文件。",
   "removeRepositoryTitle": "移除仓库记录？",
   "keepDiskFiles": "磁盘文件不会删除。",
+  "repositoryNotWorktree": "此目录不是 Git 工作区",
+  "repositoryDirectoryMissing": "仓库目录不存在",
   "scan": "扫描",
   "scanLimit": "扫描已达到上限",
   "selectRepositories": "选择要添加的仓库",

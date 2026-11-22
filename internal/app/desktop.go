@@ -151,7 +151,7 @@ func (desktop *nativeDesktop) openRepository(source *nativeApp, path string) {
 	source.runTask(locales.OpeningRepository(), true, func(ctx context.Context) (func(), error) {
 		repo, err := gitrepo.Open(ctx, path)
 		if err != nil {
-			return nil, err
+			return source.repositoryOpenFailure(path, err)
 		}
 		return func() { desktop.openCanonicalRepository(source, repo.Path) }, nil
 	})
@@ -190,7 +190,13 @@ func (desktop *nativeDesktop) openCanonicalRepository(source *nativeApp, path st
 		}
 		result, err := source.readRepository(ctx, path, true)
 		if err != nil {
-			return clearRequest, err
+			apply, err := source.repositoryOpenFailure(path, err)
+			return func() {
+				clearRequest()
+				if apply != nil {
+					apply()
+				}
+			}, err
 		}
 		directories, watchErr := source.service.WatchDirectories(ctx, result.snapshot.Path)
 		return func() {
