@@ -93,15 +93,26 @@ func (repo *Repository) BrowseFileContent(ctx context.Context, path, revision st
 		if !member {
 			return nil, errors.New("文件不在仓库浏览范围内")
 		}
-		return repo.worktreeFileContent(ctx, path)
+		content, err := repo.worktreeFileContent(ctx, path)
+		if content != nil {
+			content.blameBase = hash
+		}
+		return content, err
 	case "INDEX":
 		content, err := repo.indexFileContent(ctx, path)
 		if err == nil && !content.Present {
 			return nil, errors.New("暂存区不存在该文件")
 		}
+		if err == nil {
+			content.blameBase, err = repo.head(ctx)
+		}
 		return content, err
 	default:
-		return repo.treeFileContent(ctx, path, revision, hash)
+		content, err := repo.treeFileContent(ctx, path, revision, hash)
+		if content != nil {
+			content.blameBase = hash
+		}
+		return content, err
 	}
 }
 

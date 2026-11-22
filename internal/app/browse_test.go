@@ -322,6 +322,72 @@ func TestNativeDiffBrowserButtonStaysInsideCompactHeader(t *testing.T) {
 	}
 }
 
+func TestNativeBrowserOpensCommitForCurrentLine(t *testing.T) {
+	app, path, finish := nativeFixture(t)
+	writeNativeFile(t, path, "hello.txt", "原始内容\nsecond line\n")
+	nativeGit(t, path, "commit", "-am", "add second line")
+	app.refresh()
+	finish()
+	app.switchWorkspace("files")
+	finish()
+	app.selectBrowserFile("hello.txt")
+	finish()
+	tester := ui.NewTester(app.view, 1024, 680)
+	content, found := tester.AccessByRole(ui.RoleTextField, locales.FileContentLabel())
+	if !found {
+		t.Fatal("找不到文件预览")
+	}
+	assertBlame := func(line int, subject string) {
+		t.Helper()
+		tester.Frame()
+		if app.browser.blame == nil || app.browser.blame.line != line {
+			t.Fatalf("未请求第 %d 行的归属，光标 %+v", line+1, app.browser.viewer.state(1).CursorPos())
+		}
+		for !app.browser.blame.ready {
+			finish()
+		}
+		tester.Frame()
+		if shown := app.browser.shownBlame; shown == nil || shown.line != line || !strings.Contains(shown.hint, subject) {
+			t.Fatalf("没有显示第 %d 行的归属：%+v", line+1, shown)
+		}
+	}
+	tester.ClickAt(content.Bounds.X+80, content.Bounds.Y+9)
+	assertBlame(0, "初始提交")
+	tester.Key(0, ui.KeyDown)
+	assertBlame(1, "add second line")
+	if directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); directory != "" {
+		saveNativeScreenshot(t, tester, directory, "browser-line-blame-light.png")
+		tester.SetDark(true)
+		saveNativeScreenshot(t, tester, directory, "browser-line-blame-dark.png")
+	}
+	buffer := app.browser.viewer.state(1).Buffer
+	nativeGit(t, path, "commit", "--amend", "-m", "updated summary")
+	head := nativeGit(t, path, "rev-parse", "HEAD")
+	app.loadBrowser("WORKTREE", "hello.txt", nil)
+	finish()
+	assertBlame(1, "updated summary")
+	if app.browser.viewer.state(1).Buffer != buffer {
+		t.Fatal("正文未变时刷新归属应保留预览和光标")
+	}
+	tester.Key(ui.Cmd, ui.KeyA)
+	tester.Key(ui.Cmd, ui.KeyC)
+	if text := tester.Clipboard(); text != "原始内容\nsecond line\n" {
+		t.Fatalf("复制正文结果：%q", text)
+	}
+	tester.ClickAt(content.Bounds.X+80, content.Bounds.Y+27)
+	assertBlame(1, "updated summary")
+	tester.RightClickAt(content.Bounds.X+80, content.Bounds.Y+27)
+	if err := tester.ChooseMenuItem("查看此行的提交"); err != nil {
+		t.Fatal(err)
+	}
+	for app.readTask != nil {
+		finish()
+	}
+	if app.screen != "history" || app.commitHash != head {
+		t.Fatalf("未定位到第二行的提交：%s, %s", app.screen, app.commitHash)
+	}
+}
+
 func TestNativeBrowserScreenshots(t *testing.T) {
 	directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS")
 	if directory == "" {

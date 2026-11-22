@@ -8322,6 +8322,86 @@ func (msgs Messages) FileHistory() string {
 	return Catalog.Format(msgs.locale, "fileHistory", nil)
 }
 
+// ViewLineCommit says "查看此行的提交"
+// in the language the app shows.
+func ViewLineCommit() string { return In(i18n.Locale()).ViewLineCommit() }
+
+// ViewLineCommit says "查看此行的提交"
+// in the language of msgs.
+func (msgs Messages) ViewLineCommit() string {
+	return Catalog.Format(msgs.locale, "viewLineCommit", nil)
+}
+
+// BlameJustNow says "刚刚"
+// in the language the app shows.
+func BlameJustNow() string { return In(i18n.Locale()).BlameJustNow() }
+
+// BlameJustNow says "刚刚"
+// in the language of msgs.
+func (msgs Messages) BlameJustNow() string {
+	return Catalog.Format(msgs.locale, "blameJustNow", nil)
+}
+
+// BlameMinutesAgo says "{count, plural, other {# 分钟前}}"
+// in the language the app shows.
+func BlameMinutesAgo(count int) string { return In(i18n.Locale()).BlameMinutesAgo(count) }
+
+// BlameMinutesAgo says "{count, plural, other {# 分钟前}}"
+// in the language of msgs.
+func (msgs Messages) BlameMinutesAgo(count int) string {
+	return Catalog.Format(msgs.locale, "blameMinutesAgo", map[string]any{"count": count})
+}
+
+// BlameHoursAgo says "{count, plural, other {# 小时前}}"
+// in the language the app shows.
+func BlameHoursAgo(count int) string { return In(i18n.Locale()).BlameHoursAgo(count) }
+
+// BlameHoursAgo says "{count, plural, other {# 小时前}}"
+// in the language of msgs.
+func (msgs Messages) BlameHoursAgo(count int) string {
+	return Catalog.Format(msgs.locale, "blameHoursAgo", map[string]any{"count": count})
+}
+
+// BlameDaysAgo says "{count, plural, other {# 天前}}"
+// in the language the app shows.
+func BlameDaysAgo(count int) string { return In(i18n.Locale()).BlameDaysAgo(count) }
+
+// BlameDaysAgo says "{count, plural, other {# 天前}}"
+// in the language of msgs.
+func (msgs Messages) BlameDaysAgo(count int) string {
+	return Catalog.Format(msgs.locale, "blameDaysAgo", map[string]any{"count": count})
+}
+
+// BlameWeeksAgo says "{count, plural, other {# 周前}}"
+// in the language the app shows.
+func BlameWeeksAgo(count int) string { return In(i18n.Locale()).BlameWeeksAgo(count) }
+
+// BlameWeeksAgo says "{count, plural, other {# 周前}}"
+// in the language of msgs.
+func (msgs Messages) BlameWeeksAgo(count int) string {
+	return Catalog.Format(msgs.locale, "blameWeeksAgo", map[string]any{"count": count})
+}
+
+// BlameMonthsAgo says "{count, plural, other {# 个月前}}"
+// in the language the app shows.
+func BlameMonthsAgo(count int) string { return In(i18n.Locale()).BlameMonthsAgo(count) }
+
+// BlameMonthsAgo says "{count, plural, other {# 个月前}}"
+// in the language of msgs.
+func (msgs Messages) BlameMonthsAgo(count int) string {
+	return Catalog.Format(msgs.locale, "blameMonthsAgo", map[string]any{"count": count})
+}
+
+// BlameYearsAgo says "{count, plural, other {# 年前}}"
+// in the language the app shows.
+func BlameYearsAgo(count int) string { return In(i18n.Locale()).BlameYearsAgo(count) }
+
+// BlameYearsAgo says "{count, plural, other {# 年前}}"
+// in the language of msgs.
+func (msgs Messages) BlameYearsAgo(count int) string {
+	return Catalog.Format(msgs.locale, "blameYearsAgo", map[string]any{"count": count})
+}
+
 // PreviousHunk says "上一区块"
 // in the language the app shows.
 func PreviousHunk() string { return In(i18n.Locale()).PreviousHunk() }

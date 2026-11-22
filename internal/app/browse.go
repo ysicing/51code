@@ -17,20 +17,22 @@ import (
 )
 
 type nativeBrowser struct {
-	files     []string
-	revision  string
-	file      string
-	query     string
-	viewer    nativeFileViewer
-	collapsed map[string]bool
-	outline   *nativeFileOutline
-	cache     nativeRevisionFiles
-	filtered  []gitrepo.CommitFile
-	filterKey string
-	jump      *nativeBrowserJump
-	previous  string
-	history   nativeHistoryState
-	pending   bool
+	files      []string
+	revision   string
+	file       string
+	query      string
+	viewer     nativeFileViewer
+	collapsed  map[string]bool
+	outline    *nativeFileOutline
+	cache      nativeRevisionFiles
+	filtered   []gitrepo.CommitFile
+	filterKey  string
+	jump       *nativeBrowserJump
+	previous   string
+	history    nativeHistoryState
+	pending    bool
+	blame      *nativeBrowserLineBlame
+	shownBlame *nativeBrowserLineBlame
 }
 
 type nativeBrowserJump struct {
@@ -239,7 +241,9 @@ func (app *nativeApp) browserFilePanel(c *ui.Context) {
 		ui.Divider(c)
 		if viewer.Buffer != nil && state.file != "" {
 			viewer.SoftWrap = app.prefs.Wrap
+			viewer.ContextMenu = func(menu *ui.Menu) { app.browserBlameMenu(state, viewer, menu) }
 			editor.View(c, viewer).Grow(1).FillWidth().MinHeight(0)
+			app.updateBrowserBlame(state, viewer)
 			return
 		}
 		message := locales.SelectFileOrCommit()

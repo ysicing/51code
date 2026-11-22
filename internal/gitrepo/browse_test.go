@@ -55,6 +55,60 @@ func TestBrowseFilesIncludesTrackedNewAndDeletedButNotIgnored(t *testing.T) {
 	}
 }
 
+func TestBlameLineMatchesPreviewVersions(t *testing.T) {
+	repo, dir := fixture(t)
+	ctx := context.Background()
+	const path = "notes [draft].txt"
+	write(t, dir, path, "old\nstable\n")
+	git(t, dir, "add", "--", path)
+	git(t, dir, "commit", "-m", "first version")
+	first := git(t, dir, "rev-parse", "HEAD")
+	write(t, dir, path, "head\nstable\n")
+	git(t, dir, "commit", "-am", "change first line")
+	head := git(t, dir, "rev-parse", "HEAD")
+	write(t, dir, path, "staged\nstable\n")
+	git(t, dir, "add", "--", path)
+	write(t, dir, path, "head\nworktree")
+	write(t, dir, "new.txt", "new\n")
+	for _, test := range []struct {
+		revision string
+		path     string
+		line     int
+		hash     string
+		subject  string
+	}{
+		{first, path, 1, first, "first version"},
+		{"HEAD", path, 1, head, "change first line"},
+		{"INDEX", path, 1, "", ""},
+		{"INDEX", path, 2, first, "first version"},
+		{"WORKTREE", path, 1, head, "change first line"},
+		{"WORKTREE", path, 2, "", ""},
+		{"WORKTREE", "new.txt", 1, "", ""},
+	} {
+		content, err := repo.BrowseFileContent(ctx, test.path, test.revision)
+		if err != nil {
+			t.Fatal(err)
+		}
+		blame, err := repo.BlameLine(ctx, content, test.line)
+		if err != nil || blame.Hash != test.hash || blame.Subject != test.subject ||
+			test.hash != "" && (blame.Author == "" || blame.AuthoredAt.IsZero()) {
+			t.Fatalf("%s %s:%d attribution = %+v, %v", test.revision, test.path, test.line, blame, err)
+		}
+	}
+	worktree, err := repo.BrowseFileContent(ctx, path, "WORKTREE")
+	if err != nil {
+		t.Fatal(err)
+	}
+	write(t, dir, path, "after the preview\n")
+	if blame, err := repo.BlameLine(ctx, worktree, 1); err != nil || blame.Hash != head {
+		t.Fatalf("changed working file affected preview attribution: %+v, %v", blame, err)
+	}
+	git(t, dir, "commit", "--allow-empty", "-m", "move HEAD")
+	if _, err := repo.BlameLine(ctx, worktree, 1); err == nil {
+		t.Fatal("stale preview silently used the new HEAD")
+	}
+}
+
 func TestBrowseContentLiteralPathsVersionsAndReadOnly(t *testing.T) {
 	repo, dir := fixture(t)
 	ctx := context.Background()

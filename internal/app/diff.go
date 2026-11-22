@@ -46,7 +46,10 @@ func (viewer *nativeFileViewer) setSources(diff gitrepo.Diff) {
 		viewer.sources[1].Path == diff.New.Path && viewer.sources[1].Revision == diff.New.Revision
 	for index, source := range sources {
 		previous := viewer.sources[index]
-		if source != nil && previous != nil && *source == *previous {
+		if source != nil && previous != nil && source.SamePreview(*previous) {
+			if *source == *previous {
+				sources[index] = previous
+			}
 			continue
 		}
 		viewer.states[index], viewer.built[index] = editor.State{}, false

@@ -51,6 +51,9 @@ type nativeRead struct {
 }
 
 func (app *nativeApp) cancelRead() {
+	if app.browser != nil {
+		app.browser.cancelBlame()
+	}
 	if app.autoFetch != nil {
 		app.autoFetch.cancel()
 		app.autoFetch = nil

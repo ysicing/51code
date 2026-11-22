@@ -26,6 +26,12 @@ type FileContent struct {
 	Binary      bool   `json:"binary"`
 	Truncated   bool   `json:"truncated"`
 	Unsupported bool   `json:"unsupported"`
+	blameBase   string
+}
+
+func (content FileContent) SamePreview(other FileContent) bool {
+	content.blameBase, other.blameBase = "", ""
+	return content == other
 }
 
 func (repo *Repository) diffFileContents(ctx context.Context, diff Diff, selected File, staged bool) (Diff, error) {

@@ -29,6 +29,14 @@ func (service *RepositoryService) BrowseFileContent(ctx context.Context, path, f
 	return repo.BrowseFileContent(ctx, file, revision)
 }
 
+func (service *RepositoryService) blameLine(ctx context.Context, path string, content *gitrepo.FileContent, line int) (gitrepo.LineBlame, error) {
+	repo, err := service.manager.Get(path)
+	if err != nil {
+		return gitrepo.LineBlame{}, err
+	}
+	return repo.BlameLine(ctx, content, line)
+}
+
 func (service *RepositoryService) SearchHistory(ctx context.Context, path, query, file string, skip int, filter gitrepo.HistoryFilter, pageSize ...int) ([]gitrepo.Commit, error) {
 	repo, err := service.manager.Get(path)
 	if err != nil {
