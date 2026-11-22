@@ -386,6 +386,8 @@
   "deleteLocalBranch": "Delete local branch?",
   "forceDeleteLocalBranch": "Force delete local branch?",
   "deleteBranchDetail": "Only the local branch is deleted. Remote branches are unaffected.",
+  "branchDeletionUnmerged": "The branch has not been merged into its upstream or the current HEAD.",
+  "forceDeleteBranchPrompt": "Force Delete Branch…",
   "removeWorktreeAndDeleteBranch": "Remove Worktree and Delete Branch",
   "removeWorktreeAndDeleteBranchTitle": "Remove Worktree and Delete Branch?",
   "removeWorktreeAndForceDeleteBranchTitle": "Remove Worktree and Force Delete Branch?",

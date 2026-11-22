@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/ysicing/51code/internal/gitrepo"
+	"github.com/ysicing/51code/locales"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -29,16 +30,16 @@ func TestNativePartialBranchDeletionCancellationShowsOutcome(t *testing.T) {
 }
 
 func TestNativeLinkedBranchDeletionSafety(t *testing.T) {
-	for _, scenario := range []string{"unmerged", "forced", "dirty-forced", "stale", "partial"} {
+	for _, scenario := range []string{"unmerged", "forced", "dirty", "dirty-forced", "stale", "partial"} {
 		t.Run(scenario, func(t *testing.T) {
 			app, path, finish := nativeFixture(t)
 			linked := filepath.Join(t.TempDir(), "linked")
 			nativeGit(t, path, "worktree", "add", "-b", "topic", linked)
 			force := scenario == "forced" || scenario == "dirty-forced"
-			if scenario == "unmerged" || scenario == "forced" {
+			if scenario == "unmerged" || scenario == "forced" || scenario == "dirty" {
 				nativeGit(t, linked, "commit", "--allow-empty", "-m", "unmerged")
 			}
-			if scenario == "dirty-forced" {
+			if scenario == "dirty" || scenario == "dirty-forced" {
 				writeNativeFile(t, linked, "hello.txt", "keep changes\n")
 			}
 			app.deleteBranch("topic", force)
@@ -48,9 +49,24 @@ func TestNativeLinkedBranchDeletionSafety(t *testing.T) {
 			if dialog == nil {
 				t.Fatal("没有显示预检结果")
 			}
-			if scenario == "unmerged" || scenario == "dirty-forced" {
+			if scenario == "unmerged" || scenario == "dirty" || scenario == "dirty-forced" {
 				if !dialog.blocked || dialog.action != "" || dialog.submit != nil || dialog.problem == "" {
 					t.Fatal("不安全的联动删除未被阻止")
+				}
+				const forceAction = "强制删除分支…"
+				if scenario == "unmerged" {
+					writeNativeFile(t, linked, "hello.txt", "changed after review\n")
+					if err := tester.Click(forceAction); err != nil {
+						t.Fatal(err)
+					}
+					finish()
+					tester.Frame()
+					if app.dialog == nil || app.dialog == dialog || app.dialog.action != "" || !tester.Focused(locales.Close()) {
+						t.Fatal("重新预检应拦截后来出现的工作树更改")
+					}
+				}
+				if _, found := tester.AccessByRole(ui.RoleButton, forceAction); found {
+					t.Fatal("含本地更改的工作树不应提供强制删除入口")
 				}
 				if _, err := os.Stat(linked); err != nil || nativeGit(t, path, "branch", "--list", "topic") == "" {
 					t.Fatal("预检删除了工作树或分支", err)
@@ -100,6 +116,44 @@ func TestNativeLinkedBranchDeletionSafety(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestNativeForceDeleteUnmergedBranchFromBlockedDialog(t *testing.T) {
+	app, path, finish := nativeFixture(t)
+	const branch = "feature/notifications"
+	nativeGit(t, path, "switch", "-c", branch)
+	nativeGit(t, path, "commit", "--allow-empty", "-m", "unmerged")
+	nativeGit(t, path, "switch", "main")
+	head := nativeGit(t, path, "rev-parse", "refs/heads/"+branch)
+	app.deleteBranch(branch, false)
+	finish()
+	tester := ui.NewTester(app.view, 1024, 680)
+	if !tester.Focused(locales.Close()) {
+		t.Fatal("被拦截后应默认聚焦关闭")
+	}
+	if directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); directory != "" {
+		saveNativeScreenshot(t, tester, directory, "branch-delete-blocked-light.png")
+		tester.SetDark(true)
+		saveNativeScreenshot(t, tester, directory, "branch-delete-blocked-dark.png")
+	}
+	tester.Key(0, ui.KeyTab)
+	if !tester.Focused("强制删除分支…") {
+		t.Fatal("Tab 应从关闭移到强制删除入口")
+	}
+	tester.Key(0, ui.KeyEnter)
+	finish()
+	tester.Frame()
+	if !tester.HasText(locales.ForceDeleteLocalBranch()) || !tester.HasText(branch) ||
+		!tester.Focused(locales.Cancel()) || nativeGit(t, path, "rev-parse", "refs/heads/"+branch) != head {
+		t.Fatal("强制删除入口应展示二次确认并保留分支")
+	}
+	if err := tester.Click(locales.Delete()); err != nil {
+		t.Fatal(err)
+	}
+	finish()
+	if app.dialog != nil || app.problem != "" || nativeGit(t, path, "branch", "--list", branch) != "" {
+		t.Fatal("二次确认后应删除分支", app.problem)
 	}
 }
 

@@ -21,6 +21,7 @@ type BranchDeletionReview struct {
 	Head      string
 	Worktree  *Worktree
 	CanDelete bool
+	Unmerged  bool
 	Problem   string
 	Token     string
 }
@@ -127,7 +128,8 @@ func (repo *Repository) reviewBranchDeletion(ctx context.Context, common, name s
 			} else {
 				_, err = repo.git(ctx, "merge-base", "--is-ancestor", state.Head, state.ReferenceHead)
 				if exitCode(err, 1) {
-					review.Problem = "分支尚未合并到上游或当前 HEAD，请选择“强制删除分支…”并再次确认"
+					review.Unmerged = true
+					review.Problem = "分支尚未合并到上游或当前 HEAD。"
 				} else if err != nil {
 					return review, state, err
 				}

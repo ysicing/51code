@@ -386,6 +386,8 @@
   "deleteLocalBranch": "删除本地分支？",
   "forceDeleteLocalBranch": "强制删除本地分支？",
   "deleteBranchDetail": "仅删除本地分支，不影响远程分支。",
+  "branchDeletionUnmerged": "分支尚未合并到上游或当前 HEAD。",
+  "forceDeleteBranchPrompt": "强制删除分支…",
   "removeWorktreeAndDeleteBranch": "移除工作树并删除分支",
   "removeWorktreeAndDeleteBranchTitle": "移除工作树并删除分支？",
   "removeWorktreeAndForceDeleteBranchTitle": "移除工作树并强制删除分支？",

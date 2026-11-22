@@ -3922,6 +3922,26 @@ func (msgs Messages) DeleteBranchDetail() string {
 	return Catalog.Format(msgs.locale, "deleteBranchDetail", nil)
 }
 
+// BranchDeletionUnmerged says "分支尚未合并到上游或当前 HEAD。"
+// in the language the app shows.
+func BranchDeletionUnmerged() string { return In(i18n.Locale()).BranchDeletionUnmerged() }
+
+// BranchDeletionUnmerged says "分支尚未合并到上游或当前 HEAD。"
+// in the language of msgs.
+func (msgs Messages) BranchDeletionUnmerged() string {
+	return Catalog.Format(msgs.locale, "branchDeletionUnmerged", nil)
+}
+
+// ForceDeleteBranchPrompt says "强制删除分支…"
+// in the language the app shows.
+func ForceDeleteBranchPrompt() string { return In(i18n.Locale()).ForceDeleteBranchPrompt() }
+
+// ForceDeleteBranchPrompt says "强制删除分支…"
+// in the language of msgs.
+func (msgs Messages) ForceDeleteBranchPrompt() string {
+	return Catalog.Format(msgs.locale, "forceDeleteBranchPrompt", nil)
+}
+
 // RemoveWorktreeAndDeleteBranch says "移除工作树并删除分支"
 // in the language the app shows.
 func RemoveWorktreeAndDeleteBranch() string { return In(i18n.Locale()).RemoveWorktreeAndDeleteBranch() }

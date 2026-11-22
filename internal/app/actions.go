@@ -154,6 +154,14 @@ func (app *nativeApp) deleteBranch(name string, force bool) {
 				}
 			} else {
 				dialog.blocked, dialog.problem, dialog.dismiss = true, review.Problem, locales.Close()
+				if review.Unmerged {
+					dialog.problem = locales.BranchDeletionUnmerged()
+					dialog.secondaryAction = locales.ForceDeleteBranchPrompt()
+					dialog.secondarySubmit = func() {
+						app.closeDialog(dialog)
+						app.deleteBranch(name, true)
+					}
+				}
 			}
 			app.dialog = dialog
 		}, nil

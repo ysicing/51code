@@ -52,7 +52,8 @@ func TestBranchDeletionReviewAndExecution(t *testing.T) {
 			}
 			blocked := scenario == "unmerged" || scenario == "dirty-forced" || scenario == "untracked-forced" ||
 				scenario == "locked" || scenario == "current" || scenario == "main"
-			if review.CanDelete == blocked || review.Token == "" || (review.Worktree == nil) != (scenario == "plain") {
+			if review.CanDelete == blocked || review.Unmerged != (scenario == "unmerged") ||
+				review.Token == "" || (review.Worktree == nil) != (scenario == "plain") {
 				t.Fatalf("unexpected deletion review: %+v", review)
 			}
 			head := git(t, dir, "rev-parse", "refs/heads/"+branch)
