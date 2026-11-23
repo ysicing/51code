@@ -159,12 +159,18 @@ func repositoryWatchOptions(worktree bool) mygo.FileWatchOptions {
 		return options
 	}
 	options.Ignore = func(path string, directory bool) bool {
-		first, _, _ := strings.Cut(path, "/")
+		first, relative, _ := strings.Cut(path, "/")
 		switch first {
 		case "HEAD", "index", "packed-refs", "config", "config.worktree", "shallow", "refs",
 			"MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "REBASE_HEAD", "BISECT_LOG",
 			"rebase-merge", "rebase-apply", "sequencer":
 			return strings.HasSuffix(path, ".lock")
+		case "worktrees":
+			_, name, insideRegistration := strings.Cut(relative, "/")
+			if !insideRegistration {
+				return !directory
+			}
+			return directory || (name != "gitdir" && name != "HEAD" && name != "locked")
 		default:
 			return true
 		}

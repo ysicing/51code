@@ -108,7 +108,21 @@ func TestNativeRepositoryWatchFilters(t *testing.T) {
 			t.Fatalf("required metadata was ignored: %s", path)
 		}
 	}
-	for _, path := range []string{"objects/ab/cd", "logs/HEAD", "FETCH_HEAD", "index.lock", "refs/heads/main.lock", "worktrees/other/HEAD"} {
+	for _, path := range []string{"worktrees", "worktrees/codex"} {
+		if metadata.Ignore(path, true) {
+			t.Fatalf("worktree registration directory was ignored: %s", path)
+		}
+	}
+	if !metadata.Recursive || !metadata.Ignore("worktrees/codex/logs", true) {
+		t.Fatal("worktree metadata watch did not recurse while pruning per-worktree logs")
+	}
+	for _, path := range []string{"worktrees/codex/gitdir", "worktrees/codex/HEAD", "worktrees/codex/locked"} {
+		if metadata.Ignore(path, false) {
+			t.Fatalf("worktree registration metadata was ignored: %s", path)
+		}
+	}
+	for _, path := range []string{"objects/ab/cd", "logs/HEAD", "FETCH_HEAD", "index.lock", "refs/heads/main.lock",
+		"worktrees/codex/index", "worktrees/codex/logs/HEAD", "worktrees/codex/HEAD.lock"} {
 		if !metadata.Ignore(path, false) {
 			t.Fatalf("noisy metadata was watched: %s", path)
 		}
