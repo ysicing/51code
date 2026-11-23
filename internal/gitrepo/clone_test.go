@@ -92,6 +92,8 @@ func TestCloneRejectsUnsafeArguments(t *testing.T) {
 		{"padded option source", " --bare", "repo"},
 		{"nul source", "bad\x00source", "repo"},
 		{"newline source", "bad\nsource", "repo"},
+		{"http userinfo", "http://user:" + "secret" + "@example.com/repo.git", "repo"},
+		{"https userinfo", "https://token@example.com/repo.git", "repo"},
 		{"empty name", source, ""},
 		{"dot name", source, "."},
 		{"parent name", source, ".."},

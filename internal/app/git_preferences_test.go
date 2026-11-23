@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ysicing/51code/internal/gitrepo"
+	"github.com/ysicing/51code/locales"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -231,6 +232,83 @@ func TestNativeWrapSettingsPersistAcrossWindows(t *testing.T) {
 	tester.Frame()
 	if app.prefs.Wrap != previous || other.prefs.Wrap != previous || app.settingsError == "" || app.status != app.settingsError {
 		t.Fatal("全局设置保存失败没有回滚或提示错误")
+	}
+}
+
+func TestNativeGitignoreTemplateEditor(t *testing.T) {
+	app, _, _ := nativeIdentityFixture(t)
+	tester := sidebarSettingsTester(t, app)
+	if err := tester.Click(locales.TemplateSettings()); err != nil {
+		t.Fatal(err)
+	}
+	tester.Frame()
+	settings := app.dialog
+	click := func(label string) {
+		t.Helper()
+		if err := tester.Click(label); err != nil {
+			t.Fatal(err)
+		}
+	}
+	focusTemplate := func() {
+		t.Helper()
+		field, found := tester.AccessByRole(ui.RoleTextField, locales.GitignoreTemplate())
+		if !found || field.Offscreen {
+			t.Fatal("missing template text field")
+		}
+		tester.ClickAt(field.Bounds.X+field.Bounds.W/2, field.Bounds.Y+field.Bounds.H/2)
+	}
+	clickNativeSettingsControl(t, tester, ui.RoleButton, locales.Edit())
+	editor := app.dialog
+	if editor == settings || app.prefs.GitignoreTemplate != defaultGitignoreTemplate {
+		t.Fatal("expected editor with the built-in template")
+	}
+	focusTemplate()
+	tester.Key(ui.Cmd, ui.KeyA)
+	tester.Type("*.local\n.cache/\n")
+	if !editor.canSubmit() {
+		t.Fatal("template editor did not accept changes")
+	}
+	tester.Key(0, ui.KeyEscape)
+	if app.dialog == editor || app.dialog.parent != editor {
+		t.Fatal("closing the editor should confirm discarding the draft")
+	}
+	tester.Key(0, ui.KeyEscape)
+	if app.dialog != editor {
+		t.Fatal("cancelling the discard should reopen the draft")
+	}
+	click(locales.Save())
+	if app.dialog != settings || app.prefs.GitignoreTemplate != "*.local\n.cache/\n" {
+		t.Fatalf("customized template was not saved: %q", app.prefs.GitignoreTemplate)
+	}
+	clickNativeSettingsControl(t, tester, ui.RoleButton, locales.Edit())
+	click(locales.RestoreGitignoreTemplate())
+	click(locales.Save())
+	if app.prefs.GitignoreTemplate != defaultGitignoreTemplate {
+		t.Fatal("default template was not restored")
+	}
+	clickNativeSettingsControl(t, tester, ui.RoleButton, locales.Edit())
+	focusTemplate()
+	tester.Key(ui.Cmd, ui.KeyA)
+	tester.Key(0, ui.KeyBackspace)
+	click(locales.Save())
+	restored := newNativeApp(app.service, app.stateFile)
+	t.Cleanup(restored.cancel)
+	if restored.prefs.GitignoreTemplate != "" {
+		t.Fatal("explicitly empty template did not survive reload")
+	}
+	clickNativeSettingsControl(t, tester, ui.RoleButton, locales.Edit())
+	editor = app.dialog
+	click(locales.RestoreGitignoreTemplate())
+	stateFile := app.stateFile
+	app.stateFile = filepath.Join(stateFile, "unwritable.json")
+	click(locales.Save())
+	if app.dialog != editor || editor.problem == "" || !editor.canSubmit() || app.prefs.GitignoreTemplate != "" {
+		t.Fatal("failed save should retain the draft and leave the saved template intact")
+	}
+	app.stateFile = stateFile
+	click(locales.Save())
+	if app.dialog != settings || app.prefs.GitignoreTemplate != defaultGitignoreTemplate {
+		t.Fatal("retry did not save the retained draft")
 	}
 }
 

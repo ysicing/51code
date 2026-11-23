@@ -21,6 +21,25 @@ type nativeRemoteProgress struct {
 	failed   bool
 }
 
+func (app *nativeApp) remoteProgressReporter(state *nativeRemoteProgress) func(gitrepo.RemoteProgress) {
+	post := app.post
+	var last gitrepo.RemoteProgress
+	var sent time.Time
+	return func(progress gitrepo.RemoteProgress) {
+		now := time.Now()
+		if !sent.IsZero() && (progress == last ||
+			progress.Phase == last.Phase && progress.Percent != 100 && now.Sub(sent) < 100*time.Millisecond) {
+			return
+		}
+		last, sent = progress, now
+		post(func() {
+			if !app.closed && app.busy && app.remoteProgress == state {
+				state.progress = progress
+			}
+		})
+	}
+}
+
 func (app *nativeApp) runRemoteSync(dialog *nativeDialog, action, label, target string, operation func(context.Context, string) error) {
 	if app.repository == nil || !app.writable || app.busy || app.closed || app.dialog != dialog ||
 		app.desktop != nil && (app.desktop.checkingQuit || app.desktop.quitting) {
@@ -31,22 +50,8 @@ func (app *nativeApp) runRemoteSync(dialog *nativeDialog, action, label, target 
 		progress: gitrepo.RemoteProgress{Phase: gitrepo.RemotePreparing, Percent: gitrepo.RemotePercentUnknown},
 	}
 	post := app.post
+	report := app.remoteProgressReporter(state)
 	app.mutateFormResult(dialog, label, func(ctx context.Context, path string) error {
-		var last gitrepo.RemoteProgress
-		var sent time.Time
-		report := func(progress gitrepo.RemoteProgress) {
-			now := time.Now()
-			if !sent.IsZero() && (progress == last ||
-				progress.Phase == last.Phase && progress.Percent != 100 && now.Sub(sent) < 100*time.Millisecond) {
-				return
-			}
-			last, sent = progress, now
-			post(func() {
-				if !app.closed && app.busy && app.remoteProgress == state {
-					state.progress = progress
-				}
-			})
-		}
 		err := operation(gitrepo.WithRemoteProgress(ctx, report), path)
 		if err == nil {
 			report(gitrepo.RemoteProgress{Phase: gitrepo.RemoteRefreshing, Percent: gitrepo.RemotePercentUnknown})

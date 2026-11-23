@@ -46,6 +46,96 @@ func (msgs Messages) SecuritySettings() string {
 	return Catalog.Format(msgs.locale, "securitySettings", nil)
 }
 
+// TemplateSettings says "模板"
+// in the language the app shows.
+func TemplateSettings() string { return In(i18n.Locale()).TemplateSettings() }
+
+// TemplateSettings says "模板"
+// in the language of msgs.
+func (msgs Messages) TemplateSettings() string {
+	return Catalog.Format(msgs.locale, "templateSettings", nil)
+}
+
+// Clone says "克隆"
+// in the language the app shows.
+func Clone() string { return In(i18n.Locale()).Clone() }
+
+// Clone says "克隆"
+// in the language of msgs.
+func (msgs Messages) Clone() string {
+	return Catalog.Format(msgs.locale, "clone", nil)
+}
+
+// CloneRepository says "克隆仓库"
+// in the language the app shows.
+func CloneRepository() string { return In(i18n.Locale()).CloneRepository() }
+
+// CloneRepository says "克隆仓库"
+// in the language of msgs.
+func (msgs Messages) CloneRepository() string {
+	return Catalog.Format(msgs.locale, "cloneRepository", nil)
+}
+
+// CloneDirectoryName says "目录名"
+// in the language the app shows.
+func CloneDirectoryName() string { return In(i18n.Locale()).CloneDirectoryName() }
+
+// CloneDirectoryName says "目录名"
+// in the language of msgs.
+func (msgs Messages) CloneDirectoryName() string {
+	return Catalog.Format(msgs.locale, "cloneDirectoryName", nil)
+}
+
+// CloneLocation says "保存位置"
+// in the language the app shows.
+func CloneLocation() string { return In(i18n.Locale()).CloneLocation() }
+
+// CloneLocation says "保存位置"
+// in the language of msgs.
+func (msgs Messages) CloneLocation() string {
+	return Catalog.Format(msgs.locale, "cloneLocation", nil)
+}
+
+// ChooseCloneLocation says "选择保存位置"
+// in the language the app shows.
+func ChooseCloneLocation() string { return In(i18n.Locale()).ChooseCloneLocation() }
+
+// ChooseCloneLocation says "选择保存位置"
+// in the language of msgs.
+func (msgs Messages) ChooseCloneLocation() string {
+	return Catalog.Format(msgs.locale, "chooseCloneLocation", nil)
+}
+
+// CloneSelect says "选择"
+// in the language the app shows.
+func CloneSelect() string { return In(i18n.Locale()).CloneSelect() }
+
+// CloneSelect says "选择"
+// in the language of msgs.
+func (msgs Messages) CloneSelect() string {
+	return Catalog.Format(msgs.locale, "cloneSelect", nil)
+}
+
+// CloningRepository says "正在克隆仓库…"
+// in the language the app shows.
+func CloningRepository() string { return In(i18n.Locale()).CloningRepository() }
+
+// CloningRepository says "正在克隆仓库…"
+// in the language of msgs.
+func (msgs Messages) CloningRepository() string {
+	return Catalog.Format(msgs.locale, "cloningRepository", nil)
+}
+
+// CloneCanceled says "已取消克隆"
+// in the language the app shows.
+func CloneCanceled() string { return In(i18n.Locale()).CloneCanceled() }
+
+// CloneCanceled says "已取消克隆"
+// in the language of msgs.
+func (msgs Messages) CloneCanceled() string {
+	return Catalog.Format(msgs.locale, "cloneCanceled", nil)
+}
+
 // EnableSecretScan says "启用 Gitleaks 密钥扫描"
 // in the language the app shows.
 func EnableSecretScan() string { return In(i18n.Locale()).EnableSecretScan() }
@@ -3558,6 +3648,86 @@ func (msgs Messages) AddingRepositories() string {
 	return Catalog.Format(msgs.locale, "addingRepositories", nil)
 }
 
+// InitRepositoryTitle says "初始化为 Git 仓库？"
+// in the language the app shows.
+func InitRepositoryTitle() string { return In(i18n.Locale()).InitRepositoryTitle() }
+
+// InitRepositoryTitle says "初始化为 Git 仓库？"
+// in the language of msgs.
+func (msgs Messages) InitRepositoryTitle() string {
+	return Catalog.Format(msgs.locale, "initRepositoryTitle", nil)
+}
+
+// InitRepository says "初始化仓库"
+// in the language the app shows.
+func InitRepository() string { return In(i18n.Locale()).InitRepository() }
+
+// InitRepository says "初始化仓库"
+// in the language of msgs.
+func (msgs Messages) InitRepository() string {
+	return Catalog.Format(msgs.locale, "initRepository", nil)
+}
+
+// InitRepositoryDetail says "此目录还不是 Git 仓库。初始分支为 main，文件可在打开仓库后手动暂存。"
+// in the language the app shows.
+func InitRepositoryDetail() string { return In(i18n.Locale()).InitRepositoryDetail() }
+
+// InitRepositoryDetail says "此目录还不是 Git 仓库。初始分支为 main，文件可在打开仓库后手动暂存。"
+// in the language of msgs.
+func (msgs Messages) InitRepositoryDetail() string {
+	return Catalog.Format(msgs.locale, "initRepositoryDetail", nil)
+}
+
+// InitializingRepository says "正在初始化 Git 仓库…"
+// in the language the app shows.
+func InitializingRepository() string { return In(i18n.Locale()).InitializingRepository() }
+
+// InitializingRepository says "正在初始化 Git 仓库…"
+// in the language of msgs.
+func (msgs Messages) InitializingRepository() string {
+	return Catalog.Format(msgs.locale, "initializingRepository", nil)
+}
+
+// GitignoreTemplate says ".gitignore 模板"
+// in the language the app shows.
+func GitignoreTemplate() string { return In(i18n.Locale()).GitignoreTemplate() }
+
+// GitignoreTemplate says ".gitignore 模板"
+// in the language of msgs.
+func (msgs Messages) GitignoreTemplate() string {
+	return Catalog.Format(msgs.locale, "gitignoreTemplate", nil)
+}
+
+// GitignoreTemplateDetail says "初始化仓库时，若目录中没有 .gitignore，则写入此模板。留空则跳过。"
+// in the language the app shows.
+func GitignoreTemplateDetail() string { return In(i18n.Locale()).GitignoreTemplateDetail() }
+
+// GitignoreTemplateDetail says "初始化仓库时，若目录中没有 .gitignore，则写入此模板。留空则跳过。"
+// in the language of msgs.
+func (msgs Messages) GitignoreTemplateDetail() string {
+	return Catalog.Format(msgs.locale, "gitignoreTemplateDetail", nil)
+}
+
+// RestoreGitignoreTemplate says "恢复默认模板"
+// in the language the app shows.
+func RestoreGitignoreTemplate() string { return In(i18n.Locale()).RestoreGitignoreTemplate() }
+
+// RestoreGitignoreTemplate says "恢复默认模板"
+// in the language of msgs.
+func (msgs Messages) RestoreGitignoreTemplate() string {
+	return Catalog.Format(msgs.locale, "restoreGitignoreTemplate", nil)
+}
+
+// DiscardGitignoreTemplate says "你对 .gitignore 模板的修改尚未保存。"
+// in the language the app shows.
+func DiscardGitignoreTemplate() string { return In(i18n.Locale()).DiscardGitignoreTemplate() }
+
+// DiscardGitignoreTemplate says "你对 .gitignore 模板的修改尚未保存。"
+// in the language of msgs.
+func (msgs Messages) DiscardGitignoreTemplate() string {
+	return Catalog.Format(msgs.locale, "discardGitignoreTemplate", nil)
+}
+
 // SavingGroup says "正在保存分组…"
 // in the language the app shows.
 func SavingGroup() string { return In(i18n.Locale()).SavingGroup() }
@@ -6640,14 +6810,14 @@ func (msgs Messages) AddExistingRepository() string {
 	return Catalog.Format(msgs.locale, "addExistingRepository", nil)
 }
 
-// AddExistingRepositoryMenu says "添加已有的本地仓库"
+// AddLocalRepositoryMenu says "添加本地仓库…"
 // in the language the app shows.
-func AddExistingRepositoryMenu() string { return In(i18n.Locale()).AddExistingRepositoryMenu() }
+func AddLocalRepositoryMenu() string { return In(i18n.Locale()).AddLocalRepositoryMenu() }
 
-// AddExistingRepositoryMenu says "添加已有的本地仓库"
+// AddLocalRepositoryMenu says "添加本地仓库…"
 // in the language of msgs.
-func (msgs Messages) AddExistingRepositoryMenu() string {
-	return Catalog.Format(msgs.locale, "addExistingRepositoryMenu", nil)
+func (msgs Messages) AddLocalRepositoryMenu() string {
+	return Catalog.Format(msgs.locale, "addLocalRepositoryMenu", nil)
 }
 
 // EnterPath says "输入路径"

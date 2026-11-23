@@ -44,7 +44,7 @@ func TestNativeSettingsKeepsBoundsAcrossCategories(t *testing.T) {
 		if !found {
 			t.Fatal("未找到设置弹窗")
 		}
-		for _, category := range []string{"Git", "快捷键", "更新", "AI", locales.SecuritySettings(), "通用"} {
+		for _, category := range []string{"Git", "快捷键", "更新", "AI", locales.SecuritySettings(), locales.TemplateSettings(), "通用"} {
 			if err := tester.Click(category); err != nil {
 				t.Fatal(err)
 			}

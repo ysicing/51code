@@ -36,6 +36,23 @@ func TestRemoteProgressWriterKeepsErrors(t *testing.T) {
 	}
 }
 
+func TestWithRemoteProgressFlagAddsCloneProgress(t *testing.T) {
+	for _, test := range []struct {
+		args []string
+		want []string
+	}{
+		{[]string{"clone", "--", "https://example.test/repo", "."},
+			[]string{"clone", "--progress", "--", "https://example.test/repo", "."}},
+		{[]string{"-c", "credential.helper=", "clone", "--", "source", "."},
+			[]string{"-c", "credential.helper=", "clone", "--progress", "--", "source", "."}},
+	} {
+		got := withRemoteProgressFlag(test.args)
+		if !slices.Equal(got, test.want) {
+			t.Fatalf("withRemoteProgressFlag(%q) = %q, want %q", test.args, got, test.want)
+		}
+	}
+}
+
 func TestRemoteProgressReportsGitPushAndPullUpdate(t *testing.T) {
 	repo, path := fixture(t)
 	remote := t.TempDir()

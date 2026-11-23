@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/ysicing/51code/internal/gitrepo"
 	"github.com/ysicing/51code/internal/workspace"
 	"github.com/ysicing/51code/locales"
 
@@ -54,6 +55,7 @@ type nativeDialog struct {
 	canSubmit       func() bool
 	blocked         bool
 	onClose         func()
+	unsavedDetail   func() string
 	closeLabel      string
 	onChange        func()
 	onResult        func(error)
@@ -312,16 +314,80 @@ func (app *nativeApp) chooseLocal() {
 	if app.busy {
 		return
 	}
-	paths, err := app.chooseDirectories(locales.AddExistingRepository(), locales.Add(), true)
+	paths, err := app.chooseDirectories(locales.AddRepository(), locales.Add(), true)
 	if err != nil {
 		app.problem = err.Error()
 		return
 	}
 	if len(paths) > 0 {
-		group := app.group
-		app.libraryChange(locales.AddingRepositories(), func(ctx context.Context) (workspace.Library, error) {
-			return app.service.AddRepositories(ctx, paths, group)
-		})
+		app.addLocalPaths(paths)
+	}
+}
+
+func (app *nativeApp) addLocalPaths(paths []string) {
+	group, parent := app.group, app.dialog
+	app.run(locales.AddingRepositories(), func(ctx context.Context) (func(), error) {
+		library, err := app.service.AddRepositories(ctx, paths, group)
+		if err == nil {
+			return func() {
+				app.library = library
+				if parent != nil {
+					app.closeDialog(parent)
+				}
+			}, nil
+		}
+		if len(paths) != 1 || !errors.Is(err, gitrepo.ErrNotWorktree) {
+			return nil, err
+		}
+		directory, probeErr := gitrepo.InitCandidate(ctx, paths[0])
+		if probeErr != nil || directory == "" {
+			return nil, err
+		}
+		return func() { app.initRepositoryDialog(parent, directory, group) }, nil
+	})
+}
+
+func (app *nativeApp) initRepositoryDialog(parent *nativeDialog, directory, group string) {
+	initialized := false
+	templateApplied := false
+	app.dialog = &nativeDialog{
+		parent: parent, title: locales.InitRepositoryTitle(), action: locales.InitRepository(),
+		subject: directory, detail: locales.InitRepositoryDetail(), width: 480, confirmation: true,
+		submit: func(dialog *nativeDialog) {
+			label := locales.InitializingRepository()
+			if templateApplied {
+				label = locales.AddingRepositories()
+			}
+			template := app.prefs.GitignoreTemplate
+			app.run(label, func(ctx context.Context) (func(), error) {
+				if !initialized {
+					if err := gitrepo.Init(ctx, directory); err != nil {
+						return nil, err
+					}
+				}
+				if !templateApplied {
+					if err := gitrepo.WriteInitialGitignore(ctx, directory, template); err != nil {
+						return func() {
+							initialized = true
+							dialog.title = locales.GitignoreTemplate()
+							dialog.action = locales.Retry()
+							dialog.detail = ""
+						}, err
+					}
+				}
+				library, err := app.service.AddRepositories(ctx, []string{directory}, group)
+				return func() {
+					initialized, templateApplied = true, true
+					if err == nil {
+						app.library, app.dialog = library, nil
+						app.openRepository(directory)
+					} else {
+						dialog.title, dialog.action = locales.AddLocalRepository(), locales.Add()
+						dialog.detail = ""
+					}
+				}, err
+			})
+		},
 	}
 }
 
@@ -329,10 +395,7 @@ func (app *nativeApp) pathDialog() {
 	app.dialog = &nativeDialog{
 		title: locales.AddLocalRepository(), action: locales.Add(), fields: []nativeField{{label: locales.FullRepositoryPath()}},
 		submit: func(dialog *nativeDialog) {
-			path, group := dialog.fields[0].value, app.group
-			app.libraryChange(locales.AddingRepositories(), func(ctx context.Context) (workspace.Library, error) {
-				return app.service.AddRepositories(ctx, []string{path}, group)
-			})
+			app.addLocalPaths([]string{dialog.fields[0].value})
 		},
 	}
 }

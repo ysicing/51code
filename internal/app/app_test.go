@@ -95,7 +95,7 @@ func TestNativeTopToolbar(t *testing.T) {
 				tester := ui.NewTester(app.view, size[0], size[1])
 				labels := []string{"获取", "拉取", "推送", "分支", "合并", "仓库设置", "更多", "刷新", "设置"}
 				if screen == "library" {
-					labels = []string{"添加仓库", "输入路径", "扫描文件夹", "刷新", "设置"}
+					labels = []string{"添加", "克隆", "输入路径", "扫描文件夹", "刷新", "设置"}
 				}
 				for _, label := range labels {
 					role := ui.RoleButton

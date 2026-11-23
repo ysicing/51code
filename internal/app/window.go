@@ -27,6 +27,7 @@ import (
 
 type nativePreferences struct {
 	Git                  gitrepo.ExecutableOptions    `json:"git,omitempty"`
+	GitignoreTemplate    string                       `json:"gitignoreTemplate"`
 	LFS                  gitrepo.ExecutableOptions    `json:"lfs,omitempty"`
 	LFSIntegration       bool                         `json:"lfsIntegration"`
 	LargeFileChecks      bool                         `json:"largeFileChecks"`
@@ -201,7 +202,8 @@ func newNativeApp(service *RepositoryService, stateFile string) *nativeApp {
 			Appearance: appearanceSystem, Shortcuts: defaultNativeShortcuts(),
 			StartupPage: "library", AutoRefreshFiles: true, AutoFetchMinutes: 15, DoubleClickStage: true,
 			LFSIntegration: true, LargeFileChecks: true, LargeFileMiB: 50,
-			SidebarItems: nativeSidebarItems{Insights: true, Search: true, Compare: true, Stash: true, Worktrees: true, Submodules: true},
+			GitignoreTemplate: defaultGitignoreTemplate,
+			SidebarItems:      nativeSidebarItems{Insights: true, Search: true, Compare: true, Stash: true, Worktrees: true, Submodules: true},
 		},
 		nativeHistoryState: newNativeHistoryState(),
 		browseState:        newNativeHistoryState(), searchState: newNativeHistoryState(),
@@ -997,6 +999,21 @@ func (app *nativeApp) prepareClose() bool {
 		})
 		if err != nil || result.Button != 1 {
 			return false
+		}
+	}
+	for dialog := app.dialog; dialog != nil; dialog = dialog.parent {
+		if dialog.unsavedDetail == nil {
+			continue
+		}
+		if detail := dialog.unsavedDetail(); detail != "" {
+			result, err := app.closeMessage(mygo.MessageOptions{
+				Parent: app.win, Type: mygo.MessageWarning, Message: locales.DiscardUnsavedTitle(),
+				Detail: detail, Buttons: []string{locales.Cancel(), locales.DiscardAndQuit()},
+				CancelButton: 0, DestructiveButtons: []int{1},
+			})
+			if err != nil || result.Button != 1 {
+				return false
+			}
 		}
 	}
 	if err := app.savePreferences(); err != nil {

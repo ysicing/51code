@@ -133,7 +133,8 @@ func Run(info BuildInfo) {
 			}},
 			{Label: locales.FilesMenu(), Submenu: []*mygo.MenuItem{
 				{ID: shortcutLibrary, Label: locales.LocalRepositories(), Accelerator: shortcuts.Library, Click: func(_ *mygo.MenuItem, _ *mygo.Window) { open() }},
-				{ID: shortcutAddRepo, Label: locales.AddExistingRepositoryMenu(), Accelerator: shortcuts.AddRepository, Click: libraryCommand(func(desktop *nativeApp) { desktop.chooseLocal() })},
+				{ID: shortcutAddRepo, Label: locales.AddLocalRepositoryMenu(), Accelerator: shortcuts.AddRepository, Click: libraryCommand(func(desktop *nativeApp) { desktop.chooseLocal() })},
+				{Label: locales.Clone(), Click: libraryCommand(func(desktop *nativeApp) { desktop.cloneDialog() })},
 				{ID: shortcutScan, Label: locales.ScanFoldersMenu(), Accelerator: shortcuts.Scan, Click: libraryCommand(func(desktop *nativeApp) { desktop.chooseScan() })},
 				{Label: locales.NewGroupMenu(), Click: libraryCommand(func(desktop *nativeApp) { desktop.groupDialog("") })},
 				mygo.Separator(),

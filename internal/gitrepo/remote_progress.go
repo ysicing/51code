@@ -49,7 +49,7 @@ func withRemoteProgressFlag(args []string) []string {
 	for index+2 < len(args) && args[index] == "-c" {
 		index += 2
 	}
-	if index < len(args) && (args[index] == "push" || args[index] == "fetch") {
+	if index < len(args) && (args[index] == "push" || args[index] == "fetch" || args[index] == "clone") {
 		return slices.Insert(slices.Clone(args), index+1, "--progress")
 	}
 	return args

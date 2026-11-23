@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -96,11 +97,8 @@ func Clone(ctx context.Context, source, parent, name string) (*Repository, error
 	}()
 
 	stagePath := filepath.Join(target, stage)
-	options, err := remoteOptions(ctx, stagePath)
-	if err != nil {
-		return nil, err
-	}
-	if _, err := run(ctx, stagePath, "", remoteTimeout, append(options, "clone", "--", source, ".")...); err != nil {
+	stageRepo := &Repository{Path: stagePath}
+	if err := stageRepo.runRemote(ctx, "clone", "--", source, "."); err != nil {
 		return nil, err
 	}
 	if err := ctx.Err(); err != nil {
@@ -154,6 +152,10 @@ func validateClone(source, parent, name string) error {
 	if strings.TrimSpace(source) == "" || strings.HasPrefix(strings.TrimSpace(source), "-") ||
 		strings.ContainsFunc(source, unicode.IsControl) {
 		return errors.New("请输入有效的仓库地址，地址不能以选项开头或包含控制字符")
+	}
+	if remote, err := url.Parse(source); err == nil &&
+		(strings.EqualFold(remote.Scheme, "http") || strings.EqualFold(remote.Scheme, "https")) && remote.User != nil {
+		return errors.New("HTTPS 仓库地址不能包含账号或密码，请使用 Git 凭据管理器")
 	}
 	if strings.TrimSpace(parent) == "" {
 		return errors.New("请选择已存在的克隆父目录")

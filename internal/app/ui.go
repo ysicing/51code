@@ -338,9 +338,10 @@ func (app *nativeApp) toolbar(c *ui.Context) {
 		ui.Spacer(c)
 		if app.screen == "library" {
 			if !app.libraryEmpty() {
-				if ui.PrimaryButton(c, locales.AddRepository()).Disabled(disabled).Clicked() {
+				if ui.PrimaryButton(c, locales.Add()).Disabled(disabled).Clicked() {
 					app.chooseLocal()
 				}
+				ui.Button(c, locales.Clone()).Disabled(disabled).OnClick(app.cloneDialog)
 				if ui.Button(c, locales.EnterPath()).Disabled(disabled).Clicked() {
 					app.pathDialog()
 				}
@@ -395,7 +396,10 @@ func (app *nativeApp) libraryEmpty() bool {
 func (app *nativeApp) emptyLibraryActions(c *ui.Context) {
 	ui.Column(c).Key("empty-library").Grow(1).FillWidth().Center().Gap(12).
 		Disabled(app.busy || app.dialog != nil).Children(func() {
-		ui.PrimaryButton(c, locales.AddRepository()).Width(168).Height(36).OnClick(app.chooseLocal)
+		ui.Row(c).Gap(8).Children(func() {
+			ui.PrimaryButton(c, locales.Add()).Width(80).Height(36).OnClick(app.chooseLocal)
+			ui.Button(c, locales.Clone()).Width(80).Height(36).OnClick(app.cloneDialog)
+		})
 		ui.Toolbar(c, func() {
 			ui.Button(c, locales.EnterPath()).TextColor(c.Theme().TextMuted).OnClick(app.pathDialog)
 			ui.Button(c, locales.ScanFolders()).TextColor(c.Theme().TextMuted).OnClick(app.chooseScan)
