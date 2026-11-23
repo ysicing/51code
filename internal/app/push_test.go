@@ -50,7 +50,9 @@ func TestNativePushSelectsRemoteWithoutChangingUpstream(t *testing.T) {
 	if !app.busy {
 		t.Fatal("确认推送没有启动任务")
 	}
-	finish()
+	for app.busy {
+		finish()
+	}
 	if app.dialog != nil || app.problem != "" {
 		t.Fatalf("推送失败: dialog=%+v problem=%s", app.dialog, app.problem)
 	}
@@ -80,7 +82,12 @@ func TestNativeSingleRemotePushKeepsDirectAction(t *testing.T) {
 	if app.dialog != nil || !app.busy {
 		t.Fatal("单远程已有上游时应直接推送")
 	}
-	finish()
+	for app.busy {
+		finish()
+	}
+	if app.problem != "" {
+		t.Fatal(app.problem)
+	}
 }
 
 func TestNativePushDoesNotInferRemoteFromLocalUpstream(t *testing.T) {

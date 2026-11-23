@@ -91,6 +91,7 @@ type nativeApp struct {
 	closed                bool
 	busy                  bool
 	operationCancel       context.CancelFunc
+	remoteProgress        *nativeRemoteProgress
 	largeFileAcknowledged map[string]map[string]string
 	lfsState              *nativeLFSState
 	readOnlyBusy          bool
@@ -422,6 +423,7 @@ func (app *nativeApp) runTask(label string, readOnly bool, task func(context.Con
 	}
 	app.cancelRead()
 	previous := app.readDone
+	app.remoteProgress = nil
 	app.busy, app.status, app.problem = true, label, ""
 	app.readOnlyBusy = readOnly
 	dialog := app.dialog
@@ -449,7 +451,8 @@ func (app *nativeApp) runTask(label string, readOnly bool, task func(context.Con
 					dialog.problem = err.Error()
 				}
 				var partial *gitrepo.BranchDeletionPartialError
-				if !errors.Is(err, context.Canceled) || errors.As(err, &partial) {
+				if (app.remoteProgress == nil || !app.remoteProgress.failed) &&
+					(!errors.Is(err, context.Canceled) || errors.As(err, &partial)) {
 					app.showProblemDetails(app.problem)
 				}
 			}

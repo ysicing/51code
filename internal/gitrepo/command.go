@@ -137,6 +137,10 @@ func runDigest(ctx context.Context, root string, timeout time.Duration, args ...
 }
 
 func runTo(ctx context.Context, root, input string, timeout time.Duration, stdout io.Writer, details func() string, args ...string) error {
+	return runToWithProgress(ctx, root, input, timeout, stdout, details, nil, args...)
+}
+
+func runToWithProgress(ctx context.Context, root, input string, timeout time.Duration, stdout io.Writer, details func() string, report func(RemoteProgress), args ...string) error {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	options := []string{"--no-pager", "--literal-pathspecs", "-C", root, "-c", "color.ui=false"}
@@ -148,7 +152,15 @@ func runTo(ctx context.Context, root, input string, timeout time.Duration, stdou
 	cmd.WaitDelay = 2 * time.Second
 	var stderr limitedBuffer
 	cmd.Stdout, cmd.Stderr = stdout, &stderr
+	var progress remoteProgressWriter
+	if report != nil {
+		progress = remoteProgressWriter{report: report, details: &stderr}
+		cmd.Stderr = &progress
+	}
 	err = runProcess(ctx, cmd)
+	if report != nil {
+		progress.flush()
+	}
 	if ctx.Err() != nil {
 		return fmt.Errorf("Git 操作已取消或超时：%w", ctx.Err())
 	}

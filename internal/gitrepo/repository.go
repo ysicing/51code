@@ -735,6 +735,9 @@ func (repo *Repository) pull(ctx context.Context) error {
 			return err
 		}
 	}
+	if report := remoteProgressReporter(ctx); report != nil {
+		report(RemoteProgress{Phase: RemoteUpdating, Percent: RemotePercentUnknown})
+	}
 	if err := repo.checkMergeIgnoredPaths(ctx, upstream); err != nil {
 		return err
 	}
@@ -753,6 +756,15 @@ const checkoutTimeout = 10 * time.Minute
 func (repo *Repository) runRemote(ctx context.Context, args ...string) error {
 	options, err := remoteOptions(ctx, repo.Path)
 	if err != nil {
+		return err
+	}
+	if report := remoteProgressReporter(ctx); report != nil {
+		var stdout limitedBuffer
+		err := runToWithProgress(ctx, repo.Path, "", remoteTimeout, &stdout, stdout.String, report,
+			append(options, withRemoteProgressFlag(args)...)...)
+		if err == nil && stdout.overflow {
+			return errOutputTooLarge
+		}
 		return err
 	}
 	_, err = run(ctx, repo.Path, "", remoteTimeout, append(options, args...)...)

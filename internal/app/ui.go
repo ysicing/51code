@@ -176,7 +176,9 @@ func (app *nativeApp) view(c *ui.Context) {
 		app.problemNotice(c)
 		ui.Divider(c)
 		ui.Row(c).Height(34).Padding(0, 14).AlignItems(ui.Center).Gap(10).Children(func() {
-			if app.busy {
+			if app.busy && app.remoteProgress != nil {
+				app.remoteProgressView(c)
+			} else if app.busy {
 				ui.Spinner(c).Size(14, 14)
 				ui.Text(c, app.status).FontSize(12).TextColor(c.Theme().TextMuted).MinWidth(0).MaxLines(1).Shrink(1)
 				if app.scanning {
@@ -192,6 +194,8 @@ func (app *nativeApp) view(c *ui.Context) {
 				}
 			} else if app.trashUndo.id != "" {
 				app.trashUndoNotice(c)
+			} else if app.remoteProgress != nil && !app.remoteProgress.failed && app.screen != "library" {
+				ui.Text(c, app.remoteProgress.successLabel()).FontSize(12).TextColor(c.Theme().Success)
 			} else if app.repository != nil && app.screen != "library" {
 				ui.Text(c, app.repository.snapshot.Path).FontSize(12).TextColor(c.Theme().TextMuted).MinWidth(0).MaxLines(1).Shrink(1).Selectable()
 			} else {

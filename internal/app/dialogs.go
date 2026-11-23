@@ -205,6 +205,9 @@ func (app *nativeApp) dialogView(c *ui.Context) {
 			if dialog.problem != "" {
 				app.inlineProblem(c, dialog.problem)
 			}
+			if app.busy && app.remoteProgress != nil {
+				ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Children(func() { app.remoteProgressView(c) })
+			}
 			if app.busy && app.operationCancel != nil {
 				ui.Row(c).FillWidth().Gap(12).AlignItems(ui.Center).Children(func() {
 					ui.Text(c, app.status).FontSize(12).TextColor(c.Theme().TextMuted).Grow(1)

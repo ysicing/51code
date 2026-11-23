@@ -66,7 +66,7 @@ func (app *nativeApp) branchPushDialog(publish bool) {
 				Remote: remote.Name, Token: remote.Token, Name: dialog.fields[0].value,
 				Branch: snapshot.Branch, Head: snapshot.Head,
 			}
-			app.mutateForm(dialog, loading, func(ctx context.Context, path string) error {
+			app.runRemoteSync(dialog, "push", loading, remote.Name+"/"+strings.TrimSpace(request.Name), func(ctx context.Context, path string) error {
 				if publish {
 					return app.service.PublishBranch(ctx, path, request)
 				}

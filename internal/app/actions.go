@@ -322,9 +322,15 @@ func (app *nativeApp) remoteAction(action string) {
 		return
 	}
 	app.leaveConflict(func() {
-		app.mutate(map[string]string{"fetch": locales.Fetching(), "pull": locales.Pulling(), "push": locales.Pushing()}[action], func(ctx context.Context, path string) error {
+		label := map[string]string{"fetch": locales.Fetching(), "pull": locales.Pulling(), "push": locales.Pushing()}[action]
+		operation := func(ctx context.Context, path string) error {
 			return app.service.Remote(ctx, path, action)
-		})
+		}
+		if action == "push" || action == "pull" {
+			app.runRemoteSync(nil, action, label, app.repository.snapshot.Upstream, operation)
+		} else {
+			app.mutate(label, operation)
+		}
 	})
 }
 

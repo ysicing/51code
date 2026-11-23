@@ -3690,6 +3690,116 @@ func (msgs Messages) Pushing() string {
 	return Catalog.Format(msgs.locale, "pushing", nil)
 }
 
+// RemotePushingTo says "推送到 {target}"
+// in the language the app shows.
+func RemotePushingTo(target string) string { return In(i18n.Locale()).RemotePushingTo(target) }
+
+// RemotePushingTo says "推送到 {target}"
+// in the language of msgs.
+func (msgs Messages) RemotePushingTo(target string) string {
+	return Catalog.Format(msgs.locale, "remotePushingTo", map[string]any{"target": target})
+}
+
+// RemotePullingFrom says "从 {target} 拉取"
+// in the language the app shows.
+func RemotePullingFrom(target string) string { return In(i18n.Locale()).RemotePullingFrom(target) }
+
+// RemotePullingFrom says "从 {target} 拉取"
+// in the language of msgs.
+func (msgs Messages) RemotePullingFrom(target string) string {
+	return Catalog.Format(msgs.locale, "remotePullingFrom", map[string]any{"target": target})
+}
+
+// RemotePreparingObjects says "正在准备对象"
+// in the language the app shows.
+func RemotePreparingObjects() string { return In(i18n.Locale()).RemotePreparingObjects() }
+
+// RemotePreparingObjects says "正在准备对象"
+// in the language of msgs.
+func (msgs Messages) RemotePreparingObjects() string {
+	return Catalog.Format(msgs.locale, "remotePreparingObjects", nil)
+}
+
+// RemoteCompressingObjects says "正在压缩对象"
+// in the language the app shows.
+func RemoteCompressingObjects() string { return In(i18n.Locale()).RemoteCompressingObjects() }
+
+// RemoteCompressingObjects says "正在压缩对象"
+// in the language of msgs.
+func (msgs Messages) RemoteCompressingObjects() string {
+	return Catalog.Format(msgs.locale, "remoteCompressingObjects", nil)
+}
+
+// RemoteWritingObjects says "正在写入对象"
+// in the language the app shows.
+func RemoteWritingObjects() string { return In(i18n.Locale()).RemoteWritingObjects() }
+
+// RemoteWritingObjects says "正在写入对象"
+// in the language of msgs.
+func (msgs Messages) RemoteWritingObjects() string {
+	return Catalog.Format(msgs.locale, "remoteWritingObjects", nil)
+}
+
+// RemoteReceivingObjects says "正在接收对象"
+// in the language the app shows.
+func RemoteReceivingObjects() string { return In(i18n.Locale()).RemoteReceivingObjects() }
+
+// RemoteReceivingObjects says "正在接收对象"
+// in the language of msgs.
+func (msgs Messages) RemoteReceivingObjects() string {
+	return Catalog.Format(msgs.locale, "remoteReceivingObjects", nil)
+}
+
+// RemoteResolvingDeltas says "正在解析增量"
+// in the language the app shows.
+func RemoteResolvingDeltas() string { return In(i18n.Locale()).RemoteResolvingDeltas() }
+
+// RemoteResolvingDeltas says "正在解析增量"
+// in the language of msgs.
+func (msgs Messages) RemoteResolvingDeltas() string {
+	return Catalog.Format(msgs.locale, "remoteResolvingDeltas", nil)
+}
+
+// RemoteWaitingForConfirmation says "等待远端确认"
+// in the language the app shows.
+func RemoteWaitingForConfirmation() string { return In(i18n.Locale()).RemoteWaitingForConfirmation() }
+
+// RemoteWaitingForConfirmation says "等待远端确认"
+// in the language of msgs.
+func (msgs Messages) RemoteWaitingForConfirmation() string {
+	return Catalog.Format(msgs.locale, "remoteWaitingForConfirmation", nil)
+}
+
+// RemoteUpdatingWorktree says "正在更新工作区"
+// in the language the app shows.
+func RemoteUpdatingWorktree() string { return In(i18n.Locale()).RemoteUpdatingWorktree() }
+
+// RemoteUpdatingWorktree says "正在更新工作区"
+// in the language of msgs.
+func (msgs Messages) RemoteUpdatingWorktree() string {
+	return Catalog.Format(msgs.locale, "remoteUpdatingWorktree", nil)
+}
+
+// RemotePushComplete says "推送完成"
+// in the language the app shows.
+func RemotePushComplete() string { return In(i18n.Locale()).RemotePushComplete() }
+
+// RemotePushComplete says "推送完成"
+// in the language of msgs.
+func (msgs Messages) RemotePushComplete() string {
+	return Catalog.Format(msgs.locale, "remotePushComplete", nil)
+}
+
+// RemotePullComplete says "拉取完成"
+// in the language the app shows.
+func RemotePullComplete() string { return In(i18n.Locale()).RemotePullComplete() }
+
+// RemotePullComplete says "拉取完成"
+// in the language of msgs.
+func (msgs Messages) RemotePullComplete() string {
+	return Catalog.Format(msgs.locale, "remotePullComplete", nil)
+}
+
 // RemovingRemote says "正在移除远程…"
 // in the language the app shows.
 func RemovingRemote() string { return In(i18n.Locale()).RemovingRemote() }
