@@ -36,6 +36,106 @@ type Messages struct{ locale string }
 // source language.
 func In(locale string) Messages { return Messages{locale} }
 
+// SecuritySettings says "安全"
+// in the language the app shows.
+func SecuritySettings() string { return In(i18n.Locale()).SecuritySettings() }
+
+// SecuritySettings says "安全"
+// in the language of msgs.
+func (msgs Messages) SecuritySettings() string {
+	return Catalog.Format(msgs.locale, "securitySettings", nil)
+}
+
+// EnableSecretScan says "启用 Gitleaks 密钥扫描"
+// in the language the app shows.
+func EnableSecretScan() string { return In(i18n.Locale()).EnableSecretScan() }
+
+// EnableSecretScan says "启用 Gitleaks 密钥扫描"
+// in the language of msgs.
+func (msgs Messages) EnableSecretScan() string {
+	return Catalog.Format(msgs.locale, "enableSecretScan", nil)
+}
+
+// SecretScanSettingDetail says "在本地扫描暂存区新增内容，并在提交前提醒。"
+// in the language the app shows.
+func SecretScanSettingDetail() string { return In(i18n.Locale()).SecretScanSettingDetail() }
+
+// SecretScanSettingDetail says "在本地扫描暂存区新增内容，并在提交前提醒。"
+// in the language of msgs.
+func (msgs Messages) SecretScanSettingDetail() string {
+	return Catalog.Format(msgs.locale, "secretScanSettingDetail", nil)
+}
+
+// ScanStagedSecrets says "扫描密钥"
+// in the language the app shows.
+func ScanStagedSecrets() string { return In(i18n.Locale()).ScanStagedSecrets() }
+
+// ScanStagedSecrets says "扫描密钥"
+// in the language of msgs.
+func (msgs Messages) ScanStagedSecrets() string {
+	return Catalog.Format(msgs.locale, "scanStagedSecrets", nil)
+}
+
+// ScanningStagedSecrets says "正在扫描暂存区…"
+// in the language the app shows.
+func ScanningStagedSecrets() string { return In(i18n.Locale()).ScanningStagedSecrets() }
+
+// ScanningStagedSecrets says "正在扫描暂存区…"
+// in the language of msgs.
+func (msgs Messages) ScanningStagedSecrets() string {
+	return Catalog.Format(msgs.locale, "scanningStagedSecrets", nil)
+}
+
+// SecretScanTitle says "暂存区密钥扫描"
+// in the language the app shows.
+func SecretScanTitle() string { return In(i18n.Locale()).SecretScanTitle() }
+
+// SecretScanTitle says "暂存区密钥扫描"
+// in the language of msgs.
+func (msgs Messages) SecretScanTitle() string {
+	return Catalog.Format(msgs.locale, "secretScanTitle", nil)
+}
+
+// SecretScanClean says "未发现疑似密钥。"
+// in the language the app shows.
+func SecretScanClean() string { return In(i18n.Locale()).SecretScanClean() }
+
+// SecretScanClean says "未发现疑似密钥。"
+// in the language of msgs.
+func (msgs Messages) SecretScanClean() string {
+	return Catalog.Format(msgs.locale, "secretScanClean", nil)
+}
+
+// SecretScanFound says "发现 {count} 项疑似密钥。建议先检查暂存差异。"
+// in the language the app shows.
+func SecretScanFound(count string) string { return In(i18n.Locale()).SecretScanFound(count) }
+
+// SecretScanFound says "发现 {count} 项疑似密钥。建议先检查暂存差异。"
+// in the language of msgs.
+func (msgs Messages) SecretScanFound(count string) string {
+	return Catalog.Format(msgs.locale, "secretScanFound", map[string]any{"count": count})
+}
+
+// SecretScanLimited says "已显示前 {count} 项疑似密钥，扫描结果达到上限。"
+// in the language the app shows.
+func SecretScanLimited(count string) string { return In(i18n.Locale()).SecretScanLimited(count) }
+
+// SecretScanLimited says "已显示前 {count} 项疑似密钥，扫描结果达到上限。"
+// in the language of msgs.
+func (msgs Messages) SecretScanLimited(count string) string {
+	return Catalog.Format(msgs.locale, "secretScanLimited", map[string]any{"count": count})
+}
+
+// SecretScanStale says "暂存区或当前提交已变化，请重新扫描。"
+// in the language the app shows.
+func SecretScanStale() string { return In(i18n.Locale()).SecretScanStale() }
+
+// SecretScanStale says "暂存区或当前提交已变化，请重新扫描。"
+// in the language of msgs.
+func (msgs Messages) SecretScanStale() string {
+	return Catalog.Format(msgs.locale, "secretScanStale", nil)
+}
+
 // RepositoryFiles says "浏览文件"
 // in the language the app shows.
 func RepositoryFiles() string { return In(i18n.Locale()).RepositoryFiles() }

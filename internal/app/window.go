@@ -61,6 +61,7 @@ type nativePreferences struct {
 	UpdateCheckFrequency string                       `json:"updateCheckFrequency"`
 	AI                   commitai.Options             `json:"ai"`
 	AIConsent            bool                         `json:"aiConsent"`
+	SecretScanEnabled    bool                         `json:"secretScanEnabled,omitempty"`
 	RepositoryAI         map[string]nativeAIOverride  `json:"repositoryAI,omitempty"`
 }
 
@@ -878,7 +879,7 @@ func (app *nativeApp) commit() {
 		return
 	}
 	app.stopCommitAI()
-	if app.gitFeatures(path).checks {
+	if app.prefs.SecretScanEnabled || app.gitFeatures(path).checks {
 		app.inspectCommit(path, message)
 		return
 	}

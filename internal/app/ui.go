@@ -644,6 +644,10 @@ func (app *nativeApp) changesSection(c *ui.Context, staged bool) {
 			}
 			ui.Badge(c, badge)
 			ui.Spacer(c)
+			if staged && app.prefs.SecretScanEnabled {
+				ui.Button(c, locales.ScanStagedSecrets()).FontSize(12).Disabled(!app.canScanStagedSecrets()).
+					OnClick(app.scanStagedSecrets)
+			}
 			if ui.Button(c, action).FontSize(12).Disabled(!app.writable || app.readTask != nil || count == 0).Clicked() {
 				app.stageFiles(staged, true)
 			}

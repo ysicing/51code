@@ -134,7 +134,7 @@ func (app *nativeApp) settingsDialogAt(initialTab int) {
 	dialog.canSubmit = func() bool { return tab == 1 && identity.dirty() }
 	dialog.body = func(c *ui.Context) {
 		app.aiEditor = ai
-		categories := []string{locales.General(), "Git", locales.Shortcuts(), locales.Updates(), "AI"}
+		categories := []string{locales.General(), "Git", locales.Shortcuts(), locales.Updates(), "AI", locales.SecuritySettings()}
 		ui.Column(c).Fill().MinHeight(0).Gap(16).Children(func() {
 			if ui.Tabs(c, &tab, categories...).Label(locales.SettingsCategories()).Disabled(ai.keySaving || ai.key != "").Changed() {
 				dialog.problem = ""
@@ -231,6 +231,8 @@ func (app *nativeApp) settingsDialogAt(initialTab int) {
 							})
 						case 4:
 							ai.view(app, dialog, c)
+						case 5:
+							app.securityPreferences(c)
 						}
 					})
 				})

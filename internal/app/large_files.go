@@ -74,17 +74,49 @@ func (app *nativeApp) inspectStage(files []string) {
 
 func (app *nativeApp) inspectCommit(path, message string) {
 	features := app.gitFeatures(path)
+	scanEnabled := app.prefs.SecretScanEnabled
 	acknowledged := maps.Clone(app.largeFileAcknowledged[path])
-	app.run(locales.CheckingLargeFiles(), func(ctx context.Context) (func(), error) {
-		report, err := app.service.InspectStagedFiles(ctx, path)
-		if err != nil {
-			return nil, err
+	label := locales.CheckingLargeFiles()
+	if scanEnabled {
+		label = locales.ScanningStagedSecrets()
+	}
+	app.run(label, func(ctx context.Context) (func(), error) {
+		var report gitrepo.FileInspectionReport
+		var risks []gitrepo.FileInspection
+		if features.checks {
+			var err error
+			report, err = app.service.InspectStagedFiles(ctx, path)
+			if err != nil {
+				return nil, err
+			}
+			risks = largeFileRisks(report, features.threshold, true, acknowledged)
 		}
-		risks := largeFileRisks(report, features.threshold, true, acknowledged)
+		token := report.Token
+		if scanEnabled {
+			scan, err := app.service.ScanStagedSecrets(ctx, path)
+			if err != nil {
+				return nil, err
+			}
+			if token != "" && token != scan.Token {
+				return nil, errors.New(locales.SecretScanStale())
+			}
+			token = scan.Token
+			if len(scan.Findings) > 0 {
+				return func() {
+					app.secretScanDialog(path, scan, func() {
+						if len(risks) > 0 {
+							app.largeFileReview(path, nil, report, risks, features, message)
+						} else {
+							app.commitMessage(path, message, token)
+						}
+					})
+				}, nil
+			}
+		}
 		if len(risks) > 0 {
 			return func() { app.largeFileReview(path, nil, report, risks, features, message) }, nil
 		}
-		return app.commitResult(ctx, path, message, report.Token)
+		return app.commitResult(ctx, path, message, token)
 	})
 }
 
