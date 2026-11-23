@@ -26,6 +26,16 @@ func (app *nativeApp) cloneDialog() {
 			{label: locales.CloneLocation(), value: app.directoryDialogPath(), readOnly: true},
 		},
 	}
+	suggestedName := ""
+	nameEdited := false
+	dialog.onChange = func() {
+		name := &dialog.fields[1].value
+		nameEdited = nameEdited || *name != suggestedName
+		if !nameEdited {
+			suggestedName = gitrepo.SuggestCloneDirectoryName(dialog.fields[0].value)
+			*name = suggestedName
+		}
+	}
 	dialog.body = func(c *ui.Context) {
 		ui.Button(c, locales.ChooseCloneLocation()).OnClick(func() {
 			paths, err := app.chooseDirectories(locales.ChooseCloneLocation(), locales.CloneSelect(), false)

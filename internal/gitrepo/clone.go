@@ -10,10 +10,55 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"unicode"
 )
+
+// SuggestCloneDirectoryName 从远程地址推导符合克隆校验的单层目录名。
+func SuggestCloneDirectoryName(source string) string {
+	source = strings.TrimSpace(source)
+	if strings.HasPrefix(source, "-") || strings.ContainsFunc(source, unicode.IsControl) {
+		return ""
+	}
+
+	var name string
+	if strings.Contains(source, "://") {
+		remote, err := url.Parse(source)
+		if err != nil || remote.Hostname() == "" {
+			return ""
+		}
+		switch remote.Scheme {
+		case "http", "https", "ssh":
+		default:
+			return ""
+		}
+		name, err = url.PathUnescape(path.Base(strings.TrimRight(remote.EscapedPath(), "/")))
+		if err != nil {
+			return ""
+		}
+	} else {
+		separator := strings.IndexByte(source, ':')
+		if bracket := strings.IndexByte(source, '['); bracket >= 0 && bracket < separator {
+			end := strings.IndexByte(source, ']')
+			if end < separator || !strings.HasPrefix(source[end+1:], ":") {
+				return ""
+			}
+			separator = end + 1
+		}
+		if separator <= 0 || strings.ContainsAny(source[:separator], `/\ `) || source[separator-1] == '@' {
+			return ""
+		}
+		name = path.Base(strings.TrimRight(source[separator+1:], "/"))
+	}
+
+	name = strings.TrimSuffix(name, ".git")
+	if err := validateCloneDirectoryName(name); err != nil {
+		return ""
+	}
+	return name
+}
 
 // Clone 将仓库克隆到已存在父目录下的新目录，不覆盖已有目标。
 func Clone(ctx context.Context, source, parent, name string) (*Repository, error) {
@@ -160,6 +205,10 @@ func validateClone(source, parent, name string) error {
 	if strings.TrimSpace(parent) == "" {
 		return errors.New("请选择已存在的克隆父目录")
 	}
+	return validateCloneDirectoryName(name)
+}
+
+func validateCloneDirectoryName(name string) error {
 	if name == "" || name == "." || name == ".." || strings.HasPrefix(name, "-") ||
 		strings.TrimSpace(name) != name || strings.HasSuffix(name, ".") ||
 		strings.ContainsAny(name, `/\<>:"|?*`) || strings.ContainsFunc(name, unicode.IsControl) {

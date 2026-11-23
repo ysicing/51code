@@ -197,7 +197,7 @@ func (app *nativeApp) view(c *ui.Context) {
 			} else if app.remoteProgress != nil && !app.remoteProgress.failed && app.screen != "library" {
 				ui.Text(c, app.remoteProgress.successLabel()).FontSize(12).TextColor(c.Theme().Success)
 			} else if app.repository != nil && app.screen != "library" {
-				ui.Text(c, app.repository.snapshot.Path).FontSize(12).TextColor(c.Theme().TextMuted).MinWidth(0).MaxLines(1).Shrink(1).Selectable()
+				app.repositoryPathStatus(c, app.repository.snapshot.Path)
 			} else {
 				ui.Text(c, locales.LocalRepositoryCount(len(app.library.Repositories))).FontSize(12).TextColor(c.Theme().TextMuted)
 			}
@@ -209,6 +209,23 @@ func (app *nativeApp) view(c *ui.Context) {
 		})
 	})
 	app.dialogView(c)
+}
+
+func (app *nativeApp) repositoryPathStatus(c *ui.Context, path string) {
+	services := c.Services()
+	pathMenu := func(menu *ui.Menu) {
+		if menu.Item(locales.CopyFullPath()).Chosen() {
+			services.WriteClipboard(path)
+		}
+		if menu.Item(locales.OpenInTerminal()).Disabled(app.busy || app.closed || app.dialog != nil).Chosen() {
+			app.openRepositoryTerminal(path)
+		}
+	}
+	ui.Row(c).MinWidth(0).Shrink(1).Gap(4).AlignItems(ui.Center).Children(func() {
+		ui.Text(c, path).FontSize(12).TextColor(c.Theme().TextMuted).MinWidth(0).SingleLine().Shrink(1).
+			Selectable().Tooltip(path).ContextMenu(pathMenu)
+		iconButton(c, locales.RepositoryActions(), nativeIcons["more"]).Shrink(0).Menu(pathMenu)
+	})
 }
 
 func (app *nativeApp) sidebar(c *ui.Context) {

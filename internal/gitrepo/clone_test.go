@@ -16,6 +16,30 @@ import (
 	"time"
 )
 
+func TestSuggestCloneDirectoryName(t *testing.T) {
+	for _, test := range []struct {
+		source string
+		want   string
+	}{
+		{" git@code.example:wxapp/jika.git ", "jika"},
+		{"git@[2001:db8::1]:team/jika.git", "jika"},
+		{"ssh://git@code.example:2222/team/jika.git/", "jika"},
+		{"https://code.example/team/my%20repo.git?ref=main#readme", "my repo"},
+		{"https://code.example/team/jika", "jika"},
+		{"https://code.example", ""},
+		{"git@code.example:", ""},
+		{"git@[2001:db8::1]", ""},
+		{"https://code.example/team/not%2Fa%2Fname.git", ""},
+		{"https://code.example/team/CON.git", ""},
+		{"https://code.example/team/.git", ""},
+		{"/local/team/jika.git", ""},
+	} {
+		if got := SuggestCloneDirectoryName(test.source); got != test.want {
+			t.Errorf("SuggestCloneDirectoryName(%q) = %q, want %q", test.source, got, test.want)
+		}
+	}
+}
+
 func cloneEnvironment(t *testing.T) {
 	t.Helper()
 	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)

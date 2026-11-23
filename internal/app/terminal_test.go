@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/ysicing/51code/internal/terminal"
+	"github.com/ysicing/51code/locales"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -197,5 +198,63 @@ func TestNativeRepositoryTerminalMenu(t *testing.T) {
 				t.Fatal("repository terminal action did not use the selected terminal safely", app.problem)
 			}
 		})
+	}
+}
+
+func TestNativeStatusBarRepositoryPathMenu(t *testing.T) {
+	app, root, finish := nativeFixture(t)
+	worktree := filepath.Join(t.TempDir(), strings.Repeat("工作树 ", 14)+"feature")
+	nativeGit(t, root, "worktree", "add", "--detach", worktree)
+	worktree, err := filepath.EvalSymlinks(worktree)
+	if err != nil {
+		t.Fatal(err)
+	}
+	app.openRepository(worktree)
+	finish()
+	app.writable = false
+	missing := filepath.Join(t.TempDir(), "selected-terminal-missing")
+	app.prefs.TerminalApplication = missing
+
+	for _, appearance := range []string{appearanceLight, appearanceDark} {
+		app.prefs.Appearance = appearance
+		tester := ui.NewTester(app.view, 960, 640)
+		button, found := tester.AccessByRole(ui.RoleMenuButton, locales.RepositoryActions())
+		if !found || button.Offscreen || button.Disabled || button.Bounds.Y < 600 {
+			t.Fatalf("missing status bar path menu in %s appearance", appearance)
+		}
+		if directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); directory != "" {
+			saveNativeScreenshot(t, tester, directory, "repository-path-menu-"+appearance+".png")
+		}
+		tester.ClickAt(button.Bounds.X+button.Bounds.W/2, button.Bounds.Y+button.Bounds.H/2)
+		if err := tester.ChooseMenuItem(locales.CopyFullPath()); err != nil || tester.Clipboard() != worktree {
+			t.Fatalf("button copied %q, want %q: %v", tester.Clipboard(), worktree, err)
+		}
+		if !tester.Focused(locales.RepositoryActions()) {
+			t.Fatal("status bar menu button did not keep focus")
+		}
+		tester.Key(0, ui.KeySpace)
+		if err := tester.ChooseMenuItem(locales.CopyFullPath()); err != nil {
+			t.Fatalf("keyboard did not reopen the status bar menu: %v", err)
+		}
+
+		tester.SetClipboard("")
+		if err := tester.RightClick(worktree); err != nil {
+			t.Fatal(err)
+		}
+		if err := tester.ChooseMenuItem(locales.CopyFullPath()); err != nil || tester.Clipboard() != worktree {
+			t.Fatalf("context menu copied %q, want %q: %v", tester.Clipboard(), worktree, err)
+		}
+		if appearance == appearanceDark {
+			if err := tester.RightClick(worktree); err != nil {
+				t.Fatal(err)
+			}
+			if err := tester.ChooseMenuItem(locales.OpenInTerminal()); err != nil {
+				t.Fatal(err)
+			}
+			finish()
+			if !strings.Contains(app.problem, missing) {
+				t.Fatalf("status bar menu did not use the configured terminal: %s", app.problem)
+			}
+		}
 	}
 }

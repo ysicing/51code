@@ -16,6 +16,42 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
+func TestNativeCloneSuggestsDirectoryFromRemoteAddress(t *testing.T) {
+	app, _, _ := nativeFixture(t)
+	app.showLibrary()
+	tester := ui.NewTester(app.view, 1024, 680)
+	if err := tester.Click(locales.Clone()); err != nil {
+		t.Fatal(err)
+	}
+	replace := func(label, value string) {
+		t.Helper()
+		field, found := tester.AccessByRole(ui.RoleTextField, label)
+		if !found || field.Offscreen {
+			t.Fatalf("missing clone field %q", label)
+		}
+		tester.ClickAt(field.Bounds.X+field.Bounds.W/2, field.Bounds.Y+field.Bounds.H/2)
+		tester.Key(ui.Cmd, ui.KeyA)
+		tester.Type(value)
+	}
+	address, directory := locales.RemoteAddress(), locales.CloneDirectoryName()
+	requireDirectory := func(want string) {
+		t.Helper()
+		field, found := tester.AccessByRole(ui.RoleTextField, directory)
+		if !found || field.Value != want {
+			t.Fatalf("clone directory = %q, want %q (field found: %v)", field.Value, want, found)
+		}
+	}
+	replace(address, "git@code.example:wxapp/jika.git")
+	requireDirectory("jika")
+	replace(address, "https://code.example")
+	requireDirectory("")
+	replace(address, "https://code.example/team/another.git")
+	requireDirectory("another")
+	replace(directory, "my-checkout")
+	replace(address, "ssh://git@code.example:2222/team/third.git")
+	requireDirectory("my-checkout")
+}
+
 func TestNativeCloneAddsAndOpensInCurrentGroup(t *testing.T) {
 	app, source, finish := nativeFixture(t)
 	grouped, err := app.service.CreateGroup("克隆测试")
