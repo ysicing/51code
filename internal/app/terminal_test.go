@@ -203,7 +203,7 @@ func TestNativeRepositoryTerminalMenu(t *testing.T) {
 
 func TestNativeStatusBarRepositoryPathMenu(t *testing.T) {
 	app, root, finish := nativeFixture(t)
-	worktree := filepath.Join(t.TempDir(), strings.Repeat("工作树 ", 14)+"feature")
+	worktree := filepath.Join(t.TempDir(), strings.Repeat("工作树 ", 6)+"feature")
 	nativeGit(t, root, "worktree", "add", "--detach", worktree)
 	worktree, err := filepath.EvalSymlinks(worktree)
 	if err != nil {
