@@ -48,17 +48,21 @@ func (repo *Repository) ScanStagedSecrets(ctx context.Context) (SecretScan, erro
 	if err := repo.lockHistory(ctx); err != nil {
 		return SecretScan{}, err
 	}
-	defer repo.mu.Unlock()
-
 	token, patch, err := repo.stagedSecretPatch(ctx)
+	repo.mu.Unlock()
 	if err != nil {
 		return SecretScan{}, err
 	}
+	// 扫描固定的差异时释放锁，避免阻塞仓库刷新，扫描后复核令牌以确认暂存区和 HEAD 仍一致。
 	scan, err := scanSecretPatch(ctx, patch)
 	if err != nil {
 		return SecretScan{}, err
 	}
+	if err := repo.lockHistory(ctx); err != nil {
+		return SecretScan{}, err
+	}
 	current, err := repo.commitToken(ctx)
+	repo.mu.Unlock()
 	if err != nil {
 		return SecretScan{}, err
 	}
@@ -84,7 +88,7 @@ func (repo *Repository) stagedSecretPatch(ctx context.Context) (string, string, 
 	}
 	patch, limited, err := runCapped(ctx, repo.Path, "", 30*time.Second, outputLimit,
 		"-c", "core.quotePath=true", "-c", "diff.suppressBlankEmpty=false",
-		"diff", "--patch", "--text", "--no-ext-diff", "--no-textconv", "--no-renames",
+		"diff", "--patch", "--no-ext-diff", "--no-textconv", "--no-renames",
 		"--no-color", "--no-relative", "--no-function-context", "--word-diff=none",
 		"--submodule=short", "--ignore-submodules=none", "--diff-filter=ACMT",
 		"--src-prefix=a/", "--dst-prefix=b/", "--output-indicator-new=+",

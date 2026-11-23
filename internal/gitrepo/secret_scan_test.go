@@ -60,3 +60,20 @@ func TestScanStagedSecretsSupportsFirstCommitAndRejectsOversize(t *testing.T) {
 		t.Fatalf("oversized scan returned a usable token: %+v, %v", scan, err)
 	}
 }
+
+func TestScanStagedSecretsSkipsLargeBinary(t *testing.T) {
+	repo, path := fixture(t)
+	write(t, path, "image.bin", "\x00"+strings.Repeat("x", 5<<20))
+	write(t, path, "token.env", "TOKEN="+"ghp_"+"R7c4Wk2nH3xV8eJ9qP0uL5rD1mS6aT4yN8zB"+"\n")
+	git(t, path, "add", "--", "image.bin", "token.env")
+
+	scan, err := repo.ScanStagedSecrets(context.Background())
+	if err != nil || scan.Token == "" || len(scan.Findings) == 0 {
+		t.Fatalf("scan with staged binary: %+v, %v", scan, err)
+	}
+	for _, finding := range scan.Findings {
+		if finding.Path != "token.env" || finding.Line != 1 {
+			t.Fatalf("wrong finding location: %+v", finding)
+		}
+	}
+}
