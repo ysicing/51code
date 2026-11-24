@@ -207,6 +207,43 @@ func TestNativeComparisonSelectsFilesAndPinsReferences(t *testing.T) {
 	}
 }
 
+func TestNativeComparisonCopiesBinaryFilePath(t *testing.T) {
+	app, path, finish := nativeFixture(t)
+	const file = "apps/admin/public/sticker-proof.webp"
+	if err := os.MkdirAll(filepath.Dir(filepath.Join(path, file)), 0700); err != nil {
+		t.Fatal(err)
+	}
+	writeNativeFile(t, path, file, "RIFF\x00\x00\x00\x00WEBP")
+	nativeGit(t, path, "add", "--", file)
+	nativeGit(t, path, "commit", "-m", "add image")
+	app.switchWorkspace("compare")
+	app.comparison.base, app.comparison.target = app.repository.snapshot.Head, "HEAD"
+	app.startComparison()
+	finish()
+	if app.comparison.file != file || !strings.Contains(app.diff.Text, "Binary files") || app.rawDiff.Buffer == nil {
+		t.Fatalf("missing binary diff for %s: %s", file, app.problem)
+	}
+
+	tester := ui.NewTester(app.view, 1240, 680)
+	var title ui.Rect
+	for _, element := range tester.AccessAll() {
+		if element.Name == file && element.Bounds.X > title.X {
+			title = element.Bounds
+		}
+	}
+	if title.W == 0 {
+		t.Fatal("missing binary file path heading")
+	}
+	y := title.Y + title.H/2
+	tester.Press(title.X+1, y)
+	tester.Move(title.X+title.W-1, y)
+	tester.Release(title.X+title.W-1, y)
+	tester.Key(ui.Cmd, ui.KeyC)
+	if got := tester.Clipboard(); got != file {
+		t.Fatalf("clipboard after dragging over the binary file heading = %q, want %q", got, file)
+	}
+}
+
 func TestNativeComparisonLongInputsAndKeyboard(t *testing.T) {
 	app, _, finish := nativeFixture(t)
 	app.switchWorkspace("compare")
