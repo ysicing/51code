@@ -9,7 +9,7 @@ require (
 	github.com/go-enry/go-enry/v2 v2.9.6
 	github.com/google/gops v0.3.29
 	github.com/junegunn/fzf v0.75.0
-	github.com/rs/zerolog v1.33.0
+	github.com/rs/zerolog v1.35.1
 	github.com/shirou/gopsutil/v4 v4.26.10
 	github.com/zricethezav/gitleaks/v8 v8.30.1
 	golang.org/x/sys v0.50.0
