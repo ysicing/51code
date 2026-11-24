@@ -82,6 +82,9 @@ func (manager *Manager) decode(data []byte) error {
 	} else if err := json.Unmarshal(data, &manager.library); err != nil {
 		return errors.New("无法读取本地仓库记录：" + err.Error())
 	}
+	if !hasGroup(manager.library, manager.library.DefaultGroupID) {
+		manager.library.DefaultGroupID = ""
+	}
 	return nil
 }
 

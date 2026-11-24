@@ -79,6 +79,12 @@ func TestLibraryGroupsPersistAndRemovingGroupKeepsRepositories(t *testing.T) {
 	if _, err := manager.Add(ctx, []string{path, filepath.Join(path, ".git", "..")}, group); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := manager.SetDefaultGroup("unknown"); err == nil {
+		t.Fatal("accepted missing default group")
+	}
+	if _, err := manager.SetDefaultGroup(group); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := manager.RenameGroup(group, "个人"); err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +93,8 @@ func TestLibraryGroupsPersistAndRemovingGroupKeepsRepositories(t *testing.T) {
 		t.Fatal(err)
 	}
 	library = reloaded.Library()
-	if len(library.Repositories) != 1 || library.Repositories[0].GroupID != group || library.Groups[0].Name != "个人" {
+	if len(library.Repositories) != 1 || library.Repositories[0].GroupID != group ||
+		library.Groups[0].Name != "个人" || library.DefaultGroupID != group {
 		t.Fatalf("group persistence or deduplication: %+v", library)
 	}
 	if _, err := reloaded.Move(path, ""); err != nil {
@@ -97,8 +104,16 @@ func TestLibraryGroupsPersistAndRemovingGroupKeepsRepositories(t *testing.T) {
 		t.Fatal(err)
 	}
 	library, err = reloaded.RemoveGroup(group)
-	if err != nil || len(library.Groups) != 0 || len(library.Repositories) != 1 || library.Repositories[0].GroupID != "" {
+	if err != nil || len(library.Groups) != 0 || len(library.Repositories) != 1 ||
+		library.Repositories[0].GroupID != "" || library.DefaultGroupID != "" {
 		t.Fatalf("remove group: %+v, %v", library, err)
+	}
+	reloaded, err = New(settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reloaded.Library().DefaultGroupID != "" {
+		t.Fatal("deleted default group was not cleared on disk")
 	}
 	if _, err := reloaded.Remove(path); err != nil {
 		t.Fatal(err)

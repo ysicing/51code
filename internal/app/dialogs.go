@@ -325,7 +325,7 @@ func (app *nativeApp) chooseLocal() {
 }
 
 func (app *nativeApp) addLocalPaths(paths []string) {
-	group, parent := app.group, app.dialog
+	group, parent := app.addRepositoryGroup(), app.dialog
 	app.run(locales.AddingRepositories(), func(ctx context.Context) (func(), error) {
 		library, err := app.service.AddRepositories(ctx, paths, group)
 		if err == nil {
@@ -423,24 +423,39 @@ func (app *nativeApp) groupDialog(id string) {
 
 func (app *nativeApp) removeGroup(group workspace.Group) {
 	app.confirm(locales.RemoveGroupTitle(), locales.RemoveGroupDetail(), locales.Remove(), func() {
-		app.libraryChange(locales.RemovingGroup(), func(_ context.Context) (workspace.Library, error) {
-			return app.service.RemoveGroup(group.ID)
+		app.run(locales.RemovingGroup(), func(_ context.Context) (func(), error) {
+			library, err := app.service.RemoveGroup(group.ID)
+			if err != nil {
+				return nil, err
+			}
+			return func() {
+				app.library = library
+				if app.group == group.ID {
+					app.group = ungroupedLibraryView
+				}
+			}, nil
 		})
-		app.group = ""
 	})
 }
 
-func (app *nativeApp) groupActions(group workspace.Group) {
-	app.dialog = &nativeDialog{
-		title: group.Name,
-		body: func(c *ui.Context) {
-			if ui.Button(c, locales.Rename()).FillWidth().Clicked() {
-				app.groupDialog(group.ID)
-			}
-			if ui.Button(c, locales.RemoveGroupMenu()).FillWidth().Clicked() {
-				app.removeGroup(group)
-			}
-		},
+func (app *nativeApp) groupMenu(menu *ui.Menu, group workspace.Group) {
+	unavailable := app.busy || app.closed || app.dialog != nil
+	isDefault := app.library.DefaultGroupID == group.ID
+	if menu.Item(locales.DefaultAddToGroup()).Checked(isDefault).Disabled(unavailable).Chosen() {
+		id := group.ID
+		if isDefault {
+			id = ""
+		}
+		app.libraryChange(locales.SavingGroup(), func(_ context.Context) (workspace.Library, error) {
+			return app.service.SetDefaultGroup(id)
+		})
+	}
+	menu.Separator()
+	if menu.Item(locales.Rename()).Disabled(unavailable).Chosen() {
+		app.groupDialog(group.ID)
+	}
+	if menu.Item(locales.RemoveGroupMenu()).Danger().Disabled(unavailable).Chosen() {
+		app.removeGroup(group)
 	}
 }
 
@@ -532,8 +547,9 @@ func (app *nativeApp) scanDialog() {
 	result := app.scanResult
 	options, ids := app.groupChoices()
 	choice := options[0]
+	target := app.addRepositoryGroup()
 	for label, id := range ids {
-		if id == app.group {
+		if id == target {
 			choice = label
 		}
 	}

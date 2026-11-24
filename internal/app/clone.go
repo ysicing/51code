@@ -49,7 +49,7 @@ func (app *nativeApp) cloneDialog() {
 			}
 		})
 	}
-	group := app.group
+	group := app.addRepositoryGroup()
 	dialog.submit = func(dialog *nativeDialog) {
 		source, name, parent := dialog.fields[0].value, dialog.fields[1].value, dialog.fields[2].value
 		app.runClone(dialog, strings.TrimSpace(source), parent, name, group)

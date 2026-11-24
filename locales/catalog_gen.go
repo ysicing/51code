@@ -5886,6 +5886,36 @@ func (msgs Messages) Ungrouped() string {
 	return Catalog.Format(msgs.locale, "ungrouped", nil)
 }
 
+// DefaultGroupBadge says "默认"
+// in the language the app shows.
+func DefaultGroupBadge() string { return In(i18n.Locale()).DefaultGroupBadge() }
+
+// DefaultGroupBadge says "默认"
+// in the language of msgs.
+func (msgs Messages) DefaultGroupBadge() string {
+	return Catalog.Format(msgs.locale, "defaultGroupBadge", nil)
+}
+
+// DefaultAddToGroup says "默认添加到此组"
+// in the language the app shows.
+func DefaultAddToGroup() string { return In(i18n.Locale()).DefaultAddToGroup() }
+
+// DefaultAddToGroup says "默认添加到此组"
+// in the language of msgs.
+func (msgs Messages) DefaultAddToGroup() string {
+	return Catalog.Format(msgs.locale, "defaultAddToGroup", nil)
+}
+
+// EmptyUngrouped says "没有未分组的仓库"
+// in the language the app shows.
+func EmptyUngrouped() string { return In(i18n.Locale()).EmptyUngrouped() }
+
+// EmptyUngrouped says "没有未分组的仓库"
+// in the language of msgs.
+func (msgs Messages) EmptyUngrouped() string {
+	return Catalog.Format(msgs.locale, "emptyUngrouped", nil)
+}
+
 // MoveToGroup says "移动到分组"
 // in the language the app shows.
 func MoveToGroup() string { return In(i18n.Locale()).MoveToGroup() }
@@ -5966,11 +5996,11 @@ func (msgs Messages) RemoveGroupTitle() string {
 	return Catalog.Format(msgs.locale, "removeGroupTitle", nil)
 }
 
-// RemoveGroupDetail says "仓库将保留在本地列表中，不会删除磁盘文件。"
+// RemoveGroupDetail says "组内仓库将移到「未分组」，磁盘文件会保留。"
 // in the language the app shows.
 func RemoveGroupDetail() string { return In(i18n.Locale()).RemoveGroupDetail() }
 
-// RemoveGroupDetail says "仓库将保留在本地列表中，不会删除磁盘文件。"
+// RemoveGroupDetail says "组内仓库将移到「未分组」，磁盘文件会保留。"
 // in the language of msgs.
 func (msgs Messages) RemoveGroupDetail() string {
 	return Catalog.Format(msgs.locale, "removeGroupDetail", nil)

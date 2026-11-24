@@ -20,6 +20,113 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
+func TestNativeLibraryUngroupedAndDefaultGroup(t *testing.T) {
+	app, _, finish := nativeFixture(t)
+	original := app.repository.snapshot.Path
+	app.showLibrary()
+	tester := ui.NewTester(app.view, 1024, 680)
+	click := func(label string) {
+		t.Helper()
+		if err := tester.Click(label); err != nil {
+			t.Fatal(err)
+		}
+	}
+	choose := func(label string) {
+		t.Helper()
+		if err := tester.ChooseMenuItem(label); err != nil {
+			t.Fatal(err)
+		}
+		finish()
+		tester.Frame()
+	}
+	click(locales.Ungrouped())
+	if app.group != ungroupedLibraryView || app.libraryEmpty() {
+		t.Fatal("ungrouped repositories were not shown before any custom groups existed")
+	}
+	var err error
+	app.library, err = app.service.CreateGroup("日常开发")
+	if err != nil {
+		t.Fatal(err)
+	}
+	group := app.library.Groups[0]
+	tester.Frame()
+	click(locales.ManageGroup(group.Name))
+	choose(locales.DefaultAddToGroup())
+	if app.library.DefaultGroupID != group.ID || !tester.HasText(locales.DefaultGroupBadge()) {
+		t.Fatal("default group or its sidebar marker is missing")
+	}
+	app.scanResult = &workspace.ScanResult{}
+	app.scanDialog()
+	if app.dialog.choice != locales.Ungrouped() {
+		t.Fatal("an explicit ungrouped view must take precedence over the default")
+	}
+	app.dialog = nil
+	tester.Frame()
+	click(locales.LocalRepositories())
+	app.scanDialog()
+	if app.dialog.choice != group.Name {
+		t.Fatal("scan results from the overview did not preselect the default group")
+	}
+	app.dialog = nil
+	tester.Frame()
+
+	parent := t.TempDir()
+	added := filepath.Join(parent, "desktop-app")
+	nativeGit(t, parent, "init", "-b", "main", added)
+	added, err = filepath.EvalSymlinks(added)
+	if err != nil {
+		t.Fatal(err)
+	}
+	click(locales.EnterPath())
+	click(locales.FullRepositoryPath())
+	tester.Type(added)
+	click(locales.Add())
+	finish()
+	tester.Frame()
+	if !slices.ContainsFunc(app.library.Repositories, func(entry workspace.LocalRepository) bool {
+		return entry.Path == added && entry.GroupID == group.ID
+	}) || !slices.ContainsFunc(app.library.Repositories, func(entry workspace.LocalRepository) bool {
+		return entry.Path == original && entry.GroupID == ""
+	}) {
+		t.Fatal("the default did not apply exclusively to the newly added repository")
+	}
+	click(locales.Ungrouped())
+	if _, found := tester.AccessByRole(ui.RoleButton, filepath.Base(added)); found {
+		t.Fatal("the ungrouped view showed a grouped repository")
+	}
+	click(group.Name)
+	if _, found := tester.AccessByRole(ui.RoleButton, filepath.Base(added)); !found {
+		t.Fatal("the newly added repository is missing from its group")
+	}
+	if output := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); output != "" {
+		for _, appearance := range []string{appearanceLight, appearanceDark} {
+			app.prefs.Appearance = appearance
+			tester.Frame()
+			saveNativeScreenshot(t, tester, output, "native-library-default-group-"+appearance+".png")
+		}
+	}
+	click(locales.ManageGroup(group.Name))
+	choose(locales.DefaultAddToGroup())
+	if app.library.DefaultGroupID != "" || tester.HasText(locales.DefaultGroupBadge()) {
+		t.Fatal("clearing the default group did not remove its sidebar marker")
+	}
+	click(locales.ManageGroup(group.Name))
+	choose(locales.DefaultAddToGroup())
+	click(locales.ManageGroup(group.Name))
+	if err := tester.ChooseMenuItem(locales.RemoveGroupMenu()); err != nil {
+		t.Fatal(err)
+	}
+	click(locales.Remove())
+	finish()
+	tester.Frame()
+	if app.group != ungroupedLibraryView || app.library.DefaultGroupID != "" {
+		t.Fatal("removing the selected default group did not return to Ungrouped and clear the default")
+	}
+	if _, found := tester.AccessByRole(ui.RoleButton, filepath.Base(added)); !found {
+		t.Fatal("the removed group's repository is missing from Ungrouped")
+	}
+}
+
 func TestNativeLibraryOrganizationSortPersistsAndKeepsFilters(t *testing.T) {
 	app, _, _ := nativeFixture(t)
 	app.showLibrary()

@@ -376,8 +376,8 @@ func TestNativeAccessibleGroupManagementAndEmptyStates(t *testing.T) {
 	app.library.Groups = []workspace.Group{{ID: "daily", Name: "日常"}}
 	app.group = "daily"
 	tester := ui.NewTester(app.view, 1320, 860)
-	if _, ok := tester.AccessByRole(ui.RoleButton, "管理仓库组 日常"); !ok {
-		t.Fatal("辅助功能无法发现分组管理按钮")
+	if _, ok := tester.AccessByRole(ui.RoleMenuButton, "管理仓库组 日常"); !ok {
+		t.Fatal("辅助功能无法发现分组管理菜单按钮")
 	}
 	if button, ok := tester.AccessByRole(ui.RoleButton, "添加"); !ok || button.Bounds.Y < 200 ||
 		tester.HasText("没有匹配的仓库") {

@@ -91,6 +91,10 @@ func (service *RepositoryService) RenameGroup(id, name string) (workspace.Librar
 	return service.manager.RenameGroup(id, name)
 }
 
+func (service *RepositoryService) SetDefaultGroup(id string) (workspace.Library, error) {
+	return service.manager.SetDefaultGroup(id)
+}
+
 func (service *RepositoryService) RemoveGroup(id string) (workspace.Library, error) {
 	return service.manager.RemoveGroup(id)
 }

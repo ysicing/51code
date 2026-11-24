@@ -36,8 +36,9 @@ type Group struct {
 }
 
 type Library struct {
-	Repositories []LocalRepository `json:"repositories"`
-	Groups       []Group           `json:"groups"`
+	Repositories   []LocalRepository `json:"repositories"`
+	Groups         []Group           `json:"groups"`
+	DefaultGroupID string            `json:"defaultGroupID,omitempty"`
 }
 
 func emptyLibrary() Library {
@@ -46,8 +47,9 @@ func emptyLibrary() Library {
 
 func copyLibrary(library Library) Library {
 	return Library{
-		Repositories: append([]LocalRepository{}, library.Repositories...),
-		Groups:       append([]Group{}, library.Groups...),
+		Repositories:   append([]LocalRepository{}, library.Repositories...),
+		Groups:         append([]Group{}, library.Groups...),
+		DefaultGroupID: library.DefaultGroupID,
 	}
 }
 
@@ -359,6 +361,19 @@ func (manager *Manager) editGroup(id, name string) (Library, error) {
 	}, nil)
 }
 
+func (manager *Manager) SetDefaultGroup(id string) (Library, error) {
+	return manager.update(func(next *Library) error {
+		if !hasGroup(*next, id) {
+			return errors.New("仓库组不存在")
+		}
+		if next.DefaultGroupID == id {
+			return errUnchanged
+		}
+		next.DefaultGroupID = id
+		return nil
+	}, nil)
+}
+
 func (manager *Manager) RemoveGroup(id string) (Library, error) {
 	return manager.update(func(next *Library) error {
 		if id == "" || !hasGroup(*next, id) {
@@ -371,6 +386,9 @@ func (manager *Manager) RemoveGroup(id string) (Library, error) {
 			}
 		}
 		next.Groups = groups
+		if next.DefaultGroupID == id {
+			next.DefaultGroupID = ""
+		}
 		for index := range next.Repositories {
 			if next.Repositories[index].GroupID == id {
 				next.Repositories[index].GroupID = ""
