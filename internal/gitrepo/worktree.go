@@ -17,6 +17,17 @@ import (
 	"time"
 )
 
+// LocalLinkedWorktree 用本地元数据识别已保存路径，避免应用启动时逐一执行 Git 命令。
+func LocalLinkedWorktree(path string) bool {
+	directories, ok := localMetadataDirectories(path)
+	if !ok || directories[0] == directories[1] {
+		return false
+	}
+	current, currentErr := os.Stat(directories[0])
+	common, commonErr := os.Stat(directories[1])
+	return currentErr == nil && commonErr == nil && current.IsDir() && common.IsDir() && !os.SameFile(current, common)
+}
+
 // Worktree 的 Branch 和 ContainedIn 使用 refs/heads/ 全名；Head 为空表示尚无提交。
 // ContainedIn 只包含通过祖先关系确认的其他本地分支，CleanupCandidate 还要求可安全移除。
 type Worktree struct {

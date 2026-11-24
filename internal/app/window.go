@@ -564,7 +564,7 @@ func (app *nativeApp) openRepository(path string) {
 				if watchErr != nil && app.prefs.AutoRefreshFiles && app.background != nil {
 					app.reportWatchFailure(app.background, watchErr)
 				}
-				if app.prefs.LastRepository != result.snapshot.Path {
+				if !result.snapshot.LinkedWorktree && app.prefs.LastRepository != result.snapshot.Path {
 					app.prefs.LastRepository = result.snapshot.Path
 					if err := app.savePreferences(); err != nil {
 						app.problem = locales.SaveSettingsError(err.Error())

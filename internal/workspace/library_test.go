@@ -145,13 +145,22 @@ func TestLibraryFailedBatchDoesNotPartiallyPersist(t *testing.T) {
 	}
 }
 
-func TestScanFindsNestedRepositoriesAndWorktreesWithoutImporting(t *testing.T) {
+func TestScanFindsNestedRepositoriesWithoutImportingWorktrees(t *testing.T) {
 	root := t.TempDir()
 	first := localRepo(t, filepath.Join(root, "one"))
 	second := localRepo(t, filepath.Join(root, "nested", "two"))
+	separate := filepath.Join(root, "separate")
+	command := exec.Command("git", "init", "-b", "main", "--separate-git-dir", filepath.Join(root, ".metadata"), separate)
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("separate Git directory: %v: %s", err, output)
+	}
+	separate, err := filepath.EvalSymlinks(separate)
+	if err != nil {
+		t.Fatal(err)
+	}
 	localRepo(t, filepath.Join(root, "node_modules", "ignored"))
 	localRepo(t, filepath.Join(root, ".hidden", "ignored"))
-	command := exec.Command("git", "-C", first, "-c", "user.name=Test", "-c", "user.email=test@example.test", "-c", "commit.gpgsign=false", "commit", "--allow-empty", "-m", "initial")
+	command = exec.Command("git", "-C", first, "-c", "user.name=Test", "-c", "user.email=test@example.test", "-c", "commit.gpgsign=false", "commit", "--allow-empty", "-m", "initial")
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("commit: %v: %s", err, output)
 	}
@@ -173,7 +182,7 @@ func TestScanFindsNestedRepositoriesAndWorktreesWithoutImporting(t *testing.T) {
 		}
 	}
 	worktree, _ = filepath.EvalSymlinks(worktree)
-	if len(found) != 3 || !found[first] || !found[second] || !found[worktree] || result.Truncated {
+	if len(found) != 3 || !found[first] || !found[second] || !found[separate] || found[worktree] || result.Truncated {
 		t.Fatalf("scan results: %+v", result)
 	}
 	if len(manager.Library().Repositories) != 0 {
@@ -187,6 +196,83 @@ func TestScanFindsNestedRepositoriesAndWorktreesWithoutImporting(t *testing.T) {
 	cancel()
 	if _, err := manager.Scan(ctx, root); !errors.Is(err, context.Canceled) {
 		t.Fatalf("scan cancellation: %v", err)
+	}
+}
+
+func TestLinkedWorktreeOpensOutsideLibraryAndKeepsLegacyRecord(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	main := localRepo(t, filepath.Join(root, "project"))
+	command := exec.Command("git", "-C", main, "-c", "user.name=Test", "-c", "user.email=test@example.test", "-c", "commit.gpgsign=false", "commit", "--allow-empty", "-m", "initial")
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("commit: %v: %s", err, output)
+	}
+	linked := filepath.Join(root, "linked")
+	if output, err := exec.Command("git", "-C", main, "worktree", "add", "--detach", linked).CombinedOutput(); err != nil {
+		t.Fatalf("worktree: %v: %s", err, output)
+	}
+	linked, err := filepath.EvalSymlinks(linked)
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings := filepath.Join(root, "recent.json")
+	manager, err := New(settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.Open(ctx, linked); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.Get(linked); err != nil {
+		t.Fatal("worktree is unavailable to the open window:", err)
+	}
+	if _, err := manager.MarkOpened(ctx, linked); err != nil {
+		t.Fatal(err)
+	}
+	if len(manager.Library().Repositories) != 0 || len(manager.Recent()) != 0 {
+		t.Fatal("opening a linked worktree added it to the library")
+	}
+	if _, err := os.Stat(settings); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("opening a linked worktree wrote the library: %v", err)
+	}
+	if _, err := manager.Add(ctx, []string{linked}, ""); !errors.Is(err, ErrLinkedWorktree) {
+		t.Fatalf("explicit add should reject a linked worktree: %v", err)
+	}
+
+	saved := Library{
+		Repositories: []LocalRepository{
+			{Name: "project", Path: main, GroupID: "group"},
+			{Name: "linked", Path: linked, LastOpenedAt: 123},
+		},
+		Groups: []Group{{ID: "group", Name: "Group"}},
+	}
+	data, err := json.Marshal(saved)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(settings, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	manager, err = New(settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	library := manager.Library()
+	if len(library.Repositories) != 1 || library.Repositories[0] != saved.Repositories[0] {
+		t.Fatalf("legacy worktree is visible or main repository changed: %+v", library)
+	}
+	if _, err := manager.SetDefaultGroup("group"); err != nil {
+		t.Fatal(err)
+	}
+	data, err = os.ReadFile(settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(data, &library); err != nil {
+		t.Fatal(err)
+	}
+	if len(library.Repositories) != 2 || library.Repositories[1] != saved.Repositories[1] {
+		t.Fatalf("legacy worktree record was altered: %+v", library)
 	}
 }
 

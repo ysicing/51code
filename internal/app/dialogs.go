@@ -336,6 +336,14 @@ func (app *nativeApp) addLocalPaths(paths []string) {
 				}
 			}, nil
 		}
+		if len(paths) == 1 && errors.Is(err, workspace.ErrLinkedWorktree) {
+			return func() {
+				if parent != nil {
+					app.closeDialog(parent)
+				}
+				app.openRepository(paths[0])
+			}, nil
+		}
 		if len(paths) != 1 || !errors.Is(err, gitrepo.ErrNotWorktree) {
 			return nil, err
 		}

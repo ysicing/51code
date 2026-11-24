@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -28,6 +29,8 @@ type LocalRepository struct {
 	Changes      int    `json:"changes"`
 	Problem      string `json:"problem"`
 	LastOpenedAt int64  `json:"lastOpenedAt,omitempty"`
+
+	linkedWorktree bool
 }
 
 type Group struct {
@@ -54,13 +57,27 @@ func copyLibrary(library Library) Library {
 }
 
 func (manager *Manager) Library() Library {
+	return visibleLibrary(manager.librarySnapshot())
+}
+
+func (manager *Manager) librarySnapshot() Library {
 	manager.mu.Lock()
 	defer manager.mu.Unlock()
 	return copyLibrary(manager.library)
 }
 
+func visibleLibrary(library Library) Library {
+	library.Repositories = slices.DeleteFunc(library.Repositories, func(entry LocalRepository) bool {
+		return entry.linkedWorktree
+	})
+	return library
+}
+
 // ErrPartial 表示操作在超时或取消前只完成了一部分；与它一同返回的结果仍然有效，可直接展示。
 var ErrPartial = errors.New("操作未全部完成")
+
+// ErrLinkedWorktree 表示所选路径属于附加工作树，不能登记为单独的仓库。
+var ErrLinkedWorktree = errors.New("附加工作树请在所属仓库的工作树页面打开")
 
 // errUnchanged 由 update 的 change 返回，表示无需写盘。
 var errUnchanged = errors.New("unchanged")
@@ -72,7 +89,7 @@ var errUnchanged = errors.New("unchanged")
 func (manager *Manager) update(change func(next *Library) error, commit func()) (Library, error) {
 	manager.writeMu.Lock()
 	defer manager.writeMu.Unlock()
-	next := manager.Library()
+	next := manager.librarySnapshot()
 	changeErr := change(&next)
 	if changeErr != nil && !errors.Is(changeErr, errUnchanged) {
 		return Library{}, changeErr
@@ -90,7 +107,7 @@ func (manager *Manager) update(change func(next *Library) error, commit func()) 
 		commit()
 	}
 	manager.mu.Unlock()
-	return next, nil
+	return visibleLibrary(next), nil
 }
 
 // persist 只能在持有 writeMu 时调用，不访问 manager.library。
@@ -159,7 +176,10 @@ dispatch:
 }
 
 func entryFromSnapshot(snapshot gitrepo.Snapshot) LocalRepository {
-	return LocalRepository{Name: snapshot.Name, Path: snapshot.Path, Branch: snapshot.Branch, Changes: len(snapshot.Files)}
+	return LocalRepository{
+		Name: snapshot.Name, Path: snapshot.Path, Branch: snapshot.Branch, Changes: len(snapshot.Files),
+		linkedWorktree: snapshot.LinkedWorktree,
+	}
 }
 
 func updateEntry(library *Library, snapshot gitrepo.Snapshot) {
@@ -239,6 +259,9 @@ func (manager *Manager) Add(ctx context.Context, paths []string, groupID string)
 		snapshot, err := repo.Snapshot(ctx)
 		if err != nil {
 			return Library{}, err
+		}
+		if snapshot.LinkedWorktree {
+			return Library{}, fmt.Errorf("%s：%w", path, ErrLinkedWorktree)
 		}
 		seen[repo.Path] = true
 		snapshots = append(snapshots, snapshot)

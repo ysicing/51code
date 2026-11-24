@@ -389,6 +389,17 @@ func TestNativeDesktopCanonicalPathsReuseWindowAndWorktreesStaySeparate(t *testi
 	if first == second || len(desktop.repositories) != 2 || repositoryWindowKey(path) == repositoryWindowKey(worktree) {
 		t.Fatal("不同工作树应各自拥有窗口与窗口位置")
 	}
+	if entries := desktop.library.library.Repositories; len(entries) != 1 || entries[0].Path != first.repository.snapshot.Path {
+		t.Fatalf("打开附加工作树污染了仓库列表: %+v", entries)
+	}
+	desktop.library.addLocalPaths([]string{worktree})
+	runBackgroundUpdates(t, updates, func() bool { return !desktop.library.busy })
+	if len(desktop.repositories) != 2 || (*presented)[len(*presented)-1] != second || desktop.library.problem != "" {
+		t.Fatal("单独选择已打开的附加工作树应激活其窗口")
+	}
+	if desktop.prefs.LastRepository != first.repository.snapshot.Path {
+		t.Fatal("打开附加工作树覆盖了启动时要恢复的主仓库")
+	}
 	first.busy, first.status = true, "正在提交"
 	count := len(*presented)
 	desktop.library.openRepository(path)

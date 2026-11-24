@@ -67,6 +67,10 @@ func New(file string) (*Manager, error) {
 	if manager.library.Groups == nil {
 		manager.library.Groups = []Group{}
 	}
+	for index := range manager.library.Repositories {
+		entry := &manager.library.Repositories[index]
+		entry.linkedWorktree = gitrepo.LocalLinkedWorktree(entry.Path)
+	}
 	return manager, nil
 }
 
@@ -94,10 +98,8 @@ func (manager *Manager) LoadProblem() error {
 }
 
 func (manager *Manager) Recent() []Recent {
-	manager.mu.Lock()
-	defer manager.mu.Unlock()
 	recent := []Recent{}
-	for _, entry := range manager.library.Repositories {
+	for _, entry := range manager.Library().Repositories {
 		recent = append(recent, Recent{Name: entry.Name, Path: entry.Path})
 	}
 	return recent
@@ -128,8 +130,21 @@ func (manager *Manager) Open(ctx context.Context, path string) (gitrepo.Snapshot
 		return state, err
 	}
 	_, err = manager.update(func(next *Library) error {
+		if state.LinkedWorktree {
+			return errUnchanged
+		}
 		updateEntry(next, state)
 		return nil
-	}, func() { manager.open[repo.Path] = repo })
+	}, func() {
+		manager.open[repo.Path] = repo
+		if state.LinkedWorktree {
+			for index, entry := range manager.library.Repositories {
+				if entry.Path == repo.Path {
+					manager.library.Repositories[index].linkedWorktree = true
+					break
+				}
+			}
+		}
+	})
 	return state, err
 }

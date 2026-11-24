@@ -57,7 +57,7 @@ func newNativeDesktop(service *RepositoryService, stateFile string) *nativeDeskt
 
 func (desktop *nativeDesktop) present(app *nativeApp) {
 	desktop.active = app
-	if app.repository != nil && app.prefs.LastRepository != app.repository.snapshot.Path {
+	if app.repository != nil && !app.repository.snapshot.LinkedWorktree && app.prefs.LastRepository != app.repository.snapshot.Path {
 		app.prefs.LastRepository = app.repository.snapshot.Path
 		if err := app.savePreferences(); err != nil {
 			app.problem = locales.SaveSettingsError(err.Error())

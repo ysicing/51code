@@ -44,6 +44,8 @@ type Snapshot struct {
 	Detached  bool      `json:"detached"`
 	Unborn    bool      `json:"unborn"`
 	Files     []File    `json:"files"`
+
+	LinkedWorktree bool `json:"-"`
 }
 
 type Branch struct {
@@ -300,12 +302,16 @@ func (repo *Repository) Snapshot(ctx context.Context) (Snapshot, error) {
 	if !state.Unborn && !state.Detached {
 		state.Upstream, state.Ahead, state.Behind = branch.upstream, branch.ahead, branch.behind
 	}
-	directory, err := repo.gitDirectory(ctx)
-	if err != nil {
-		return state, err
+	directories, ok := localMetadataDirectories(repo.Path)
+	if !ok {
+		directories, err = repo.metadataDirectories(ctx)
+		if err != nil {
+			return state, err
+		}
 	}
+	state.LinkedWorktree = !worktreeSamePath(directories[0], directories[1])
 	// status 头部已给出 HEAD，进行中操作的令牌直接复用，不再单独读取。
-	state.Operation, err = repo.operationAt(ctx, directory, &branch.head)
+	state.Operation, err = repo.operationAt(ctx, directories[0], &branch.head)
 	return state, err
 }
 

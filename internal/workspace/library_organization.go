@@ -32,9 +32,15 @@ func (manager *Manager) MarkOpened(ctx context.Context, path string) (Library, e
 		}
 		for index, entry := range next.Repositories {
 			if entry.Path == path {
+				if entry.linkedWorktree {
+					return errUnchanged
+				}
 				next.Repositories[index].LastOpenedAt = max(time.Now().UnixNano(), entry.LastOpenedAt)
 				return nil
 			}
+		}
+		if _, err := manager.Get(path); err == nil {
+			return errUnchanged
 		}
 		return errors.New("仓库不在本地列表中")
 	}, nil)
@@ -57,6 +63,9 @@ func (manager *Manager) Relocate(ctx context.Context, expected LocalRepository, 
 	snapshot, err := snapshotRepository(ctx, path)
 	if err != nil {
 		return Library{}, err
+	}
+	if snapshot.LinkedWorktree {
+		return Library{}, ErrLinkedWorktree
 	}
 	if snapshot.Path == expected.Path {
 		return Library{}, errors.New("请选择仓库的新位置")

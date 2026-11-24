@@ -88,6 +88,9 @@ func (manager *Manager) scan(ctx context.Context, root string, readSnapshot func
 					}
 					continue
 				}
+				if snapshot.LinkedWorktree {
+					continue
+				}
 				mu.Lock()
 				if snapshot.Path == path && !seen[path] {
 					seen[path] = true
