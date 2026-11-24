@@ -249,7 +249,7 @@ func (app *nativeApp) fileDiffPanel(c *ui.Context) {
 				ui.Spinner(c).Size(14, 14)
 				title = app.readTask.label
 			}
-			ui.Text(c, title).Bold().Grow(1).MinWidth(0).MaxLines(1).Tooltip(title)
+			ui.Text(c, title).Bold().Grow(1).MinWidth(0).SingleLine().Selectable().Tooltip(title)
 			if full == 0 {
 				app.diffLayoutControl(c)
 			}

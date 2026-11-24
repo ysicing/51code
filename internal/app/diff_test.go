@@ -39,6 +39,36 @@ func TestNativeDiffKeepsWholeFileContext(t *testing.T) {
 	}
 }
 
+func TestNativeDiffFilePathCopiesFullText(t *testing.T) {
+	app, _, _ := nativeFixture(t)
+	for _, dark := range []bool{false, true} {
+		tester := ui.NewTester(app.fileDiffPanel, 380, 240)
+		tester.SetDark(dark)
+		for _, screen := range []string{"changes", "history", "compare"} {
+			app.screen = screen
+			title := "db/model/tapd_connection.go"
+			if screen != "changes" {
+				title = "internal/" + strings.Repeat("中文长路径/", 8) + screen + ".go"
+			}
+			app.selectedFile, app.commitFile = title, title
+			app.comparison = &nativeComparison{file: title}
+			tester.Frame()
+			tester.SetClipboard("")
+			if err := tester.Click(title); err != nil {
+				t.Fatal(err)
+			}
+			tester.Key(ui.Cmd, ui.KeyA)
+			tester.Key(ui.Cmd, ui.KeyC)
+			if got := tester.Clipboard(); got != title {
+				t.Fatalf("%s (dark=%t): copied path = %q, want %q", screen, dark, got, title)
+			}
+		}
+		if directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); directory != "" {
+			saveNativeScreenshot(t, tester, directory, fmt.Sprintf("diff-file-path-dark-%t.png", dark))
+		}
+	}
+}
+
 func TestNativeUnifiedDiffDragCopiesDeletedAndAddedCode(t *testing.T) {
 	app, _, _ := nativeFixture(t)
 	app.prefs.DiffLayout = "unified"
