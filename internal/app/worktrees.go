@@ -353,6 +353,11 @@ func (app *nativeApp) worktreeTable(c *ui.Context, state *nativeWorktrees) {
 	ui.Themed(c, &theme).FillWidth().Grow(1).MinHeight(0).MinWidth(0).Children(func() {
 		ui.Table(c, state.list, columns, len(state.items), func(index, column int) {
 			item := state.items[index]
+			selectableText := func(text ui.Element) {
+				if text.SingleLine().Selectable().Focused() && index != state.selected {
+					state.list.Choose(index)
+				}
+			}
 			switch column {
 			case 0:
 				ui.Row(c).FillWidth().MinWidth(0).Gap(6).AlignItems(ui.Center).Children(func() {
@@ -366,11 +371,11 @@ func (app *nativeApp) worktreeTable(c *ui.Context, state *nativeWorktrees) {
 				})
 			case 1:
 				branch := worktreeBranch(item)
-				ui.Text(c, branch).SingleLine().Tooltip(branch)
+				selectableText(ui.Text(c, branch).Tooltip(branch))
 			case 2:
-				ui.Text(c, item.Path).SingleLine().Tooltip(item.Path)
+				selectableText(ui.Text(c, item.Path).Tooltip(item.Path))
 			case 3:
-				ui.Text(c, shortHash(item.Head)).Font("monospace").FontSize(12).SingleLine().Tooltip(item.Head)
+				selectableText(ui.Text(c, shortHash(item.Head)).Font("monospace").FontSize(12).Tooltip(item.Head))
 			case 4:
 				if index != state.selected {
 					return

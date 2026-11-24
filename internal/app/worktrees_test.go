@@ -189,12 +189,33 @@ func TestNativeWorktreesDiscoverAndOpen(t *testing.T) {
 	if len(app.worktrees.items) != 1 || len(app.worktrees.allItems) != 2 {
 		t.Fatal("没有发现同仓库的其他工作树")
 	}
-	if err := tester.Click(linked); err != nil {
-		t.Fatal(err)
+	head := nativeGit(t, linked, "rev-parse", "HEAD")
+	branchBounds, found := tester.Find("topic")
+	if !found {
+		t.Fatal("没有找到工作树分支名")
+	}
+	branchY := branchBounds.Y + branchBounds.H/2
+	tester.Press(branchBounds.X+1, branchY)
+	tester.Move(branchBounds.X+branchBounds.W-1, branchY)
+	tester.Release(branchBounds.X+branchBounds.W-1, branchY)
+	tester.Key(ui.Cmd, ui.KeyC)
+	if got := tester.Clipboard(); got != "topic" {
+		t.Fatalf("clipboard after dragging over branch = %q, want topic", got)
+	}
+	for _, text := range []string{"topic", linked, shortHash(head)} {
+		tester.SetClipboard("")
+		if err := tester.Click(text); err != nil {
+			t.Fatal(err)
+		}
+		tester.Key(ui.Cmd, ui.KeyA)
+		tester.Key(ui.Cmd, ui.KeyC)
+		if got := tester.Clipboard(); got != text {
+			t.Fatalf("clipboard after selecting %q = %q", text, got)
+		}
 	}
 	for _, copyItem := range []struct{ label, want string }{
 		{locales.CopyFullPath(), linked},
-		{locales.CopyWorktreeCommit(), nativeGit(t, linked, "rev-parse", "HEAD")},
+		{locales.CopyWorktreeCommit(), head},
 	} {
 		if err := tester.Click(locales.WorktreeActions()); err != nil {
 			t.Fatal(err)
@@ -508,6 +529,11 @@ func TestNativeWorktreesAppearanceAndReadOnly(t *testing.T) {
 			selected := app.worktrees.items[app.worktrees.selected]
 			if selected.Path != linked {
 				t.Fatalf("selected %q, want %q", selected.Path, linked)
+			}
+			tester.Key(ui.Cmd, ui.KeyA)
+			tester.Key(ui.Cmd, ui.KeyC)
+			if got := tester.Clipboard(); got != linked {
+				t.Fatalf("clipboard after selecting the long path = %q, want %q", got, linked)
 			}
 			if open, found := tester.AccessByRole(ui.RoleButton, "打开"); !found || open.Disabled || open.Offscreen {
 				t.Fatal("不可写仓库仍应允许打开工作树")
