@@ -3,7 +3,7 @@ module github.com/ysicing/51code
 go 1.27.3
 
 require (
-	github.com/Masterminds/semver/v3 v3.3.0
+	github.com/Masterminds/semver/v3 v3.5.0
 	github.com/ebitengine/purego v0.11.3
 	github.com/egoist/mygo v0.10.0
 	github.com/gitleaks/go-gitdiff v0.9.1
