@@ -203,6 +203,8 @@ Windows 同时生成 `windows-amd64/51code-<版本>-windows-amd64-portable.zip`�
 
 版本统一修改 [package.json](../package.json) 的 `version`，MyGo 构建配置、关于窗口与界面版本号均使用该版本；同时在 [CHANGELOG.md](../CHANGELOG.md) 添加对应 `## <version>` 节，构建时写入更新说明。
 
+`task release` 将 `CHANGELOG.md` 的历史版本说明写入各平台更新清单的 `releaseHistory`。自更新窗口汇总高于当前版本、直至目标版本的条目，按新增功能、功能改进、问题修复、已废弃和已移除分组；未分类的记录归入其他更新。每条标明发布版本，组内按版本倒序，同版保留原顺序，空组隐藏。旧清单只展示目标版本的条目。旧版客户端和 GitHub Release 继续使用单版 `notes` 原文。
+
 发布签名私钥必须与 `release.config.json` 中的公钥配对；私钥保存在仓库外并离线备份，不要重新生成替换，否则已安装应用将拒绝新签名。当前维护者本机路径为 `~/.config/xsourcetree/update-keys/mygo-update.key`；其他构建环境通过 `MYGO_UPDATER_PRIVATE_KEY` 提供同一私钥。
 
 ### 构建与上传

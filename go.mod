@@ -3,6 +3,7 @@ module github.com/ysicing/51code
 go 1.27.3
 
 require (
+	github.com/Masterminds/semver/v3 v3.3.0
 	github.com/ebitengine/purego v0.11.3
 	github.com/egoist/mygo v0.10.0
 	github.com/gitleaks/go-gitdiff v0.9.1
@@ -19,7 +20,6 @@ require (
 	dario.cat/mergo v1.0.1 // indirect
 	github.com/BobuSumisu/aho-corasick v1.0.3 // indirect
 	github.com/Masterminds/goutils v1.1.1 // indirect
-	github.com/Masterminds/semver/v3 v3.3.0 // indirect
 	github.com/Masterminds/sprig/v3 v3.3.0 // indirect
 	github.com/STARRY-S/zip v0.2.3 // indirect
 	github.com/andybalholm/brotli v1.2.0 // indirect

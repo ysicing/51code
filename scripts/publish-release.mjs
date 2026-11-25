@@ -4,7 +4,7 @@
  */
 
 import { createHash, createPublicKey, verify } from "node:crypto";
-import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { spawn, spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
@@ -12,6 +12,7 @@ import { fileURLToPath } from "node:url";
 import { windowsPortableName } from "./windows-portable.mjs";
 
 const sha256 = (data) => createHash("sha256").update(data).digest("hex");
+const maxManifestBytes = 1024 * 1024;
 
 // 一次 mygo 调用构建全部平台，共用构建号；每个平台都带签名更新包与清单。
 export const updateTargets = ["darwin-arm64", "darwin-amd64", "windows-amd64", "linux-amd64", "linux-arm64"];
@@ -161,11 +162,15 @@ async function command(args, hashOutput = false) {
     const child = spawn("mc", args, { stdio: ["ignore", "pipe", "ignore"], timeout: 300_000 });
     const digest = createHash("sha256");
     const chunks = [];
+    const outputLimit = args[0] === "cat" ? maxManifestBytes : 256 * 1024;
     let size = 0;
     child.stdout.on("data", (chunk) => {
       if (hashOutput) digest.update(chunk);
-      else if ((size += chunk.length) <= 256 * 1024) chunks.push(chunk);
-      else child.kill();
+      else if ((size += chunk.length) <= outputLimit) chunks.push(chunk);
+      else {
+        child.kill();
+        reject(new Error(`mc ${args[0]} 输出超过 ${outputLimit} 字节`));
+      }
     });
     child.on("error", () => reject(new Error("无法运行 mc，请先安装并配置对象存储别名")));
     child.on("close", (status) => resolveResult({
@@ -198,6 +203,27 @@ function newer(left, right) {
     if (first[index] !== second[index]) return first[index] > second[index];
   }
   return false;
+}
+
+export async function addReleaseHistory(root, directory) {
+  const { version } = JSON.parse(await readFile(resolve(root, "package.json"), "utf8"));
+  const changelog = await readFile(resolve(root, "CHANGELOG.md"), "utf8");
+  const headings = [...changelog.matchAll(/^##[ \t]+([^\r\n]+?)[ \t]*\r?$/gm)];
+  const history = {};
+  for (const [index, heading] of headings.entries()) {
+    const previous = heading[1];
+    if (!/^\d+\.\d+\.\d+$/.test(previous) || !newer(version, previous)) continue;
+    const notes = changelog.slice(heading.index + heading[0].length, headings[index + 1]?.index).trim();
+    if (notes) history[previous] = notes;
+  }
+  for (const target of updateTargets) {
+    const path = resolve(root, directory, target, `update-${target}.json`);
+    const manifest = JSON.parse(await readFile(path, "utf8"));
+    if (manifest.version !== version) throw new Error(`${target} 的清单版本与构建版本不一致`);
+    const data = JSON.stringify({ ...manifest, releaseHistory: history }, null, 2) + "\n";
+    if (Buffer.byteLength(data) > maxManifestBytes) throw new Error(`${target} 的更新清单超过 MyGo 的 1 MiB 限制`);
+    await writeFile(path, data);
+  }
 }
 
 export async function publish(plan, { run = command, remoteHash = onlineHash } = {}) {
@@ -405,6 +431,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
         },
       });
       if (build.error || build.status !== 0) throw new Error("发布构建失败，未上传");
+      await addReleaseHistory(root, directory);
       console.log(`发布产物：${directory}`);
     }
     const plan = await releasePlan(root, directory);

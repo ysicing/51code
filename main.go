@@ -12,6 +12,7 @@ var (
 )
 
 func main() {
+	configureUpdateSource()
 	app.Run(app.BuildInfo{
 		Number: buildNumber,
 		Commit: buildCommit,

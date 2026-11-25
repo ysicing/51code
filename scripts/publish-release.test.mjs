@@ -105,6 +105,28 @@ test("checks every platform's signed update and rejects wrong signatures or miss
   });
 });
 
+test("adds previous changelog sections to each platform without changing single-version notes", async () => {
+  await fixture(async (root) => {
+    await writeFile(join(root, "CHANGELOG.md"), [
+      "# 更新日志", "## 1.2.4", "未来版本", "## 1.2.3", "当前发布",
+      "## 1.2.2", "### 修复", "- 修复问题", "## 未发布", "草稿",
+      "## 1.2.1", "", "## 1.2.0", "- 新功能",
+    ].join("\r\n"));
+    const original = await releasePlan(root);
+    await release.addReleaseHistory(root, "build");
+    const plan = await releasePlan(root);
+    expect(plan.github.notes).toBe(original.github.notes);
+    for (const [index, feed] of plan.feeds.entries()) {
+      const manifest = JSON.parse(await readFile(feed.path, "utf8"));
+      const previous = original.feeds[index];
+      expect(manifest.notes).toBe("更新说明");
+      expect(manifest.releaseHistory).toEqual({ "1.2.2": "### 修复\r\n- 修复问题", "1.2.0": "- 新功能" });
+      expect(feed.hash).not.toBe(previous.hash);
+      expect(plan.artifacts.find((file) => file.name === `1.2.3/${feed.name}`).hash).toBe(feed.hash);
+    }
+  });
+});
+
 test("publishes install.sh only when it embeds the current update source and key", async () => {
   await fixture(async (root) => {
     const plan = await releasePlan(root);
