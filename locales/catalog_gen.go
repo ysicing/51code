@@ -9154,6 +9154,16 @@ func (msgs Messages) ViewImageSource() string {
 	return Catalog.Format(msgs.locale, "viewImageSource", nil)
 }
 
+// FilePreview says "预览"
+// in the language the app shows.
+func FilePreview() string { return In(i18n.Locale()).FilePreview() }
+
+// FilePreview says "预览"
+// in the language of msgs.
+func (msgs Messages) FilePreview() string {
+	return Catalog.Format(msgs.locale, "filePreview", nil)
+}
+
 // ViewImage says "查看图片"
 // in the language the app shows.
 func ViewImage() string { return In(i18n.Locale()).ViewImage() }

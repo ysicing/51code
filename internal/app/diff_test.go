@@ -262,6 +262,102 @@ func TestNativeFullFileFindAndVersionState(t *testing.T) {
 	}
 }
 
+func TestNativeFullFileDocumentPreview(t *testing.T) {
+	app, _, _ := nativeFixture(t)
+	worktree := &gitrepo.FileContent{Path: "README.MD", Revision: "WORKTREE", Present: true,
+		Text: "<h1 align=\"center\">51Code</h1>\n\n## 安装\n\n| 平台 | 安装方式 |\n| --- | --- |\n| macOS | Homebrew |\n"}
+	index := &gitrepo.FileContent{Path: worktree.Path, Revision: "INDEX", Present: true, Text: "# 暂存的说明"}
+	app.setDiff(gitrepo.Diff{Old: index, New: worktree})
+	tester := ui.NewTester(app.fileDiffPanel, 420, 420)
+	click := func(label string) {
+		t.Helper()
+		if err := tester.Click(label); err != nil {
+			t.Fatal(err)
+		}
+	}
+	click("全文")
+	buffer := app.fileViewer.states[1].Buffer
+	position := editor.Pos{Line: 2, Col: 2}
+	app.fileViewer.states[1].GoTo(position)
+	click("预览")
+	for _, dark := range []bool{false, true} {
+		tester.SetDark(dark)
+		if !tester.HasText("51Code") || !tester.HasText("安装") || !tester.HasText("Homebrew") {
+			t.Fatalf("README 预览缺少 HTML 标题、Markdown 标题或表格: %v", tester.Texts())
+		}
+		if directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); directory != "" {
+			saveNativeScreenshot(t, tester, directory, fmt.Sprintf("full-file-preview-dark-%t.png", dark))
+		}
+	}
+	click("查看源码")
+	if state := &app.fileViewer.states[1]; state.Buffer != buffer || state.CursorPos() != position {
+		t.Fatal("往返预览丢失了源码阅读位置")
+	}
+	click("预览")
+	click("文件版本")
+	if err := tester.ChooseMenuItem("暂存区"); err != nil {
+		t.Fatal(err)
+	}
+	if !tester.HasText("暂存的说明") || tester.HasText("Homebrew") {
+		t.Fatal("预览没有切换到暂存区版本")
+	}
+	click("查看源码")
+	field, found := tester.AccessByRole(ui.RoleTextField, "文件全文")
+	if !found || !field.ReadOnly || field.Value != index.Text {
+		t.Fatalf("返回源码后文件版本错误: %+v", field)
+	}
+	click("预览")
+	html := &gitrepo.FileContent{Path: "guide.htm", Revision: "WORKTREE", Present: true,
+		Text: "<h1>旧的指南</h1><script>hidden()</script>"}
+	app.setDiff(gitrepo.Diff{Old: index, New: html})
+	tester.Frame()
+	if !tester.HasText("旧的指南") || tester.HasText("hidden()") {
+		t.Fatal("HTML 静态预览内容错误")
+	}
+	updated := *html
+	updated.Text = "<h1>更新的指南</h1>"
+	app.setDiff(gitrepo.Diff{Old: index, New: &updated})
+	tester.Frame()
+	if !tester.HasText("更新的指南") || tester.HasText("旧的指南") {
+		t.Fatal("同一文件刷新后仍显示旧 HTML")
+	}
+	empty := &gitrepo.FileContent{Path: "empty.md", Revision: "WORKTREE", Present: true}
+	app.setDiff(gitrepo.Diff{Old: index, New: empty})
+	tester.Frame()
+	if _, found := tester.AccessByRole(ui.RoleButton, "查看源码"); !found || tester.HasText("更新的指南") {
+		t.Fatal("空 Markdown 未正确显示空预览")
+	}
+	for _, test := range []struct{ path, text string }{
+		{"unsafe.md", "[blocked](javascript:alert(1))"},
+		{"unsafe.html", "<a href=\"javascript:alert(1)\">blocked</a>"},
+	} {
+		content := &gitrepo.FileContent{Path: test.path, Revision: "WORKTREE", Present: true, Text: test.text}
+		app.setDiff(gitrepo.Diff{Old: index, New: content})
+		tester.Frame()
+		if err := tester.Click("blocked"); err != nil {
+			t.Fatalf("%q: %v; texts=%q", test.text, err, tester.Texts())
+		}
+		if len(tester.OpenedURLs()) != 0 {
+			t.Fatal("预览打开了不安全的链接")
+		}
+	}
+	for _, source := range []gitrepo.FileContent{
+		{Path: "hello.txt", Present: true, Text: "plain text"},
+		{Path: "binary.md", Present: true, Binary: true},
+		{Path: "large.md", Present: true, Truncated: true},
+		{Path: "link.html", Present: true, Unsupported: true},
+		{Path: "absent.md"},
+	} {
+		app.setDiff(gitrepo.Diff{Old: &gitrepo.FileContent{}, New: &source})
+		tester.Frame()
+		_, preview := tester.AccessByRole(ui.RoleButton, "预览")
+		_, viewSource := tester.AccessByRole(ui.RoleButton, "查看源码")
+		if preview || viewSource || tester.HasText("更新的指南") {
+			t.Fatalf("%s 仍显示预览入口或旧内容", source.Path)
+		}
+	}
+}
+
 func TestNativeDiffContextMismatchKeepsGitPatch(t *testing.T) {
 	app, _, _ := nativeFixture(t)
 	patch := "diff --git a/hello.txt b/hello.txt\n--- a/hello.txt\n+++ b/hello.txt\n@@ -1 +1 @@\n-old\n+new\n"

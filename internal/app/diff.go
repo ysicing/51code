@@ -4,15 +4,21 @@
 package app
 
 import (
+	"path/filepath"
+	"strings"
+
 	"github.com/ysicing/51code/internal/gitrepo"
 	"github.com/ysicing/51code/locales"
 
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
+	"github.com/egoist/mygo/ui/markdown"
+	"github.com/egoist/mygo/ui/richtext"
 )
 
 type nativeFileViewer struct {
 	full    bool
+	preview bool
 	side    int
 	sources [2]*gitrepo.FileContent
 	states  [2]editor.State
@@ -325,15 +331,39 @@ func (app *nativeApp) codeDiffView(c *ui.Context, index int, fit bool) ui.Elemen
 func (app *nativeApp) fullFilePanel(c *ui.Context) {
 	viewer := &app.fileViewer
 	source := viewer.sources[viewer.side]
-	state := viewer.state(viewer.side)
+	format := fullFilePreviewFormat(source)
+	preview := format != "" && viewer.preview
+	var state *editor.State
+	if !preview {
+		state = viewer.state(viewer.side)
+	}
 	ui.Row(c).FillWidth().Padding(0, 12, 6).Gap(8).AlignItems(ui.Center).Children(func() {
 		ui.MenuButton(c, fileVersionLabel(source), app.fileVersionMenu).Label(locales.FileVersion())
 		ui.Button(c, locales.FileHistory()).OnClick(app.fileHistoryAction)
 		ui.Column(c).Grow(1)
-		ui.Button(c, locales.FindInFile()).Disabled(state.Buffer == nil).
-			OnClick(func() { state.Run(editor.Find) })
+		if format != "" {
+			label := locales.FilePreview()
+			if preview {
+				label = locales.ViewImageSource()
+			}
+			ui.Button(c, label).OnClick(func() { viewer.preview = !viewer.preview })
+		}
+		if state != nil {
+			ui.Button(c, locales.FindInFile()).Disabled(state.Buffer == nil).
+				OnClick(func() { state.Run(editor.Find) })
+		}
 	})
 	ui.Divider(c)
+	if preview {
+		ui.Scroll(c).Key(source).Grow(1).FillWidth().MinHeight(0).Padding(12, 16).Children(func() {
+			if format == "html" {
+				fullFileHTML(c, source.Text)
+			} else {
+				markdown.View(c, source.Text, &markdown.Options{HTML: fullFileHTML}).FillWidth()
+			}
+		})
+		return
+	}
 	if state.Buffer != nil {
 		state.SoftWrap = app.prefs.Wrap
 		state.Label = locales.FileContentLabel()
@@ -352,4 +382,25 @@ func (app *nativeApp) fullFilePanel(c *ui.Context) {
 	ui.Column(c).Grow(1).FillWidth().Center().Padding(20).Children(func() {
 		ui.Text(c, message).TextColor(c.Theme().TextMuted)
 	})
+}
+
+func fullFilePreviewFormat(source *gitrepo.FileContent) string {
+	if source == nil || !source.Present || source.Binary || source.Unsupported || source.Truncated {
+		return ""
+	}
+	switch strings.ToLower(filepath.Ext(source.Path)) {
+	case ".md", ".markdown":
+		return "markdown"
+	case ".htm", ".html":
+		return "html"
+	}
+	return ""
+}
+
+func fullFileHTML(c *ui.Context, html string) {
+	panel := ui.Column(c).FillWidth()
+	content := ui.Local(panel, "html-content", func() string { return richtext.ParseHTML(html).Markdown() })
+	if *content != "" {
+		panel.Children(func() { markdown.View(c, *content, nil).FillWidth() })
+	}
 }

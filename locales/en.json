@@ -907,6 +907,7 @@
   "automaticDiff": "Auto",
   "findInFile": "Find",
   "viewImageSource": "View Source",
+  "filePreview": "Preview",
   "viewImage": "View Image",
   "imageActualSize": "Actual Size",
   "imageFitToView": "Fit to Window",

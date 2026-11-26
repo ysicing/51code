@@ -907,6 +907,7 @@
   "automaticDiff": "自动",
   "findInFile": "查找",
   "viewImageSource": "查看源码",
+  "filePreview": "预览",
   "viewImage": "查看图片",
   "imageActualSize": "原始大小",
   "imageFitToView": "适应窗口",
