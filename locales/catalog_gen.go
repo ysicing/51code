@@ -36,6 +36,146 @@ type Messages struct{ locale string }
 // source language.
 func In(locale string) Messages { return Messages{locale} }
 
+// FileReviewed says "已审阅"
+// in the language the app shows.
+func FileReviewed() string { return In(i18n.Locale()).FileReviewed() }
+
+// FileReviewed says "已审阅"
+// in the language of msgs.
+func (msgs Messages) FileReviewed() string {
+	return Catalog.Format(msgs.locale, "fileReviewed", nil)
+}
+
+// AddReviewNote says "添加审阅意见"
+// in the language the app shows.
+func AddReviewNote() string { return In(i18n.Locale()).AddReviewNote() }
+
+// AddReviewNote says "添加审阅意见"
+// in the language of msgs.
+func (msgs Messages) AddReviewNote() string {
+	return Catalog.Format(msgs.locale, "addReviewNote", nil)
+}
+
+// ReviewNote says "意见"
+// in the language the app shows.
+func ReviewNote() string { return In(i18n.Locale()).ReviewNote() }
+
+// ReviewNote says "意见"
+// in the language of msgs.
+func (msgs Messages) ReviewNote() string {
+	return Catalog.Format(msgs.locale, "reviewNote", nil)
+}
+
+// ReviewNotes says "审阅意见"
+// in the language the app shows.
+func ReviewNotes() string { return In(i18n.Locale()).ReviewNotes() }
+
+// ReviewNotes says "审阅意见"
+// in the language of msgs.
+func (msgs Messages) ReviewNotes() string {
+	return Catalog.Format(msgs.locale, "reviewNotes", nil)
+}
+
+// CopyReviewNotesMarkdown says "复制全部意见为 Markdown"
+// in the language the app shows.
+func CopyReviewNotesMarkdown() string { return In(i18n.Locale()).CopyReviewNotesMarkdown() }
+
+// CopyReviewNotesMarkdown says "复制全部意见为 Markdown"
+// in the language of msgs.
+func (msgs Messages) CopyReviewNotesMarkdown() string {
+	return Catalog.Format(msgs.locale, "copyReviewNotesMarkdown", nil)
+}
+
+// ClearReviewNotes says "清空审阅意见"
+// in the language the app shows.
+func ClearReviewNotes() string { return In(i18n.Locale()).ClearReviewNotes() }
+
+// ClearReviewNotes says "清空审阅意见"
+// in the language of msgs.
+func (msgs Messages) ClearReviewNotes() string {
+	return Catalog.Format(msgs.locale, "clearReviewNotes", nil)
+}
+
+// ClearReviewNotesConfirm says "清空当前仓库在此窗口中的全部审阅意见？"
+// in the language the app shows.
+func ClearReviewNotesConfirm() string { return In(i18n.Locale()).ClearReviewNotesConfirm() }
+
+// ClearReviewNotesConfirm says "清空当前仓库在此窗口中的全部审阅意见？"
+// in the language of msgs.
+func (msgs Messages) ClearReviewNotesConfirm() string {
+	return Catalog.Format(msgs.locale, "clearReviewNotesConfirm", nil)
+}
+
+// DiscardReviewNoteDraft says "放弃尚未保存的审阅意见？"
+// in the language the app shows.
+func DiscardReviewNoteDraft() string { return In(i18n.Locale()).DiscardReviewNoteDraft() }
+
+// DiscardReviewNoteDraft says "放弃尚未保存的审阅意见？"
+// in the language of msgs.
+func (msgs Messages) DiscardReviewNoteDraft() string {
+	return Catalog.Format(msgs.locale, "discardReviewNoteDraft", nil)
+}
+
+// ReviewNoteOldSide says "旧版"
+// in the language the app shows.
+func ReviewNoteOldSide() string { return In(i18n.Locale()).ReviewNoteOldSide() }
+
+// ReviewNoteOldSide says "旧版"
+// in the language of msgs.
+func (msgs Messages) ReviewNoteOldSide() string {
+	return Catalog.Format(msgs.locale, "reviewNoteOldSide", nil)
+}
+
+// ReviewNoteNewSide says "新版"
+// in the language the app shows.
+func ReviewNoteNewSide() string { return In(i18n.Locale()).ReviewNoteNewSide() }
+
+// ReviewNoteNewSide says "新版"
+// in the language of msgs.
+func (msgs Messages) ReviewNoteNewSide() string {
+	return Catalog.Format(msgs.locale, "reviewNoteNewSide", nil)
+}
+
+// ExpandGeneratedDiff says "展开生成文件差异"
+// in the language the app shows.
+func ExpandGeneratedDiff() string { return In(i18n.Locale()).ExpandGeneratedDiff() }
+
+// ExpandGeneratedDiff says "展开生成文件差异"
+// in the language of msgs.
+func (msgs Messages) ExpandGeneratedDiff() string {
+	return Catalog.Format(msgs.locale, "expandGeneratedDiff", nil)
+}
+
+// CollapseGeneratedDiff says "折叠生成文件差异"
+// in the language the app shows.
+func CollapseGeneratedDiff() string { return In(i18n.Locale()).CollapseGeneratedDiff() }
+
+// CollapseGeneratedDiff says "折叠生成文件差异"
+// in the language of msgs.
+func (msgs Messages) CollapseGeneratedDiff() string {
+	return Catalog.Format(msgs.locale, "collapseGeneratedDiff", nil)
+}
+
+// ImageDiffZoomOut says "缩小"
+// in the language the app shows.
+func ImageDiffZoomOut() string { return In(i18n.Locale()).ImageDiffZoomOut() }
+
+// ImageDiffZoomOut says "缩小"
+// in the language of msgs.
+func (msgs Messages) ImageDiffZoomOut() string {
+	return Catalog.Format(msgs.locale, "imageDiffZoomOut", nil)
+}
+
+// ImageDiffZoomIn says "放大"
+// in the language the app shows.
+func ImageDiffZoomIn() string { return In(i18n.Locale()).ImageDiffZoomIn() }
+
+// ImageDiffZoomIn says "放大"
+// in the language of msgs.
+func (msgs Messages) ImageDiffZoomIn() string {
+	return Catalog.Format(msgs.locale, "imageDiffZoomIn", nil)
+}
+
 // SecuritySettings says "安全"
 // in the language the app shows.
 func SecuritySettings() string { return In(i18n.Locale()).SecuritySettings() }

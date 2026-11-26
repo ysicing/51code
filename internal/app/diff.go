@@ -24,8 +24,9 @@ type nativeFileViewer struct {
 	states  [2]editor.State
 	// built 标记 states[i] 是否已按 sources[i] 构建。全文视图首次显示某个版本时才建 Buffer
 	// （含语法识别），只看差异时不再为两个版本各建一份；版本内容变化时由 setSources 清除。
-	built          [2]bool
-	contextChanged bool
+	built             [2]bool
+	contextChanged    bool
+	generatedExpanded bool
 }
 
 func (app *nativeApp) canApplyPatch() bool {
@@ -62,6 +63,7 @@ func (viewer *nativeFileViewer) setSources(diff gitrepo.Diff) {
 	}
 	viewer.sources = sources
 	if !sameFile {
+		viewer.generatedExpanded = false
 		viewer.side = 1
 		if diff.New != nil && !diff.New.Present && diff.Old != nil && diff.Old.Present {
 			viewer.side = 0
@@ -256,8 +258,11 @@ func (app *nativeApp) fileDiffPanel(c *ui.Context) {
 				title = app.readTask.label
 			}
 			ui.Text(c, title).Bold().Grow(1).MinWidth(0).SingleLine().Selectable().Tooltip(title)
-			if full == 0 {
+			if full == 0 && !hasImageDiff(app.diff) {
 				app.diffLayoutControl(c)
+			}
+			if app.canReviewDiffSelection() || app.repository != nil && len(app.reviewNotes[app.repository.snapshot.Path]) > 0 {
+				app.reviewNotesControl(c)
 			}
 			source, _ := app.diffBrowserContext()
 			iconButton(c, locales.BrowseFile(), nativeIcons["file"]).Shrink(0).
@@ -277,6 +282,12 @@ func (app *nativeApp) fileDiffPanel(c *ui.Context) {
 			})
 		}
 		ui.Divider(c)
+		if app.diff.Generated && generatedDiffDisclosure(c, &app.fileViewer.generatedExpanded) {
+			return
+		}
+		if app.imageDiffPanel(c) {
+			return
+		}
 		if hasSources {
 			ui.Text(c, fileVersionLabel(app.diff.Old)+" → "+fileVersionLabel(app.diff.New)).
 				FontSize(11).TextColor(c.Theme().TextMuted).Padding(4, 12).FillWidth()
@@ -322,10 +333,7 @@ func (app *nativeApp) codeDiffView(c *ui.Context, index int, fit bool) ui.Elemen
 	app.configureDiff(diff)
 	diff.FitContent = fit
 	c.Key(diff.Layout)
-	if diff.Layout == editor.DiffSplit {
-		return editor.DiffView(c, diff)
-	}
-	return app.unifiedDiffs[index].view(c, app.diffNames[index], diff.Wrap, fit)
+	return app.reviewCodeDiffView(c, index, fit)
 }
 
 func (app *nativeApp) fullFilePanel(c *ui.Context) {

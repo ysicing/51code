@@ -132,5 +132,8 @@ func (repo *Repository) CompareFileDiff(ctx context.Context, from, target, path 
 		return Diff{}, err
 	}
 	diff.New, err = repo.treeFileContent(ctx, selected.Path, target, target)
+	if err == nil {
+		diff.Generated = repo.isGeneratedDiff(ctx, diff)
+	}
 	return diff, err
 }

@@ -325,6 +325,16 @@ func (app *nativeApp) historyPanel(c *ui.Context) {
 	app.loadHistoryNearEnd(c)
 }
 
+func (app *nativeApp) selectedHistoryCommit() *gitrepo.Commit {
+	if commit := app.historyGraphCache.commit(app.history, app.commitHash); commit != nil {
+		return commit
+	}
+	if app.commitHash != "" && app.viewedCommit.Hash == app.commitHash {
+		return &app.viewedCommit
+	}
+	return nil
+}
+
 func (app *nativeApp) historyDetails(c *ui.Context) {
 	ui.Column(c).FillWidth().Padding(9, 14).Gap(5).Children(func() {
 		if app.historyWorking {
@@ -338,13 +348,7 @@ func (app *nativeApp) historyDetails(c *ui.Context) {
 			ui.Text(c, locales.SelectCommit()).TextColor(c.Theme().TextMuted)
 			return
 		}
-		var selected *gitrepo.Commit
-		if app.viewedCommit.Hash == app.commitHash {
-			selected = &app.viewedCommit
-		}
-		if commit := app.historyGraphCache.commit(app.history, app.commitHash); commit != nil {
-			selected = commit
-		}
+		selected := app.selectedHistoryCommit()
 		commit := gitrepo.Commit{Hash: app.commitHash}
 		if selected != nil {
 			commit = *selected
@@ -383,6 +387,21 @@ func (app *nativeApp) historyDetails(c *ui.Context) {
 							ui.Text(c, shortHash(parent)).Font("monospace").FontSize(11).TextColor(c.Theme().Accent).Underline()
 						}).OnClick(func() { app.revealHistoryCommit(parent) })
 				}
+				if len(commit.Parents) > 1 {
+					parent := app.commitParent
+					if parent == "" {
+						parent = commit.Parents[0]
+					}
+					label := locales.ComparisonBase() + " · " + shortHash(parent)
+					ui.Button(c, label).FontSize(11).Tooltip(parent).
+						Disabled(app.busy || app.readTask != nil || app.dialog != nil).Menu(func(menu *ui.Menu) {
+						for index, hash := range commit.Parents {
+							if menu.Item(fmt.Sprintf("%d · %s", index+1, shortHash(hash))).Radio(hash == parent).Chosen() {
+								app.selectCommitParent(commit, hash)
+							}
+						}
+					})
+				}
 			})
 		}
 		if selected != nil {
@@ -405,8 +424,11 @@ func (app *nativeApp) historyDetails(c *ui.Context) {
 
 func (app *nativeApp) historyFiles(c *ui.Context) {
 	empty := ""
-	if app.commitHash != "" {
+	if app.commitHash != "" && len(app.commitFiles) == 0 {
 		empty = locales.EmptyCommit()
+		if commit := app.selectedHistoryCommit(); commit != nil && len(commit.Parents) > 1 {
+			empty = locales.EmptyComparison()
+		}
 	}
 	app.revisionFileList(c, app.commitFiles, app.commitList, &app.commitSelected, locales.CommitFileList(), empty, func(file string) {
 		if file != app.commitFile || app.readTask != nil || app.problem != "" {
@@ -425,7 +447,27 @@ func (app *nativeApp) revisionFileList(c *ui.Context, files []gitrepo.CommitFile
 	outline := *ui.Local(panel, "revision-outline", newNativeFileOutline)
 	panel.Children(func() {
 		ui.Column(c).FillWidth().Padding(6, 8).Gap(2).Children(func() {
-			ui.Text(c, locales.ChangedFiles(fmt.Sprint(len(files)))).FontSize(12).Bold()
+			ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(4).Children(func() {
+				ui.Text(c, locales.ChangedFiles(fmt.Sprint(len(files)))).FontSize(12).Bold().Grow(1).MinWidth(0).SingleLine()
+				scope := app.revisionReviewScope()
+				if scope.target != "" && *selected >= 0 && *selected < len(files) {
+					path := files[*selected].Path
+					marked := app.reviewedFiles[scope][path]
+					ui.Checkbox(c, &marked, locales.FileReviewed()).Disabled(app.readTask != nil || app.diff.New == nil || app.diff.New.Path != path).
+						OnClick(func() {
+							next := app.toggleRevisionReviewed(scope, files, cache.indices[path])
+							if next >= 0 {
+								target := files[next].Path
+								if app.prefs.FileTree {
+									outline.revealReviewedNext(target, *collapsed)
+								} else {
+									list.ScrollIntoView(next)
+								}
+								choose(target)
+							}
+						})
+				}
+			})
 			ui.Toolbar(c, func() {
 				app.fileSortingControl(c)
 				ui.Spacer(c)
@@ -464,6 +506,7 @@ func (app *nativeApp) revisionFileList(c *ui.Context, files []gitrepo.CommitFile
 			ui.Row(c).ContextMenu(app.filePathMenu(c, file.Path)).FillWidth().Height(30).Padding(0, 12).Gap(8).AlignItems(ui.Center).Children(func() {
 				nativeFileIcon(c, file.Path)
 				ui.Text(c, file.Path).FontSize(12).Grow(1).MinWidth(0).SingleLine().Tooltip(file.Path)
+				app.reviewedFileBadge(c, file.Path)
 				ui.Text(c, file.Status).FontSize(10).TextColor(c.Theme().TextMuted)
 			})
 		}).FillWidth().Grow(1).MinHeight(0).Disabled(disabled).Label(label).Changed() && *selected >= 0 && *selected < len(files) {

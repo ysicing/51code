@@ -34,6 +34,67 @@ type nativeUnifiedRow struct {
 	note     string
 }
 
+func (diff *nativeUnifiedDiff) reviewSelection(includeCaret bool) []reviewExcerpt {
+	if diff.state.Buffer == nil {
+		return nil
+	}
+	snapshot := diff.state.Buffer.Snapshot()
+	selections := diff.state.Selections()
+	var excerpts []reviewExcerpt
+	for _, selection := range selections {
+		if selection.Empty() && (!includeCaret || len(selections) != 1) {
+			continue
+		}
+		first, last := snapshot.LineOf(selection.Start()), snapshot.LineOf(max(selection.Start(), selection.End()-1))
+		if first >= len(diff.rows) {
+			continue
+		}
+		rows := diff.rows[first : last+1]
+		side := editor.DiffNew
+		for _, row := range rows {
+			if row.kind == '-' {
+				side = editor.DiffOld
+			}
+			if row.kind != 0 {
+				break
+			}
+		}
+		// 上下文沿用选区中相邻改动的一侧；占位行与文件行号跳跃均断开快照。
+		runStart, sourceStart := -1, 0
+		flush := func(end int) {
+			if runStart >= 0 {
+				excerpts = append(excerpts, newReviewExcerpt(diff.patch, side, sourceStart, snapshot, first+runStart, first+end))
+				runStart = -1
+			}
+		}
+		for index, row := range rows {
+			if row.gap > 0 || row.note != "" {
+				flush(index - 1)
+				continue
+			}
+			nextSide := side
+			switch row.kind {
+			case '-':
+				nextSide = editor.DiffOld
+			case '+':
+				nextSide = editor.DiffNew
+			}
+			number := row.new
+			if nextSide == editor.DiffOld {
+				number = row.old
+			}
+			if nextSide != side || runStart >= 0 && number != sourceStart+index-runStart {
+				flush(index - 1)
+			}
+			if runStart < 0 {
+				side, runStart, sourceStart = nextSide, index, number
+			}
+		}
+		flush(len(rows) - 1)
+	}
+	return excerpts
+}
+
 func (diff *nativeUnifiedDiff) build(name string) {
 	var text strings.Builder
 	old, newLine := 1, 1

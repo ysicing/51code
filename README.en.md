@@ -103,6 +103,7 @@ Inspired by the everyday operations in SourceTree, with a native interface built
 | --- | --- |
 | Organize repositories | Multiple repository windows, add, scan, clone and initialize repositories, default groups, search, recently opened sort order, repository relocation and primary language detection |
 | Review and commit | File filters, bulk and hunk / line staging, staged secret scanning, commit drafts and AI commit messages |
+| Review changes | Line comments with Markdown export, viewed-file tracking, folded generated files, side-by-side image diffs and merge-parent selection |
 | Browse files and diffs | Adaptive unified / side-by-side diff, file browsing and image previews, Quick Open, syntax highlighting, read-only full files, line navigation and in-file search |
 | Explore history | Commit graph, full-text search, path filters, commit diffs and comparison between any two revisions |
 | Branch and sync | Branches and tags, remote branch checkout, first publish and upstream tracking, remote URLs, Fetch / fast-forward Pull / Push and ahead / behind counts |

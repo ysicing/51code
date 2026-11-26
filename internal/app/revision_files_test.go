@@ -16,6 +16,63 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
+func TestRevisionReviewFollowsDisplayedOrderAndComparison(t *testing.T) {
+	app, path, finish := nativeFixture(t)
+	base := app.repository.snapshot.Head
+	if err := os.Mkdir(filepath.Join(path, "b"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"a.txt", "b/b.txt", "c.txt"} {
+		writeNativeFile(t, path, name, name+"\n")
+	}
+	nativeGit(t, path, "add", ".")
+	nativeGit(t, path, "commit", "-m", "review files")
+	app.switchWorkspace("compare")
+	app.comparison.base, app.comparison.target = base, "HEAD"
+	app.startComparison()
+	finish()
+	app.prefs.FileTree = true
+	tester := ui.NewTester(app.view, 1024, 680)
+	if err := tester.Click("b/"); err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{"b/b.txt", "c.txt", "c.txt"} {
+		if err := tester.Click("已审阅"); err != nil {
+			t.Fatal(err)
+		}
+		if app.readTask != nil {
+			finish()
+		}
+		tester.Frame()
+		if app.comparison.file != expected {
+			t.Fatalf("标记后选中了 %q，预期 %q", app.comparison.file, expected)
+		}
+	}
+	scope := app.revisionReviewScope()
+	if len(app.reviewedFiles[scope]) != 3 {
+		t.Fatal("三个文件应分别记录")
+	}
+	if err := tester.Click("已审阅"); err != nil {
+		t.Fatal(err)
+	}
+	if len(app.reviewedFiles[scope]) != 2 || app.readTask != nil {
+		t.Fatal("取消标记应保留选择")
+	}
+	app.comparison.base, app.comparison.target = "HEAD", base
+	app.startComparison()
+	finish()
+	if len(app.reviewedFiles[app.revisionReviewScope()]) != 0 {
+		t.Fatal("反向比较不应沿用原标记")
+	}
+	target := app.comparison.result.From
+	app.switchWorkspace("history")
+	app.selectCommit(target)
+	finish()
+	if app.revisionReviewScope() != scope || len(app.reviewedFiles[app.revisionReviewScope()]) != 2 {
+		t.Fatal("查看同一父子提交应保留比较页的标记")
+	}
+}
+
 func TestNativeRevisionFileViewsKeepSelection(t *testing.T) {
 	app := &nativeApp{prefs: &nativePreferences{FileSort: "path"}}
 	files := []gitrepo.CommitFile{

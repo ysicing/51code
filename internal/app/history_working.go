@@ -94,7 +94,7 @@ func (app *nativeApp) applyHistoryWorkingSelection(selection *nativeSelection) {
 	app.setSelection(selection)
 	app.historyWorking = true
 	app.historySelected, app.commitSelected = -1, -1
-	app.commitHash, app.commitFile, app.commitFiles = "", "", nil
+	app.commitHash, app.commitParent, app.commitFile, app.commitFiles = "", "", "", nil
 	app.viewedRef, app.viewedCommit = nativeRefKey{}, gitrepo.Commit{}
 }
 

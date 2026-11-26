@@ -348,7 +348,7 @@ func (app *nativeApp) searchHistory(more bool) {
 				app.historySelected, app.commitSelected = -1, -1
 				// 旧界面的辅助功能节点仍引用列表状态，替换指针而非原地清零。
 				app.historyList, app.commitList = &ui.ListState{}, &ui.ListState{}
-				app.commitHash, app.commitFiles, app.commitFile = "", nil, ""
+				app.commitHash, app.commitParent, app.commitFiles, app.commitFile = "", "", nil, ""
 				app.clearDiff()
 			}
 			app.historyResult = request
@@ -364,8 +364,12 @@ func (app *nativeApp) selectCommit(hash string) {
 		return
 	}
 	path := app.repository.snapshot.Path
+	parent := ""
+	if hash == app.commitHash {
+		parent = app.commitParent
+	}
 	app.load(locales.ReadingCommit(), nativeReadCommit, func(ctx context.Context) (func(), error) {
-		files, err := app.service.CommitFiles(ctx, path, hash)
+		files, err := app.readCommitFiles(ctx, path, hash, parent)
 		if err != nil {
 			return func() {
 				app.historySelected = slices.IndexFunc(app.history, func(commit gitrepo.Commit) bool { return commit.Hash == app.commitHash })
@@ -376,11 +380,12 @@ func (app *nativeApp) selectCommit(hash string) {
 		file := ""
 		if len(files) > 0 {
 			file = files[0].Path
-			diff, diffErr = app.service.CommitFileDiff(ctx, path, hash, file)
+			diff, diffErr = app.readCommitFileDiff(ctx, path, hash, parent, file)
 		}
 		return func() {
 			app.viewedRef, app.viewedCommit = nativeRefKey{}, gitrepo.Commit{}
 			app.applyCommitSelection(hash, files, file)
+			app.commitParent = parent
 			if diffErr == nil {
 				app.setDiff(diff)
 			}
@@ -388,18 +393,65 @@ func (app *nativeApp) selectCommit(hash string) {
 	})
 }
 
+func (app *nativeApp) readCommitFiles(ctx context.Context, path, hash, parent string) ([]gitrepo.CommitFile, error) {
+	if parent == "" {
+		return app.service.CommitFiles(ctx, path, hash)
+	}
+	result, err := app.service.Compare(ctx, path, parent, hash, false)
+	return result.Files, err
+}
+
+func (app *nativeApp) readCommitFileDiff(ctx context.Context, path, hash, parent, file string) (gitrepo.Diff, error) {
+	if parent == "" {
+		return app.service.CommitFileDiff(ctx, path, hash, file)
+	}
+	return app.service.CompareFileDiff(ctx, path, parent, hash, file)
+}
+
+func (app *nativeApp) selectCommitParent(commit gitrepo.Commit, parent string) {
+	if app.repository == nil || app.busy || app.dialog != nil || app.readTask != nil ||
+		app.commitHash != commit.Hash || len(commit.Parents) < 2 || !slices.Contains(commit.Parents, parent) {
+		return
+	}
+	if parent == commit.Parents[0] {
+		parent = ""
+	}
+	if parent == app.commitParent {
+		return
+	}
+	path, preferred := app.repository.snapshot.Path, app.commitFile
+	app.load(locales.ReadingComparison(), nativeReadCommit, func(ctx context.Context) (func(), error) {
+		files, err := app.readCommitFiles(ctx, path, commit.Hash, parent)
+		if err != nil {
+			return nil, err
+		}
+		var file string
+		var diff gitrepo.Diff
+		if len(files) > 0 {
+			index := slices.IndexFunc(files, func(entry gitrepo.CommitFile) bool { return entry.Path == preferred })
+			file = files[max(0, index)].Path
+			diff, err = app.readCommitFileDiff(ctx, path, commit.Hash, parent, file)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return func() {
+			app.applyCommitSelection(commit.Hash, files, file)
+			app.commitParent = parent
+			app.setDiff(diff)
+		}, nil
+	})
+}
+
 func (app *nativeApp) applyCommitSelection(hash string, files []gitrepo.CommitFile, file string) {
 	app.clearDiff()
 	app.historyWorking = false
-	app.commitHash, app.commitFiles, app.commitFile = hash, files, file
+	app.commitHash, app.commitParent, app.commitFiles, app.commitFile = hash, "", files, file
 	app.historySelected = slices.IndexFunc(app.history, func(commit gitrepo.Commit) bool { return commit.Hash == hash })
 	if app.historySelected >= 0 {
 		app.historyList.ScrollIntoView(app.historySelected + app.historyWorkingOffset())
 	}
-	app.commitSelected = -1
-	if len(files) > 0 {
-		app.commitSelected = 0
-	}
+	app.commitSelected = slices.IndexFunc(files, func(entry gitrepo.CommitFile) bool { return entry.Path == file })
 	app.commitList = &ui.ListState{}
 }
 
@@ -489,9 +541,14 @@ func (app *nativeApp) selectCommitFile(file string) {
 	if app.repository == nil || app.readTask != nil && app.readTask.kind != nativeReadDiff {
 		return
 	}
-	path, hash := app.repository.snapshot.Path, app.commitHash
+	path, hash, parent := app.repository.snapshot.Path, app.commitHash, app.commitParent
 	app.load(locales.ReadingFileDiff(), nativeReadDiff, func(ctx context.Context) (func(), error) {
-		diff, err := app.service.CommitFileDiff(ctx, path, hash, file)
+		diff, err := app.readCommitFileDiff(ctx, path, hash, parent, file)
+		if err != nil {
+			return func() {
+				app.commitSelected = slices.IndexFunc(app.commitFiles, func(entry gitrepo.CommitFile) bool { return entry.Path == app.commitFile })
+			}, err
+		}
 		return func() {
 			app.clearDiff()
 			app.commitFile = file
@@ -501,10 +558,8 @@ func (app *nativeApp) selectCommitFile(file string) {
 					break
 				}
 			}
-			if err == nil {
-				app.setDiff(diff)
-			}
-		}, err
+			app.setDiff(diff)
+		}, nil
 	})
 }
 

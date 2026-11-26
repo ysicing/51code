@@ -101,6 +101,7 @@ func (app *nativeApp) revisionFileTree(c *ui.Context, tree *nativeFileTree, outl
 		row.Children(func() {
 			nativeFileIcon(c, node.path)
 			ui.Text(c, filepath.Base(node.path)).FontSize(12).Grow(1).MinWidth(0).SingleLine()
+			app.reviewedFileBadge(c, node.path)
 			ui.Text(c, node.file.Index).FontSize(10).TextColor(c.Theme().TextMuted)
 		})
 		if row.RowClicked() {

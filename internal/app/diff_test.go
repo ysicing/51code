@@ -493,8 +493,9 @@ func TestNativeDiffHeaderControlsStayOnOneRow(t *testing.T) {
 	app, _, _ := nativeFixture(t)
 	app.selectedFile = strings.Repeat("很长的目录/", 20) + "preview.go"
 	app.setDiff(gitrepo.Diff{
-		Old: &gitrepo.FileContent{Path: app.selectedFile, Present: true},
-		New: &gitrepo.FileContent{Path: app.selectedFile, Present: true},
+		Text: "--- a/preview.go\n+++ b/preview.go\n@@ -1 +1 @@\n-old\n+new\n",
+		Old:  &gitrepo.FileContent{Path: app.selectedFile, Revision: "INDEX", Present: true, Text: "old\n"},
+		New:  &gitrepo.FileContent{Path: app.selectedFile, Revision: "WORKTREE", Present: true, Text: "new\n"},
 	})
 	for _, width := range []int{360, 640, 1024} {
 		for _, dark := range []bool{false, true} {
@@ -504,7 +505,7 @@ func TestNativeDiffHeaderControlsStayOnOneRow(t *testing.T) {
 			if !found || layout.Offscreen {
 				t.Fatal("布局选择必须保持可见")
 			}
-			for _, label := range []string{"差异", "全文"} {
+			for _, label := range []string{"审阅意见", "差异", "全文"} {
 				control, found := tester.Access(label)
 				if !found || control.Offscreen || control.Bounds.X+control.Bounds.W > float32(width) {
 					t.Fatalf("width=%d: %s 控件被裁切", width, label)

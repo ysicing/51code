@@ -18,6 +18,7 @@ import (
 type Diff struct {
 	Text      string       `json:"text"`
 	Binary    bool         `json:"binary"`
+	Generated bool         `json:"-"`
 	Truncated bool         `json:"truncated"`
 	Old       *FileContent `json:"old,omitempty"`
 	New       *FileContent `json:"new,omitempty"`

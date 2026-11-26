@@ -136,6 +136,8 @@ type nativeApp struct {
 	hunkOffsets           []int
 	rawDiff               editor.State
 	fileViewer            nativeFileViewer
+	reviewedFiles         map[revisionReviewScope]map[string]bool
+	reviewNotes           nativeReviewNotes
 	browser               *nativeBrowser
 	searchMode            int
 	contentSearch         nativeWorktreeSearch
@@ -513,6 +515,7 @@ func (app *nativeApp) adopt(result *repositoryView) {
 		app.submodules = nativeSubmodules{}
 		app.repositoryTrash = nativeTrashList{}
 		app.insights = nil
+		app.fileViewer.generatedExpanded = false
 	}
 	app.repository, app.writable = result, true
 	app.fileMetrics = nativeFileMetrics{}
@@ -549,7 +552,7 @@ func (app *nativeApp) openRepository(path string) {
 				}
 				app.adopt(result)
 				app.screen, app.selectedFile = "changes", ""
-				app.history, app.commitHash, app.commitFiles, app.stashHash = nil, "", nil, ""
+				app.history, app.commitHash, app.commitParent, app.commitFiles, app.stashHash = nil, "", "", nil, ""
 				app.historyOffset, app.viewedRef, app.viewedCommit = 0, nativeRefKey{}, gitrepo.Commit{}
 				app.historyGraph, app.historyGraphSource = nil, nil
 				app.historyWorking = false
@@ -767,7 +770,7 @@ func (app *nativeApp) mutateFormResult(dialog *nativeDialog, label string, opera
 					app.historySelected = retained
 				} else {
 					app.viewedRef, app.viewedCommit = nativeRefKey{}, gitrepo.Commit{}
-					app.commitHash, app.commitFile, app.commitFiles = "", "", nil
+					app.commitHash, app.commitParent, app.commitFile, app.commitFiles = "", "", "", nil
 					app.historySelected, app.commitSelected = -1, -1
 					app.historyList, app.commitList = &ui.ListState{}, &ui.ListState{}
 				}

@@ -34,6 +34,7 @@ type nativeHistoryState struct {
 	historyGraphCache    *historyGraphCache
 	historyList          *ui.ListState
 	commitHash           string
+	commitParent         string // 空值表示按默认规则与第一父比较，也适用于根提交。
 	viewedRef            nativeRefKey
 	viewedCommit         gitrepo.Commit
 	commitFiles          []gitrepo.CommitFile

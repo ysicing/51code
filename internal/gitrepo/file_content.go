@@ -67,6 +67,7 @@ func (repo *Repository) diffFileContents(ctx context.Context, diff Diff, selecte
 	if err != nil {
 		return Diff{}, err
 	}
+	diff.Generated = repo.isGeneratedDiff(ctx, diff)
 	return diff, nil
 }
 
@@ -91,11 +92,12 @@ func (repo *Repository) commitFileContents(ctx context.Context, diff Diff, selec
 	if err != nil {
 		return Diff{}, err
 	}
+	diff.Generated = repo.isGeneratedDiff(ctx, diff)
 	return diff, nil
 }
 
 func (repo *Repository) treeFileContent(ctx context.Context, path, revision, hash string) (*FileContent, error) {
-	return repo.readTreeFileContent(ctx, &FileContent{Path: path, Revision: revision}, hash)
+	return repo.readTreeFileContent(ctx, newImageAwareFileContent(path, revision), hash)
 }
 
 func (repo *Repository) readTreeFileContent(ctx context.Context, side *FileContent, hash string) (*FileContent, error) {
@@ -136,7 +138,7 @@ func (repo *Repository) readTreeFileContent(ctx context.Context, side *FileConte
 }
 
 func (repo *Repository) indexFileContent(ctx context.Context, path string) (*FileContent, error) {
-	return repo.readIndexFileContent(ctx, &FileContent{Path: path, Revision: "INDEX"})
+	return repo.readIndexFileContent(ctx, newImageAwareFileContent(path, "INDEX"))
 }
 
 func (repo *Repository) readIndexFileContent(ctx context.Context, side *FileContent) (*FileContent, error) {
@@ -211,6 +213,11 @@ func (side *FileContent) setContent(content string) {
 		side.Truncated = true
 		return
 	}
+	if side.ImageFormat != "" && len(content) < 1024 && isLFSPointer([]byte(content)) {
+		side.ImageFormat = ""
+		side.Text = content
+		return
+	}
 	if side.ImageFormat != "" && side.ImageFormat != "svg" {
 		side.ImageData = content
 		side.Binary = true
@@ -223,7 +230,7 @@ func (side *FileContent) setContent(content string) {
 }
 
 func (repo *Repository) worktreeFileContent(ctx context.Context, path string) (*FileContent, error) {
-	return repo.readWorktreeFileContent(ctx, &FileContent{Path: path, Revision: "WORKTREE"})
+	return repo.readWorktreeFileContent(ctx, newImageAwareFileContent(path, "WORKTREE"))
 }
 
 func (repo *Repository) readWorktreeFileContent(ctx context.Context, side *FileContent) (*FileContent, error) {

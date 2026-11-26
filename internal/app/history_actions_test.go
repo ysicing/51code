@@ -88,6 +88,120 @@ func TestNativeCommitDetailsNavigateMergeParents(t *testing.T) {
 	}
 }
 
+func TestNativeMergeParentComparison(t *testing.T) {
+	app, path, finish := nativeFixture(t)
+	nativeGit(t, path, "switch", "-c", "topic")
+	writeNativeFile(t, path, "topic.txt", "topic\n")
+	nativeGit(t, path, "add", ".")
+	nativeGit(t, path, "commit", "-m", "topic")
+	second := nativeGit(t, path, "rev-parse", "HEAD")
+	nativeGit(t, path, "switch", "main")
+	writeNativeFile(t, path, "aaa.txt", "main only\n")
+	writeNativeFile(t, path, "hello.txt", "main\n")
+	nativeGit(t, path, "add", ".")
+	nativeGit(t, path, "commit", "-m", "main")
+	first := nativeGit(t, path, "rev-parse", "HEAD")
+	nativeGit(t, path, "merge", "--no-ff", "--no-commit", "topic")
+	writeNativeFile(t, path, "hello.txt", "merged\n")
+	nativeGit(t, path, "commit", "-am", "merge")
+	merge := nativeGit(t, path, "rev-parse", "HEAD")
+	app.switchWorkspace("history")
+	app.searchHistory(false)
+	finish()
+	app.selectCommit(merge)
+	finish()
+	tester := ui.NewTester(app.view, 1024, 680)
+	choose := func(current, option string) {
+		t.Helper()
+		if err := tester.Click(locales.ComparisonBase() + " · " + shortHash(current)); err != nil {
+			t.Fatal(err)
+		}
+		if err := tester.ChooseMenuItem(option); err != nil {
+			t.Fatal(err)
+		}
+		finish()
+		tester.Frame()
+	}
+	check := func(parent, from, file string, index int) {
+		t.Helper()
+		if app.problem != "" || app.commitHash != merge || app.commitParent != parent || app.commitFile != file ||
+			app.commitSelected != index || len(app.commitFiles) != 2 || app.commitFiles[index].Path != file ||
+			app.diff.Old == nil || app.diff.Old.Revision != from || app.diff.New == nil || app.diff.New.Revision != merge {
+			t.Fatalf("parent=%q file=%q index=%d files=%v diff=%+v problem=%q",
+				app.commitParent, app.commitFile, app.commitSelected, app.commitFiles, app.diff, app.problem)
+		}
+	}
+	check("", first, "hello.txt", 0)
+	if !strings.Contains(app.diff.Text, "-main\n") || app.commitFiles[1].Path != "topic.txt" {
+		t.Fatal("默认比较未使用第一父")
+	}
+	choose(first, "2 · "+shortHash(second))
+	check(second, second, "hello.txt", 1)
+	if !strings.Contains(app.diff.Text, "-原始内容\n") || app.commitFiles[0].Path != "aaa.txt" {
+		t.Fatal("第二父的文件列表或补丁不符")
+	}
+	app.fileViewer.full, app.fileViewer.side = true, 0
+	buffer := app.fileViewer.state(0).Buffer
+	if buffer == nil || buffer.String() != "原始内容\n" {
+		t.Fatal("旧侧全文未切换到第二父")
+	}
+	app.browseDiffFile()
+	finish()
+	if app.screen != "files" || app.browser.revision != second || app.browser.file != "hello.txt" {
+		t.Fatal("打开上下文未定位到第二父的文件")
+	}
+	app.switchWorkspace("history")
+	app.selectCommitFile("aaa.txt")
+	finish()
+	check(second, second, "aaa.txt", 0)
+	app.refresh()
+	finish()
+	check(second, second, "aaa.txt", 0)
+	nativeGit(t, path, "branch", "trigger-focus-refresh")
+	app.refreshOnFocus()
+	finish()
+	check(second, second, "aaa.txt", 0)
+	tester.Frame()
+	choose(second, "1 · "+shortHash(first))
+	check("", first, "hello.txt", 0)
+	choose(first, "2 · "+shortHash(second))
+	link, found := tester.AccessByRole(ui.RoleButton, shortHash(first))
+	if !found || link.Disabled || link.Offscreen {
+		t.Fatal("切换比较基准后第一父 SHA 链接不可用")
+	}
+	tester.ClickAt(link.Bounds.X+link.Bounds.W/2, link.Bounds.Y+link.Bounds.H/2)
+	finish()
+	if app.commitHash != first || app.commitParent != "" {
+		t.Fatal("父 SHA 导航未重置比较基准")
+	}
+}
+
+func TestNativeMergeParentEmptyComparisonClearsPreview(t *testing.T) {
+	app, path, finish := nativeFixture(t)
+	nativeGit(t, path, "switch", "-c", "topic")
+	writeNativeFile(t, path, "hello.txt", "topic change\n")
+	nativeGit(t, path, "commit", "-am", "topic")
+	second := nativeGit(t, path, "rev-parse", "HEAD")
+	nativeGit(t, path, "switch", "main")
+	nativeGit(t, path, "merge", "--no-ff", "-m", "merge", "topic")
+	app.switchWorkspace("history")
+	app.searchHistory(false)
+	finish()
+	merge := app.history[0]
+	app.selectCommit(merge.Hash)
+	finish()
+	if app.commitFile != "hello.txt" || app.diff.Old == nil {
+		t.Fatal("第一父比较缺少预览")
+	}
+	app.selectCommitParent(merge, second)
+	finish()
+	source, _ := app.diffBrowserContext()
+	if app.problem != "" || app.commitParent != second || len(app.commitFiles) != 0 || app.commitSelected != -1 ||
+		app.commitFile != "" || app.diff.Text != "" || source != nil {
+		t.Fatal("空比较仍保留前一基准的文件、差异或上下文")
+	}
+}
+
 func TestNativeHistoryCommitActions(t *testing.T) {
 	app, path, finish := nativeFixture(t)
 	initial := app.repository.snapshot.Head
