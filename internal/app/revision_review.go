@@ -67,7 +67,7 @@ func (app *nativeApp) reviewedFileBadge(c *ui.Context, path string) {
 	}
 }
 
-func (outline *nativeFileOutline) revealReviewedNext(path string, collapsed map[string]bool) {
+func (outline *nativeFileOutline) revealFile(path string, collapsed map[string]bool) {
 	if outline.tree == nil {
 		return
 	}

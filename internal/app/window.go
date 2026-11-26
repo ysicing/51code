@@ -129,6 +129,8 @@ type nativeApp struct {
 	selectedFiles         map[string]bool
 	stashHash             string
 	diff                  gitrepo.Diff
+	diffReveal            nativeDiffFile
+	diffBoundary          nativeDiffBoundary
 	patch                 gitrepo.Patch
 	diffViews             []*editor.DiffState
 	diffNames             []string

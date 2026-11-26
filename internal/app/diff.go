@@ -282,6 +282,7 @@ func (app *nativeApp) fileDiffPanel(c *ui.Context) {
 			})
 		}
 		ui.Divider(c)
+		app.diffBoundaryNotice(c)
 		if app.diff.Generated && generatedDiffDisclosure(c, &app.fileViewer.generatedExpanded) {
 			return
 		}

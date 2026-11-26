@@ -76,6 +76,7 @@ func (app *nativeApp) fileControls(c *ui.Context) {
 				clear(app.fileCollapsed)
 			}
 		}
+		app.diffFileFinderButton(c)
 	})
 	ui.Toolbar(c, func() {
 		filters := []struct{ value, label string }{

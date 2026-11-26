@@ -459,7 +459,7 @@ func (app *nativeApp) revisionFileList(c *ui.Context, files []gitrepo.CommitFile
 							if next >= 0 {
 								target := files[next].Path
 								if app.prefs.FileTree {
-									outline.revealReviewedNext(target, *collapsed)
+									outline.revealFile(target, *collapsed)
 								} else {
 									list.ScrollIntoView(next)
 								}
@@ -471,6 +471,7 @@ func (app *nativeApp) revisionFileList(c *ui.Context, files []gitrepo.CommitFile
 			ui.Toolbar(c, func() {
 				app.fileSortingControl(c)
 				ui.Spacer(c)
+				app.diffFileFinderButton(c)
 				app.fileViewControl(c)
 			}).Label(locales.FileDisplayOptions()).FillWidth().Padding(0)
 		})
@@ -494,6 +495,15 @@ func (app *nativeApp) revisionFileList(c *ui.Context, files []gitrepo.CommitFile
 			path = ""
 		}
 		disabled := app.readTask != nil && app.readTask.kind != nativeReadDiff
+		if path != "" && app.diffReveal.path == path {
+			if app.prefs.FileTree {
+				outline.sync(cache.fileTree(files), *collapsed, "f:"+path)
+				outline.revealFile(path, *collapsed)
+			} else {
+				list.ScrollIntoView(*selected)
+			}
+			app.diffReveal = nativeDiffFile{}
+		}
 		if app.prefs.FileTree {
 			app.revisionFileTree(c, cache.fileTree(files), outline, *collapsed, cache.indices, selected, path, label, disabled, choose)
 			return

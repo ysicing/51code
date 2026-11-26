@@ -36,6 +36,36 @@ type Messages struct{ locale string }
 // source language.
 func In(locale string) Messages { return Messages{locale} }
 
+// GoToChangedFile says "跳到变更文件"
+// in the language the app shows.
+func GoToChangedFile() string { return In(i18n.Locale()).GoToChangedFile() }
+
+// GoToChangedFile says "跳到变更文件"
+// in the language of msgs.
+func (msgs Messages) GoToChangedFile() string {
+	return Catalog.Format(msgs.locale, "goToChangedFile", nil)
+}
+
+// NextDiffFileHint says "再按 F7 跳到下一个文件"
+// in the language the app shows.
+func NextDiffFileHint() string { return In(i18n.Locale()).NextDiffFileHint() }
+
+// NextDiffFileHint says "再按 F7 跳到下一个文件"
+// in the language of msgs.
+func (msgs Messages) NextDiffFileHint() string {
+	return Catalog.Format(msgs.locale, "nextDiffFileHint", nil)
+}
+
+// PreviousDiffFileHint says "再按 Shift+F7 跳到上一个文件"
+// in the language the app shows.
+func PreviousDiffFileHint() string { return In(i18n.Locale()).PreviousDiffFileHint() }
+
+// PreviousDiffFileHint says "再按 Shift+F7 跳到上一个文件"
+// in the language of msgs.
+func (msgs Messages) PreviousDiffFileHint() string {
+	return Catalog.Format(msgs.locale, "previousDiffFileHint", nil)
+}
+
 // FileReviewed says "已审阅"
 // in the language the app shows.
 func FileReviewed() string { return In(i18n.Locale()).FileReviewed() }

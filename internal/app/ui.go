@@ -31,6 +31,7 @@ var nativeIcons = map[string]*ui.SVG{
 	"check":    nativeSymbol(`<path d="m5 12 4 4L19 6"/>`),
 	"copy":     nativeSymbol(`<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>`),
 	"close":    nativeSymbol(`<path d="m6 6 12 12M6 18 18 6"/>`),
+	"search":   nativeSymbol(`<circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.2 15.2 4.8 4.8"/>`),
 	"chevron":  nativeSymbol(`<path d="m9 5 7 7-7 7"/>`),
 	"plus":     nativeSymbol(`<path d="M12 5v14M5 12h14"/>`),
 	"more":     nativeSymbol(`<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>`),
@@ -208,6 +209,7 @@ func (app *nativeApp) view(c *ui.Context) {
 			}
 		})
 	})
+	app.diffShortcuts(c)
 	app.dialogView(c)
 }
 
@@ -702,6 +704,9 @@ func (app *nativeApp) changesSection(c *ui.Context, staged bool) {
 			}
 			ui.Badge(c, badge)
 			ui.Spacer(c)
+			if staged && app.historyWorking && app.screen == "history" {
+				app.diffFileFinderButton(c)
+			}
 			if staged && app.prefs.SecretScanEnabled {
 				ui.Button(c, locales.ScanStagedSecrets()).FontSize(12).Disabled(!app.canScanStagedSecrets()).
 					OnClick(app.scanStagedSecrets)
@@ -722,9 +727,22 @@ func (app *nativeApp) changesSection(c *ui.Context, staged bool) {
 			return
 		}
 		if tree != nil {
+			if app.diffReveal.path != "" && app.diffReveal.staged == staged {
+				outline.sync(tree, app.fileCollapsed, "f:"+app.diffReveal.path)
+				outline.revealFile(app.diffReveal.path, app.fileCollapsed)
+				app.diffReveal = nativeDiffFile{}
+				c.Invalidate()
+			}
 			app.changesFileTree(c, outline, tree, staged, label, listWidth)
 		} else {
-			list := ui.List(c, nil, len(files)).
+			state := *ui.Local(section, "flat-files", func() *ui.ListState { return &ui.ListState{} })
+			if app.diffReveal.path != "" && app.diffReveal.staged == staged {
+				if index := slices.IndexFunc(files, func(file gitrepo.File) bool { return file.Path == app.diffReveal.path }); index >= 0 {
+					state.ScrollIntoView(index)
+				}
+				app.diffReveal = nativeDiffFile{}
+			}
+			list := ui.List(c, state, len(files)).
 				ItemKey(func(index int) any { return files[index].Path }).
 				Label(locales.SectionList(label)).Grow(1).MinHeight(0).FillWidth().
 				Padding(0, 6, 6).RowWidth(listWidth)

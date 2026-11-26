@@ -1,4 +1,7 @@
 {
+  "goToChangedFile": "Go to Changed File",
+  "nextDiffFileHint": "Press F7 again to go to the next file",
+  "previousDiffFileHint": "Press Shift+F7 again to go to the previous file",
   "fileReviewed": "Viewed",
   "addReviewNote": "Add review note",
   "reviewNote": "Comment",

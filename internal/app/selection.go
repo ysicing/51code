@@ -45,9 +45,10 @@ const (
 )
 
 type nativeRead struct {
-	label  string
-	kind   nativeReadKind
-	cancel context.CancelFunc
+	label     string
+	kind      nativeReadKind
+	cancel    context.CancelFunc
+	onSuccess func()
 }
 
 func (app *nativeApp) cancelRead() {
@@ -104,6 +105,9 @@ func (app *nativeApp) load(label string, kind nativeReadKind, task func(context.
 			if apply != nil {
 				apply()
 			}
+			if err == nil && request.onSuccess != nil {
+				request.onSuccess()
+			}
 			if err != nil {
 				if kind == nativeReadHistory && screen != "search" {
 					app.historyFilter = app.historyResult.filter
@@ -157,6 +161,7 @@ func (app *nativeApp) selectFile(file string, staged bool) {
 }
 
 func (app *nativeApp) clearDiff() {
+	app.diffReveal, app.diffBoundary = nativeDiffFile{}, nativeDiffBoundary{}
 	app.diff, app.patch = gitrepo.Diff{}, gitrepo.Patch{}
 	app.diffViews, app.diffNames, app.lineChoices = nil, nil, nil
 	app.unifiedDiffs = nil
@@ -212,6 +217,7 @@ func patchLines(text string) []nativeLine {
 }
 
 func (app *nativeApp) setDiff(diff gitrepo.Diff) {
+	app.diffBoundary = nativeDiffBoundary{}
 	app.diff = diff
 	app.fileViewer.setSources(diff)
 	app.diffViews, app.diffNames = nil, nil

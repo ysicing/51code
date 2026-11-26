@@ -1,4 +1,7 @@
 {
+  "goToChangedFile": "跳到变更文件",
+  "nextDiffFileHint": "再按 F7 跳到下一个文件",
+  "previousDiffFileHint": "再按 Shift+F7 跳到上一个文件",
   "fileReviewed": "已审阅",
   "addReviewNote": "添加审阅意见",
   "reviewNote": "意见",
