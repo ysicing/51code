@@ -4,7 +4,11 @@
 
 <h1 align="center">51Code</h1>
 
-<p align="center">A lightweight, open-source desktop client for everyday Git workflows.</p>
+<p align="center">A lightweight, open-source, cross-platform desktop client for everyday Git workflows.</p>
+
+<p align="center">
+  <a href="https://awesomemygo.dev/apps/51code"><img src="https://awesomemygo.dev/badge.svg" alt="Listed on Awesome MyGo"></a>
+</p>
 
 <p align="center"><a href="README.md">简体中文</a> · English</p>
 
@@ -18,8 +22,8 @@
 
 | Platform | Supported systems | Install |
 | --- | --- | --- |
-| macOS | Apple Silicon / Intel | [Download DMG](https://github.com/ysicing/51code/releases/latest) or Homebrew |
-| Windows | Windows 11 x64 | [Download installer](https://github.com/ysicing/51code/releases/latest), with Git, SSH and Git LFS included |
+| macOS | macOS 12+, Apple Silicon / Intel | [Download DMG](https://github.com/ysicing/51code/releases/latest) or Homebrew |
+| Windows | Windows 11 x64 | [Download installer or portable ZIP](https://github.com/ysicing/51code/releases/latest), both with Git, SSH and Git LFS included |
 | Linux | x64 / arm64 | Install script, APT / YUM repositories, or [deb / rpm packages](https://github.com/ysicing/51code/releases/latest) |
 
 <details>
@@ -38,7 +42,7 @@ Releases are Developer ID-signed and Apple-notarized, with in-app updates.
 
 Choose `51code-setup-<version>-amd64.exe` from the download page. In-app updates are supported; no separate Git installation is required. The installer is not yet Authenticode-signed.
 
-If the release offers `51code-<version>-windows-amd64-portable.zip`, extract the entire ZIP to a folder and run `51Code.exe`. The ZIP includes Git, SSH, and Git LFS. App settings are stored in the current user's data directory.
+For the portable edition, download `51code-<version>-windows-amd64-portable.zip`, extract the entire ZIP to a folder, and run `51Code.exe`. App settings are stored in the current user's data directory.
 
 </details>
 
@@ -73,7 +77,7 @@ Write the following configuration to `/etc/yum.repos.d/fury.repo`:
 
 ```ini
 [fury]
-name=Gemfury Private Repo
+name=Gemfury
 baseurl=https://yum.fury.io/ysicing/
 enabled=1
 gpgcheck=0
@@ -97,24 +101,24 @@ Inspired by the everyday operations in SourceTree, with a native interface built
 
 | Workflow | Capabilities |
 | --- | --- |
-| Organize repositories | Separate repository browser, multiple repository windows, add and scan, groups, search and primary language detection |
-| Review and commit | File filters, bulk and hunk / line staging, commit drafts and AI commit messages |
-| Read diffs | Adaptive unified / side-by-side diff, syntax highlighting, read-only full files and in-file search |
+| Organize repositories | Multiple repository windows, add, scan, clone and initialize repositories, default groups, search, recently opened sort order, repository relocation and primary language detection |
+| Review and commit | File filters, bulk and hunk / line staging, staged secret scanning, commit drafts and AI commit messages |
+| Browse files and diffs | Adaptive unified / side-by-side diff, file browsing and image previews, Quick Open, syntax highlighting, read-only full files, line navigation and in-file search |
 | Explore history | Commit graph, full-text search, path filters, commit diffs and comparison between any two revisions |
 | Branch and sync | Branches and tags, remote branch checkout, first publish and upstream tracking, remote URLs, Fetch / fast-forward Pull / Push and ahead / behind counts |
 | Stash and merge | Stash management, branch merges, conflict editing, and continuing or aborting Git operations |
-| Use worktrees | Discover, open and create worktrees; merge and remove merged worktrees after checking their state |
+| Use worktrees | Discover, open, create and merge worktrees, find cleanup candidates, and remove linked worktrees after checking their state while keeping their branches |
 | LFS and insights | Git LFS, large-file checks, commit activity, contributors and file hotspots |
 
 Light / dark appearance, native menus, keyboard shortcuts and resizable panes. Sidebar entries such as search, comparison, stashes and worktrees can be shown or hidden individually.
 
 ## Getting started
 
-1. Add an existing local repository, or scan a folder to add several.
+1. From the repository browser, add an existing repository, scan a folder, clone a remote repository, or initialize a local folder as a Git repository.
 2. Review diffs, stage your changes, and write or generate a commit message with AI.
 3. Commit, then fetch, pull or push from the toolbar.
 
-Cloning, interactive rebase and authentication settings are not yet available in the UI. Remote operations use the selected Git installation's credentials. A recovery copy is saved before discarding file changes. AI sends staged diffs only after confirmation and never commits or pushes automatically. See the [usage guide](docs/usage.md) (Chinese).
+Remote operations use the selected Git installation's credentials. Start interactive rebases from the command line. With Trash enabled, 51Code saves a recovery copy before discarding file changes. AI commit messages require permission to send staged diffs. You control when to commit and push. See the [usage guide](docs/usage.md) (Chinese).
 
 ## Documentation and development
 
