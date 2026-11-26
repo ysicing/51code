@@ -92,8 +92,8 @@ func (builder *historyGraphBuilder) rewind(row int) {
 	}
 }
 
-// process 计算第 index 行，算法与原 commitGraph 相同：
-// 轨道颜色随父提交传递，不随列压缩改变；筛选掉的提交不能被画成直接相连。
+// process 计算第 index 行。轨道颜色随父提交传递，不随列压缩改变；
+// 筛选掉的提交不能被画成直接相连。
 func (builder *historyGraphBuilder) process(index int) {
 	if index%historyGraphCheckpointEvery == 0 {
 		builder.checkpoints = append(builder.checkpoints, historyGraphCheckpoint{
@@ -130,7 +130,8 @@ func (builder *historyGraphBuilder) process(index int) {
 		target := slices.IndexFunc(after, func(lane historyLane) bool { return lane.Hash == parent })
 		if target >= 0 {
 			if parentIndex == 0 {
-				after[target].Color = row.Color
+				// 先建立的轨道在汇合后延续，后建立的支线不能把主线染色。
+				after[target].Color = min(after[target].Color, row.Color)
 			}
 			continue
 		}
@@ -154,13 +155,17 @@ func (builder *historyGraphBuilder) process(index int) {
 	for from, lane := range lanes {
 		if from != column {
 			if to, ok := afterIndex[lane.Hash]; ok {
-				row.Edges = append(row.Edges, historyEdge{From: from, To: to, Color: after[to].Color})
+				row.Edges = append(row.Edges, historyEdge{From: from, To: to, Color: lane.Color})
 			}
 			continue
 		}
 		for _, parent := range parents {
 			if to, ok := afterIndex[parent]; ok {
-				row.Edges = append(row.Edges, historyEdge{From: from, To: to, Color: after[to].Color})
+				color := after[to].Color
+				if parent == parents[0] {
+					color = row.Color
+				}
+				row.Edges = append(row.Edges, historyEdge{From: from, To: to, Color: color})
 			}
 		}
 	}

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -63,9 +64,14 @@ func TestNativeGraphConnections(t *testing.T) {
 					t.Fatalf("节点越过图谱列: %+v", row)
 				}
 				for _, edge := range row.Edges {
-					if index+1 == len(graph) || edge.To >= len(graph[index+1].Incoming) ||
-						edge.Color != graph[index+1].Incoming[edge.To] {
+					if index+1 == len(graph) || edge.To >= len(graph[index+1].Incoming) {
 						t.Fatalf("跨行连线不连续: row=%d edge=%+v graph=%+v", index, edge, graph)
+					}
+					nextColor := graph[index+1].Incoming[edge.To]
+					if edge.Color != nextColor && !slices.ContainsFunc(row.Edges, func(other historyEdge) bool {
+						return other.From != edge.From && other.To == edge.To && other.Color == nextColor
+					}) {
+						t.Fatalf("连线在汇合前变色: row=%d edge=%+v graph=%+v", index, edge, graph)
 					}
 				}
 			}

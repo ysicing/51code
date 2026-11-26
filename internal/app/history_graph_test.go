@@ -15,7 +15,7 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-// referenceCommitGraph 是改为增量计算前的 commitGraph 原实现，作为对照基准。
+// referenceCommitGraph 每次从头计算完整图谱，用于验证增量计算。
 func referenceCommitGraph(commits []gitrepo.Commit) []historyGraphRow {
 	positions := make(map[string]int, len(commits))
 	for index, commit := range commits {
@@ -44,7 +44,7 @@ func referenceCommitGraph(commits []gitrepo.Commit) []historyGraphRow {
 			}
 			target := slices.IndexFunc(after, func(lane historyLane) bool { return lane.Hash == parent })
 			if target >= 0 {
-				if parentIndex == 0 {
+				if parentIndex == 0 && row.Color < after[target].Color {
 					after[target].Color = row.Color
 				}
 				continue
@@ -66,7 +66,11 @@ func referenceCommitGraph(commits []gitrepo.Commit) []historyGraphRow {
 			for _, hash := range targets {
 				to := slices.IndexFunc(after, func(lane historyLane) bool { return lane.Hash == hash })
 				if to >= 0 {
-					row.Edges = append(row.Edges, historyEdge{From: from, To: to, Color: after[to].Color})
+					color := lane.Color
+					if from == column && hash != commit.Parents[0] {
+						color = after[to].Color
+					}
+					row.Edges = append(row.Edges, historyEdge{From: from, To: to, Color: color})
 				}
 			}
 		}
@@ -164,6 +168,60 @@ func TestHistoryGraphBuilderRewindsWhenHiddenParentArrives(t *testing.T) {
 	}
 	if len(rows[0].Edges) == 0 {
 		t.Fatal("翻页后第一行应连到 base")
+	}
+}
+
+func TestHistoryGraphKeepsColorsWhenLinesConverge(t *testing.T) {
+	cases := []struct {
+		name     string
+		commits  []gitrepo.Commit
+		mainRows []int
+		sideRows []int
+		joinRow  int
+	}{
+		{
+			name: "side line joins a pending main parent",
+			commits: []gitrepo.Commit{
+				{Hash: "tip", Parents: []string{"main"}},
+				{Hash: "side", Parents: []string{"main"}},
+				{Hash: "main", Parents: []string{"base"}},
+				{Hash: "other", Parents: []string{"base"}},
+				{Hash: "base"},
+			},
+			mainRows: []int{0, 2, 4}, sideRows: []int{1, 3}, joinRow: 1,
+		},
+		{
+			name: "main line reaches an ancestor found through the side line first",
+			commits: []gitrepo.Commit{
+				{Hash: "merge", Parents: []string{"main", "side"}},
+				{Hash: "side", Parents: []string{"base"}},
+				{Hash: "main", Parents: []string{"base"}},
+				{Hash: "base"},
+			},
+			mainRows: []int{0, 2, 3}, sideRows: []int{1}, joinRow: 2,
+		},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			rows := commitGraph(test.commits)
+			mainColor := rows[test.mainRows[0]].Color
+			for _, index := range test.mainRows {
+				if rows[index].Color != mainColor {
+					t.Fatalf("%s 改变了主线颜色: got=%d want=%d", test.commits[index].Hash, rows[index].Color, mainColor)
+				}
+			}
+			for _, index := range test.sideRows {
+				if rows[index].Color == mainColor {
+					t.Fatalf("%s 的支线颜色与主线相同", test.commits[index].Hash)
+				}
+			}
+			join := rows[test.joinRow]
+			if len(join.Edges) != 2 || join.Edges[0].To != join.Edges[1].To ||
+				join.Edges[0].Color != mainColor || join.Edges[1].From != 1 ||
+				join.Edges[1].Color != rows[test.sideRows[0]].Color {
+				t.Fatalf("两条线应各自保持颜色直到汇合: %+v", join)
+			}
+		})
 	}
 }
 
