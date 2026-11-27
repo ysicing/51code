@@ -16,7 +16,8 @@ import (
 )
 
 func (app *nativeApp) sshWorkspaceDialog() {
-	if app.screen != "library" || app.busy || app.closed || app.dialog != nil {
+	if app.screen != "library" || app.busy || app.closed || app.dialog != nil ||
+		app.desktop != nil && (app.desktop.checkingQuit || app.desktop.quitting) {
 		return
 	}
 	if app.group == "" {

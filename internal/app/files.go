@@ -298,6 +298,12 @@ func (app *nativeApp) changeFileContent(c *ui.Context, row ui.Element, file gitr
 
 func (app *nativeApp) chooseChangeFile(file gitrepo.File, staged bool) {
 	if app.ssh != nil {
+		for _, entry := range app.ssh.snapshot.Files {
+			if entry.Path == file.Path {
+				file = entry
+				break
+			}
+		}
 		app.selectSSHFile(file, staged, "")
 	} else if app.screen == "history" && app.historyWorking {
 		app.selectHistoryWorkingFile(file.Path, staged)

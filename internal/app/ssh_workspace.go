@@ -8,6 +8,7 @@ import (
 	"path"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/ysicing/51code/internal/gitrepo"
 	"github.com/ysicing/51code/internal/workspace"
@@ -43,7 +44,8 @@ func (state *nativeSSHWorkspace) update(snapshot gitrepo.Snapshot, refs []string
 }
 
 func (app *nativeApp) connectSSHRepository(saved gitrepo.SSHWorkspace) {
-	if app.screen != "library" || app.busy || app.closed || app.dialog != nil {
+	if app.screen != "library" || app.busy || app.closed || app.dialog != nil ||
+		app.desktop != nil && (app.desktop.checkingQuit || app.desktop.quitting) {
 		return
 	}
 	app.sshRepositoryPicker(saved)
@@ -71,6 +73,9 @@ func (app *nativeApp) openSSHRepository(form *nativeDialog, repo gitrepo.SSHWork
 				return
 			}
 			form.cancel, form.blocked = nil, false
+			if app.desktop != nil && (app.desktop.checkingQuit || app.desktop.quitting) {
+				return
+			}
 			if err != nil {
 				form.problem = err.Error()
 				return
@@ -163,17 +168,62 @@ func (app *nativeApp) sshLibraryRow(c *ui.Context, entry workspace.SSHRepository
 
 func (app *nativeApp) refreshSSH() {
 	state := app.ssh
-	app.load(locales.OpeningRepository(), nativeReadDiff, func(ctx context.Context) (func(), error) {
+	app.runTask(locales.Refreshing(), true, func(ctx context.Context) (func(), error) {
 		snapshot, refs, err := state.repo.Snapshot(ctx)
-		if err != nil {
-			return func() { state.snapshot.SSHWritable = false }, err
-		}
 		return func() {
+			if app.ssh != state {
+				return
+			}
+			if err != nil {
+				state.snapshot.SSHWritable = false
+				return
+			}
+			previous, previousRefs := state.snapshot, state.refs
 			state.update(snapshot, refs)
 			app.fileMetrics = nativeFileMetrics{}
+			if len(app.selectedFiles) > 0 {
+				valid := make(map[string]bool, len(snapshot.Files)*2)
+				for _, file := range snapshot.Files {
+					if isStaged(file) {
+						valid[nativeSelectionKey(true, file.Path)] = true
+					}
+					if isWorking(file) {
+						valid[nativeSelectionKey(false, file.Path)] = true
+					}
+				}
+				for key := range app.selectedFiles {
+					if !valid[key] {
+						delete(app.selectedFiles, key)
+					}
+				}
+			}
+			app.invalidateSSHCaches(previous, snapshot, previousRefs, refs, true)
 			app.refreshSSHView()
-		}, nil
+		}, err
 	})
+}
+
+func (app *nativeApp) invalidateSSHCaches(previous, current gitrepo.Snapshot, previousRefs, currentRefs []string, refreshed bool) {
+	refsChanged := previous.Head != current.Head || previous.Branch != current.Branch ||
+		previous.Detached != current.Detached || !slices.Equal(previousRefs, currentRefs)
+	if refreshed || refsChanged {
+		if app.screen != "sshHistory" {
+			app.browseState.historyLoaded = false
+		}
+		if app.screen != "search" {
+			app.searchState.historyLoaded = false
+		}
+		if app.screen == "files" && app.browser != nil {
+			// 文件浏览页返回时会直接恢复自己的历史副本。
+			app.browser.history.historyLoaded = false
+		}
+		if app.insights != nil {
+			app.insights.checked = time.Time{}
+		}
+	}
+	if app.screen != "search" && (refsChanged || !slices.Equal(previous.Files, current.Files)) {
+		app.pathSearch.invalidateQuickPaths()
+	}
 }
 
 func (app *nativeApp) refreshSSHView() {
@@ -225,8 +275,19 @@ func (app *nativeApp) switchSSH(selected string) {
 		app.switchWorkspace("stash")
 		app.loadSSHStashes()
 		return
-	case "screen:compare", "screen:search":
-		app.switchWorkspace(strings.TrimPrefix(selected, "screen:"))
+	case "screen:compare":
+		app.switchWorkspace("compare")
+		return
+	case "screen:search":
+		app.switchWorkspace("search")
+		if app.searchMode == nativeSearchCommits && !app.historyLoaded &&
+			app.historyResult != (nativeHistoryRequest{}) && app.readTask == nil {
+			app.history, app.historyMore, app.historyPagePaused = nil, false, false
+			app.commitHash, app.commitParent, app.commitFiles, app.commitFile, app.selectedFile = "", "", nil, "", ""
+			app.historySelected, app.commitSelected = -1, -1
+			app.clearDiff()
+			app.searchHistory(false)
+		}
 		return
 	case "screen:files":
 		app.switchWorkspace("files")
@@ -329,8 +390,7 @@ func (app *nativeApp) loadSSHCommit(hash, parent string) {
 	if hash == app.commitHash {
 		previous = app.selectedFile
 	}
-	app.historySelected = slices.IndexFunc(app.history, func(commit gitrepo.Commit) bool { return commit.Hash == hash })
-	app.load(locales.CommitFileList(), nativeReadDiff, func(ctx context.Context) (func(), error) {
+	app.load(locales.CommitFileList(), nativeReadCommit, func(ctx context.Context) (func(), error) {
 		var files []gitrepo.CommitFile
 		var err error
 		if parent == "" {
@@ -345,6 +405,7 @@ func (app *nativeApp) loadSSHCommit(hash, parent string) {
 		}
 		return func() {
 			app.clearDiff()
+			app.historySelected = slices.IndexFunc(app.history, func(commit gitrepo.Commit) bool { return commit.Hash == hash })
 			app.commitParent, app.commitHash, app.commitFiles, app.commitFile, app.selectedFile, app.commitSelected = parent, hash, files, "", "", -1
 			if len(files) > 0 {
 				index := slices.IndexFunc(files, func(file gitrepo.CommitFile) bool { return file.Path == previous })
@@ -435,7 +496,9 @@ func (app *nativeApp) sshSidebar(c *ui.Context) {
 					item := ui.SidebarItem(c, ref, nativeIcons[group.icon], name).Tooltip(name)
 					if group.prefix == "refs/heads/" {
 						item.ContextMenu(func(menu *ui.Menu) {
-							if menu.Item(locales.Checkout()).Disabled(!app.ssh.snapshot.SSHWritable || name == app.ssh.snapshot.Branch || app.busy).Chosen() {
+							state := app.ssh
+							if menu.Item(locales.Checkout()).Disabled(!state.snapshot.SSHWritable ||
+								!state.snapshot.Detached && name == state.snapshot.Branch || app.busy || app.dialog != nil).Chosen() {
 								app.sshSwitchDialog(name)
 							}
 						})
@@ -479,14 +542,23 @@ func (app *nativeApp) loadSSHStashes() {
 }
 
 func (app *nativeApp) openRelatedWorktree(directory string) {
+	if app.desktop != nil && (app.desktop.checkingQuit || app.desktop.quitting) {
+		return
+	}
 	if app.ssh == nil {
 		app.openRepository(directory)
 		return
 	}
 	if app.desktop != nil {
 		library := app.desktop.showLibrary()
+		if library.screen != "library" || library.busy || library.closed || library.dialog != nil {
+			return
+		}
 		library.remoteLibrary, library.group = true, ""
 		library.connectSSHRepository(gitrepo.SSHWorkspace{Host: app.ssh.repo.Host, Path: directory})
+		if library.win != nil {
+			library.win.Invalidate()
+		}
 	}
 }
 
@@ -520,7 +592,7 @@ func (app *nativeApp) sshHistoryPanel(c *ui.Context) {
 				ui.Text(c, app.searchSummary()).FontSize(11).TextColor(c.Theme().TextMuted).Padding(4, 10)
 			}
 			if app.historyPagePaused && app.historyMore {
-				ui.Button(c, locales.Retry()).OnClick(func() { app.readSSHHistoryPage(true) })
+				ui.Button(c, locales.Retry()).Disabled(app.busy || app.readTask != nil).OnClick(func() { app.readSSHHistoryPage(true) })
 			}
 			app.loadHistoryNearEnd(c)
 		})

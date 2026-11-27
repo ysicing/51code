@@ -5,6 +5,7 @@ package app
 
 import (
 	"context"
+	"maps"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -299,6 +300,260 @@ printf '%s\n' "$script" | sh -s
 	}
 }
 
+func nativeSSHTestWorkspace(t *testing.T) (*nativeApp, string, <-chan func()) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("本地 SSH 替身需要 POSIX shell")
+	}
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "ssh"), []byte("#!/bin/sh\nexec sh -s\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	desktop, dir, updates, _ := desktopFixture(t)
+	app := desktop.newApp()
+	repo := gitrepo.SSHWorkspace{Host: "fixture", Path: dir}
+	snapshot, refs, err := repo.Snapshot(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	app.ssh, app.screen = &nativeSSHWorkspace{repo: repo}, "sshChanges"
+	app.ssh.update(snapshot, refs)
+	desktop.showWindow(app)
+	return app, dir, updates
+}
+
+func TestNativeSSHHistoryReloadsAfterWriteAndRefresh(t *testing.T) {
+	app, dir, updates := nativeSSHTestWorkspace(t)
+	drain := func() {
+		t.Helper()
+		runBackgroundUpdates(t, updates, func() bool { return !app.busy && app.readTask == nil })
+		if app.problem != "" {
+			t.Fatal(app.problem)
+		}
+	}
+	nativeGit(t, dir, "commit", "--allow-empty", "-m", "SSH history cache initial")
+	app.refreshSSH()
+	drain()
+	app.switchSSH("screen:sshHistory")
+	drain()
+	app.switchSSH("screen:search")
+	app.historyQuery = "SSH history cache"
+	app.searchHistory(false)
+	drain()
+	if !app.historyLoaded || len(app.history) != 1 {
+		t.Fatalf("提交搜索没有建立初始缓存: %+v", app.history)
+	}
+	app.switchSSH("screen:sshChanges")
+	drain()
+
+	assertReload := func(wantMatches int) {
+		t.Helper()
+		if app.browseState.historyLoaded || app.searchState.historyLoaded || !app.insights.checked.IsZero() || app.pathSearch.quickPaths != nil {
+			t.Fatal("远端状态更新后仍保留旧缓存")
+		}
+		app.switchSSH("screen:sshHistory")
+		if app.readTask == nil || app.readTask.kind != nativeReadHistory {
+			t.Fatal("切回提交历史应重新读取")
+		}
+		drain()
+		if !app.historyLoaded || len(app.history) == 0 || app.history[0].Hash != app.ssh.snapshot.Head {
+			t.Fatalf("提交历史未更新到新 HEAD: %+v", app.history)
+		}
+		app.switchSSH("screen:search")
+		if app.readTask == nil || app.readTask.kind != nativeReadHistory || len(app.history) != 0 {
+			t.Fatal("切回提交搜索应重新读取并清除旧结果")
+		}
+		drain()
+		if !app.historyLoaded || len(app.history) != wantMatches || app.history[0].Hash != app.ssh.snapshot.Head {
+			t.Fatalf("提交搜索未更新到新 HEAD: %+v", app.history)
+		}
+		app.switchSSH("screen:sshChanges")
+		drain()
+	}
+
+	writeNativeFile(t, dir, "hello.txt", "remote commit\n")
+	nativeGit(t, dir, "add", "hello.txt")
+	repo, expected := app.ssh.repo, app.ssh.snapshot
+	prepared, err := repo.PrepareCommit(t.Context(), expected, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	app.insights = &nativeInsights{checked: time.Now()}
+	app.pathSearch.quickPaths = []nativeQuickPath{{}}
+	app.runSSHWrite(locales.Committing(), func(ctx context.Context) error {
+		return repo.CommitStaged(ctx, expected, "SSH history cache written", prepared.Token)
+	}, nil)
+	drain()
+	assertReload(2)
+
+	nativeGit(t, dir, "commit", "--allow-empty", "-m", "SSH history cache refreshed")
+	writeNativeFile(t, dir, "staged.txt", "staged\n")
+	nativeGit(t, dir, "add", "staged.txt")
+	writeNativeFile(t, dir, "working.txt", "working\n")
+	for _, name := range []string{"staged.txt", "working.txt", "gone.txt"} {
+		app.selectedFiles[nativeSelectionKey(true, name)] = true
+		app.selectedFiles[nativeSelectionKey(false, name)] = true
+	}
+	app.insights.checked = time.Now()
+	app.pathSearch.quickPaths = []nativeQuickPath{{}}
+	app.refreshSSH()
+	if !app.busy || !app.readOnlyBusy || app.status != locales.Refreshing() {
+		t.Fatal("远端刷新应进入只读的刷新任务")
+	}
+	drain()
+	want := map[string]bool{nativeSelectionKey(true, "staged.txt"): true, nativeSelectionKey(false, "working.txt"): true}
+	if !maps.Equal(app.selectedFiles, want) {
+		t.Fatalf("刷新未裁剪失效的文件勾选: %+v", app.selectedFiles)
+	}
+	assertReload(3)
+}
+
+func TestNativeSSHOpensSavedPathWithTrailingSpace(t *testing.T) {
+	app, dir, updates := nativeSSHTestWorkspace(t)
+	parent := t.TempDir()
+	plain, spaced := filepath.Join(parent, "repo"), filepath.Join(parent, "repo ")
+	nativeGit(t, dir, "init", "-b", "plain", plain)
+	nativeGit(t, dir, "init", "-b", "spaced", spaced)
+	spaced, err := filepath.EvalSymlinks(spaced)
+	if err != nil {
+		t.Fatal(err)
+	}
+	library := app.desktop.library
+	repo := gitrepo.SSHWorkspace{Host: app.ssh.repo.Host, Path: spaced}
+	library.library, err = library.service.manager.RememberSSH(t.Context(), repo, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	library.connectSSHRepository(repo)
+	runBackgroundUpdates(t, updates, func() bool { return library.dialog == nil || library.dialog.problem != "" })
+	if library.dialog != nil {
+		t.Fatal(library.dialog.problem)
+	}
+	if current := app.desktop.active.ssh; current.repo != repo || current.snapshot.Branch != "spaced" {
+		t.Fatalf("应原样打开保存的目录: %q, %q", current.repo.Path, current.snapshot.Branch)
+	}
+}
+
+func TestNativeSSHRefreshReloadsMovedNonCurrentBranch(t *testing.T) {
+	app, dir, updates := nativeSSHTestWorkspace(t)
+	drain := func() {
+		t.Helper()
+		runBackgroundUpdates(t, updates, func() bool { return !app.busy && app.readTask == nil })
+		if app.problem != "" {
+			t.Fatal(app.problem)
+		}
+	}
+	old := nativeGit(t, dir, "rev-parse", "HEAD")
+	nativeGit(t, dir, "branch", "topic", old)
+	nativeGit(t, dir, "commit", "--allow-empty", "-m", "new tip")
+	head := nativeGit(t, dir, "rev-parse", "HEAD")
+	app.refreshSSH()
+	drain()
+	app.switchSSH("refs/heads/topic")
+	drain()
+	if len(app.history) == 0 || app.history[0].Hash != old {
+		t.Fatal("未建立旧分支历史缓存")
+	}
+	app.switchSSH("screen:sshChanges")
+	drain()
+	nativeGit(t, dir, "branch", "-f", "topic", "HEAD")
+	app.refreshSSH()
+	drain()
+	app.switchSSH("refs/heads/topic")
+	drain()
+	if app.ssh.snapshot.Head != head || len(app.history) == 0 || app.history[0].Hash != head {
+		t.Fatalf("当前 HEAD 不变时应重新读取已移动的分支: %+v", app.history)
+	}
+}
+
+func TestNativeSSHCommitSelectionWaitsForSuccessfulRead(t *testing.T) {
+	app, dir, updates := nativeSSHTestWorkspace(t)
+	app.screen = "sshHistory"
+	current := app.ssh.snapshot.Head
+	nativeGit(t, dir, "commit", "--allow-empty", "-m", "empty commit")
+	next := nativeGit(t, dir, "rev-parse", "HEAD")
+	const missing = "invalid-hash"
+	app.history = []gitrepo.Commit{{Hash: current}, {Hash: missing}, {Hash: next}}
+	app.historySelected, app.commitHash = 0, current
+	app.commitFiles = []gitrepo.CommitFile{{Path: "hello.txt"}}
+	app.loadSSHCommit(missing, "")
+	request := app.readTask
+	if app.historySelected != 0 || request == nil || request.kind != nativeReadCommit {
+		t.Fatal("提交尚未读取成功时应保留原行高亮")
+	}
+	app.selectCommitFile("hello.txt")
+	if app.readTask != request {
+		t.Fatal("提交文件点击取消了正在进行的提交读取")
+	}
+	runBackgroundUpdates(t, updates, func() bool { return app.readTask == nil })
+	if app.problem == "" || app.commitHash != current || app.historySelected != 0 {
+		t.Fatalf("提交读取失败后应保留原选择，行 %d，提交 %s: %q", app.historySelected, app.commitHash, app.problem)
+	}
+	app.dialog = nil
+	app.loadSSHCommit(next, "")
+	runBackgroundUpdates(t, updates, func() bool { return app.readTask == nil })
+	if app.problem != "" || app.commitHash != next || app.historySelected != 2 || len(app.commitFiles) != 0 {
+		t.Fatalf("应在读取成功后选中无文件变更的提交，行 %d，提交 %s: %q", app.historySelected, app.commitHash, app.problem)
+	}
+}
+
+func TestNativeSSHChooseChangeFilePreservesRename(t *testing.T) {
+	app, dir, updates := nativeSSHTestWorkspace(t)
+	const renamed = "renamed.txt"
+	nativeGit(t, dir, "mv", "hello.txt", renamed)
+	nativeGit(t, dir, "config", "status.renames", "true")
+	nativeGit(t, dir, "config", "diff.renames", "false")
+	snapshot, refs, err := app.ssh.repo.Snapshot(t.Context())
+	if err != nil || len(snapshot.Files) != 1 || snapshot.Files[0].OriginalPath != "hello.txt" {
+		t.Fatalf("测试仓库未识别重命名: %+v, %v", snapshot.Files, err)
+	}
+	app.ssh.update(snapshot, refs)
+	app.chooseChangeFile(gitrepo.File{Path: renamed}, true)
+	runBackgroundUpdates(t, updates, func() bool { return app.readTask == nil })
+	if app.problem != "" || !strings.Contains(app.diff.Text, "rename from hello.txt") ||
+		app.diff.Old == nil || app.diff.Old.Path != "hello.txt" || app.diff.New == nil || app.diff.New.Path != renamed {
+		t.Fatalf("从路径定位暂存重命名时丢失源路径: %+v, %q", app.diff, app.problem)
+	}
+}
+
+func TestNativeSSHRelatedWorktreePreservesUnavailableLibrary(t *testing.T) {
+	desktop, _, _, presented := desktopFixture(t)
+	app := desktop.newApp()
+	t.Cleanup(app.cancel)
+	app.ssh = &nativeSSHWorkspace{repo: gitrepo.SSHWorkspace{Host: "fixture", Path: "/repo"}}
+	library := desktop.library
+	library.group = "team"
+	dialog := &nativeDialog{title: "未保存的表单"}
+	for _, scenario := range []struct {
+		name         string
+		busy         bool
+		dialog       *nativeDialog
+		checkingQuit bool
+		quitting     bool
+	}{
+		{name: "busy", busy: true},
+		{name: "dialog", dialog: dialog},
+		{name: "checking quit", checkingQuit: true},
+		{name: "quitting", quitting: true},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			library.busy, library.dialog = scenario.busy, scenario.dialog
+			desktop.checkingQuit, desktop.quitting = scenario.checkingQuit, scenario.quitting
+			before := len(*presented)
+			app.openRelatedWorktree("/linked")
+			if library.group != "team" || library.remoteLibrary || library.dialog != scenario.dialog {
+				t.Fatal("打开远端工作树修改了库窗口现有的分组或弹窗")
+			}
+			if (scenario.checkingQuit || scenario.quitting) && len(*presented) != before {
+				t.Fatal("退出期间不应显示库窗口")
+			}
+		})
+	}
+}
+
 func TestSSHStatusRates(t *testing.T) {
 	initial := sshStatusSample{gitrepo.SSHHostStats{Interface: "eth0", Received: 100, Transmitted: 200}, time.Now()}
 	sample := initial
@@ -506,7 +761,7 @@ func checkSSHWorkspaceWindow(t *testing.T, host string) {
 	}
 	tester.SetDark(false)
 	finish := func() {
-		runBackgroundUpdates(t, updates, func() bool { return window.readTask == nil })
+		runBackgroundUpdates(t, updates, func() bool { return !window.busy && window.readTask == nil })
 		tester.Frame()
 		if window.problem != "" {
 			t.Fatal(window.problem)

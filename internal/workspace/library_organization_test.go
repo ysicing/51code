@@ -46,7 +46,7 @@ func TestRemoteLibraryPersistsHostAndPath(t *testing.T) {
 
 func TestSSHCanonicalOpenConsolidatesLegacyGroupRecords(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "library.json")
-	raw := `{"groups":[{"id":"team","name":"Team"}],"sshRepositories":[{"host":"dev","path":"/srv/app/subdir","groupID":"team"},{"host":"dev","path":"/srv/app/"},{"host":"staging","path":"/srv/app"},{"host":"dev","path":"/srv/other-worktree","groupID":"team"}]}`
+	raw := `{"groups":[{"id":"team","name":"Team"},{"id":"later","name":"Later"}],"sshRepositories":[{"host":"dev","path":"/srv/app/subdir/","groupID":"team"},{"host":"dev","path":"/srv/app"},{"host":"dev","path":"/srv/app/.","groupID":"later","lastOpenedAt":9000000000000000000},{"host":"staging","path":"/srv/app"},{"host":"dev","path":"/srv/other-worktree","groupID":"team"}]}`
 	if err := os.WriteFile(file, []byte(raw), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -61,8 +61,75 @@ func TestSSHCanonicalOpenConsolidatesLegacyGroupRecords(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(library.SSHRepositories) != 3 || library.SSHRepositories[0].SSHWorkspace != canonical ||
-		library.SSHRepositories[0].GroupID != "team" || library.SSHRepositories[0].LastOpenedAt == 0 {
+		library.SSHRepositories[0].GroupID != "team" || library.SSHRepositories[0].LastOpenedAt != 9000000000000000000 {
 		t.Fatalf("旧条目未按工作树合并并保留分组: %+v", library.SSHRepositories)
+	}
+}
+
+func TestSSHOpenRootPreservesCanonicalGroupAndRejectsInvalidDestination(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "library.json")
+	raw := `{"groups":[{"id":"root","name":"Root"},{"id":"alias","name":"Alias"}],"sshRepositories":[{"host":"dev","path":"/child/..","groupID":"alias"},{"host":"dev","path":"/","groupID":"root"},{"host":"dev","path":""}]}`
+	if err := os.WriteFile(file, []byte(raw), 0600); err != nil {
+		t.Fatal(err)
+	}
+	manager, err := New(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := gitrepo.SSHWorkspace{Host: "dev", Path: "/"}
+	library, err := manager.OpenSSH(t.Context(), root, root, "")
+	if err != nil || len(library.SSHRepositories) != 3 || library.SSHRepositories[0].Path != "/child/.." ||
+		library.SSHRepositories[1].SSHWorkspace != root || library.SSHRepositories[1].GroupID != "root" || library.SSHRepositories[2].Path != "" {
+		t.Fatalf("打开根目录应保留独立旧条目: %+v, %v", library.SSHRepositories, err)
+	}
+	for _, invalid := range []gitrepo.SSHWorkspace{
+		{Host: "", Path: "/"}, {Host: "-V", Path: "/"}, {Host: "dev;extra", Path: "/"},
+		{Host: "dev", Path: ""}, {Host: "dev", Path: "relative"},
+		{Host: "dev", Path: "/x\x00"}, {Host: "dev", Path: "/x\r"}, {Host: "dev", Path: "/x\n"},
+	} {
+		if _, err := manager.OpenSSH(t.Context(), root, invalid, ""); err == nil {
+			t.Errorf("接受了无效远端地址: %+v", invalid)
+		}
+	}
+	if !reflect.DeepEqual(library, manager.Library()) {
+		t.Fatal("无效地址修改了仓库库")
+	}
+}
+
+func TestSSHOpenMergesOnlyConfirmedParentPath(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "library.json")
+	raw := `{"groups":[{"id":"team","name":"Team"}],"sshRepositories":[{"host":"dev","path":"/left","groupID":"team"},{"host":"dev","path":"/left/link/.."}]}`
+	if err := os.WriteFile(file, []byte(raw), 0600); err != nil {
+		t.Fatal(err)
+	}
+	manager, err := New(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	library, err := manager.OpenSSH(t.Context(),
+		gitrepo.SSHWorkspace{Host: "dev", Path: "/left/link/.."},
+		gitrepo.SSHWorkspace{Host: "dev", Path: "/right"}, "")
+	if err != nil || len(library.SSHRepositories) != 2 ||
+		library.SSHRepositories[0].Path != "/left" || library.SSHRepositories[0].GroupID != "team" ||
+		library.SSHRepositories[1].Path != "/right" || library.SSHRepositories[1].GroupID != "" {
+		t.Fatalf("远端已确认的物理路径应只替换原始别名: %+v, %v", library.SSHRepositories, err)
+	}
+}
+
+func TestSSHLibraryDecodeClearsMissingGroups(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "library.json")
+	raw := `{"groups":[{"id":"team","name":"Team"}],"defaultGroupID":"missing","sshRepositories":[{"host":"dev","path":"/first","groupID":"missing"},{"host":"dev","path":"/second","groupID":"team"}]}`
+	if err := os.WriteFile(file, []byte(raw), 0600); err != nil {
+		t.Fatal(err)
+	}
+	manager, err := New(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	library := manager.Library()
+	if library.DefaultGroupID != "" || len(library.SSHRepositories) != 2 ||
+		library.SSHRepositories[0].GroupID != "" || library.SSHRepositories[1].GroupID != "team" {
+		t.Fatalf("加载时应仅清理悬空分组: %+v", library)
 	}
 }
 

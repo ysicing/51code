@@ -172,7 +172,20 @@ func (repo SSHWorkspace) readWorktreeFileContent(ctx context.Context, side *File
 gitDir=$(cd -P "$(git rev-parse --absolute-git-dir)" && pwd -P) || exit 2
 commonDir=$(cd -P "$(git rev-parse --git-common-dir)" && pwd -P) || exit 2
 expected="${base%/}/"` + sshShellWord(parent) + `
-cd -P ` + sshShellWord("./"+parent) + ` 2>/dev/null || exit 3
+if ! cd -P ` + sshShellWord("./"+parent) + ` 2>/dev/null; then
+    # 遇到不支持的祖先立即退出，避免穿过链接检查后续路径。
+    remaining=` + sshShellWord(parent) + `
+    cur=.
+    while [ -n "$remaining" ]; do
+        cur="$cur/${remaining%%/*}"
+        [ ! -L "$cur" ] || exit 3
+        [ -e "$cur" ] || exit 4
+        [ -d "$cur" ] || exit 3
+        [ -x "$cur" ] || exit 2
+        case "$remaining" in */*) remaining=${remaining#*/};; *) break;; esac
+    done
+    exit 2
+fi
 [ "$PWD" = "$expected" ] || exit 3
 case "$PWD/" in "$gitDir/"*|"$commonDir/"*) exit 3;; esac
 `)
@@ -204,7 +217,14 @@ exec tar --no-recursion -cf - -- "$file"`)
 	}
 	reader := tar.NewReader(&output.content)
 	header, err := reader.Next()
-	if err != nil || strings.TrimPrefix(header.Name, "./") != path.Base(side.Path) {
+	if err != nil {
+		return nil, errors.New("远端文件预览格式无效")
+	}
+	name := strings.TrimPrefix(header.Name, "./")
+	if header.Typeflag == tar.TypeDir {
+		name = strings.TrimSuffix(name, "/")
+	}
+	if name != path.Base(side.Path) {
 		return nil, errors.New("远端文件预览格式无效")
 	}
 	side.Present = true

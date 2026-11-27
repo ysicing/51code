@@ -89,6 +89,11 @@ func (manager *Manager) decode(data []byte) error {
 	if !hasGroup(manager.library, manager.library.DefaultGroupID) {
 		manager.library.DefaultGroupID = ""
 	}
+	for index, entry := range manager.library.SSHRepositories {
+		if !hasGroup(manager.library, entry.GroupID) {
+			manager.library.SSHRepositories[index].GroupID = ""
+		}
+	}
 	return nil
 }
 

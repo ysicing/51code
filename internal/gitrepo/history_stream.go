@@ -199,6 +199,9 @@ func historyArguments(ctx context.Context, read readGitCommand, path, ref string
 		args = append(args, "-G"+regexp.QuoteMeta(stdout.query), "--regexp-ignore-case", "--diff-merges=first-parent",
 			"--no-patch", "--no-ext-diff", "--no-textconv")
 	}
+	if path != "" {
+		args = append(args, "--full-history")
+	}
 	if ref != "" {
 		args = append(args, "--end-of-options", ref)
 	} else if filter.Mode == "branch" && stdout.query != "" {
@@ -228,9 +231,6 @@ func historyArguments(ctx context.Context, read readGitCommand, path, ref string
 			args = append(args, "--exclude=refs/remotes/*")
 		}
 		args = append(args, "--all")
-	}
-	if path != "" {
-		args = append(args, "--full-history")
 	}
 	args = append(args, "--")
 	if path != "" {

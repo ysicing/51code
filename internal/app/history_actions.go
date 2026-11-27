@@ -17,9 +17,9 @@ func (app *nativeApp) historyCommitMenu(menu *ui.Menu, commit gitrepo.Commit, se
 		services.WriteClipboard(commit.Hash)
 	}
 	if menu.Item(locales.CompareCommitWithHead()).Disabled(!app.canCompareCommit()).Chosen() {
-		repository, screen := app.repository, app.screen
+		repository, ssh, screen := app.repository, app.ssh, app.screen
 		app.post(func() {
-			if !app.closed && app.repository == repository && app.screen == screen {
+			if !app.closed && app.repository == repository && app.ssh == ssh && app.screen == screen {
 				app.compareCommitWithHead(commit.Hash)
 			}
 		})

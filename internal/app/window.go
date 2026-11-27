@@ -367,13 +367,11 @@ func (app *nativeApp) open() {
 		app.refreshOnFocus()
 		app.startSSHStats()
 	})
-	if app.ssh != nil {
-		app.win.OnBlur(app.stopSSHStats)
-		app.win.OnHide(app.stopSSHStats)
-		app.win.OnMinimize(app.stopSSHStats)
-		if app.win.IsFocused() {
-			app.startSSHStats()
-		}
+	app.win.OnBlur(app.stopSSHStats)
+	app.win.OnHide(app.stopSSHStats)
+	app.win.OnMinimize(app.stopSSHStats)
+	if app.ssh != nil && app.win.IsFocused() {
+		app.startSSHStats()
 	}
 	cacheDir := ""
 	if directory, err := os.UserCacheDir(); err == nil {

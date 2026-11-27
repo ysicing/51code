@@ -261,7 +261,7 @@ func (app *nativeApp) fileDiffPanel(c *ui.Context) {
 		}
 		ui.Row(c).FillWidth().Padding(8, 12).Gap(8).AlignItems(ui.Center).Children(func() {
 			title := app.selectedFile
-			if (app.screen == "history" || app.screen == "search") && !app.historyWorking {
+			if (app.screen == "history" || app.screen == "sshHistory" || app.screen == "search") && !app.historyWorking {
 				title = app.commitFile
 				if title == "" {
 					title = shortHash(app.commitHash)

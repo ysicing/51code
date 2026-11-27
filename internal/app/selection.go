@@ -80,7 +80,7 @@ func (app *nativeApp) load(label string, kind nativeReadKind, task func(context.
 	ctx, cancel := context.WithCancel(app.ctx)
 	request := &nativeRead{label: label, kind: kind, cancel: cancel}
 	previous, done := app.readDone, make(chan struct{})
-	repository, screen := app.repository, app.screen
+	repository, ssh, screen := app.repository, app.ssh, app.screen
 	app.readTask, app.readDone, app.problem = request, done, ""
 	go func() {
 		// 等待已取消的读取退出，避免历史搜索注册与 Git 写操作重叠。
@@ -99,7 +99,7 @@ func (app *nativeApp) load(label string, kind nativeReadKind, task func(context.
 				return
 			}
 			app.readTask = nil
-			if app.repository != repository || app.screen != screen {
+			if app.repository != repository || app.ssh != ssh || app.screen != screen {
 				return
 			}
 			if apply != nil {
@@ -553,6 +553,9 @@ func (app *nativeApp) selectHistoryReference(kind, name string, all bool) {
 
 func (app *nativeApp) selectCommitFile(file string) {
 	if app.ssh != nil {
+		if app.readTask != nil && app.readTask.kind != nativeReadDiff {
+			return
+		}
 		for _, entry := range app.commitFiles {
 			if entry.Path == file {
 				app.selectSSHCommitFile(entry)

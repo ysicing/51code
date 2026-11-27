@@ -29,9 +29,12 @@ func (app *nativeApp) startSSHStats() {
 	state.stopStats = cancel
 	repo, post := state.repo, app.post
 	go func() {
-		ticker := time.NewTicker(5 * time.Second)
-		defer ticker.Stop()
+		const interval = 5 * time.Second
+		delay := interval
 		var previous sshStatusSample
+		var published gitrepo.SSHHostStats
+		var publishedDown, publishedUp string
+		hasPublished := false
 		for ctx.Err() == nil {
 			sample := sshStatusSample{SSHHostStats: repo.HostStats(ctx), at: time.Now()}
 			down, up := sample.rates(previous)
@@ -39,15 +42,28 @@ func (app *nativeApp) startSSHStats() {
 			if ctx.Err() != nil {
 				return
 			}
-			post(func() {
-				if ctx.Err() == nil && !app.closed && app.ssh == state {
-					state.stats, state.down, state.up = sample.SSHHostStats, down, up
-				}
-			})
+			if !hasPublished || sample.SSHHostStats != published || down != publishedDown || up != publishedUp {
+				post(func() {
+					if ctx.Err() == nil && !app.closed && app.ssh == state {
+						state.stats, state.down, state.up = sample.SSHHostStats, down, up
+					}
+				})
+				published, publishedDown, publishedUp, hasPublished = sample.SSHHostStats, down, up, true
+			}
+			empty := !sample.HasLoad && sample.CPUs == 0 && sample.Interface == ""
+			if !empty {
+				delay = interval
+			}
+			// 从采样结束开始计时，避免 SSH 超时后立即发起下一次请求。
+			timer := time.NewTimer(delay)
+			if empty {
+				delay = min(2*delay, 30*time.Second)
+			}
 			select {
 			case <-ctx.Done():
+				timer.Stop()
 				return
-			case <-ticker.C:
+			case <-timer.C:
 			}
 		}
 	}()

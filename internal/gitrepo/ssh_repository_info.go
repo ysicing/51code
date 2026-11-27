@@ -74,7 +74,7 @@ func (repo SSHWorkspace) Submodules(ctx context.Context) ([]Submodule, error) {
 	for index, item := range items {
 		byPath[item.Path] = index
 	}
-	command := `head=$(git rev-parse --verify HEAD) || exit 1
+	command := `head=$(git rev-parse --verify --quiet HEAD) || head=''
 dirty=$(git --no-optional-locks -c core.fsmonitor=false status --porcelain --ignore-submodules=none) || exit 1
 printf '%s\000%s\000%s\000' "$sm_path" "$head" "${dirty:+dirty}"`
 	output, err := repo.read(ctx, "submodule", "foreach", "--quiet", command)
@@ -90,10 +90,13 @@ printf '%s\000%s\000%s\000' "$sm_path" "$head" "${dirty:+dirty}"`
 	}
 	for index := 0; index < len(fields); index += 3 {
 		if pos, ok := byPath[fields[index]]; ok {
-			if err := validCommitHash(fields[index+1]); err != nil {
-				return nil, err
+			if head := fields[index+1]; head != "" {
+				if err := validCommitHash(head); err != nil {
+					return nil, err
+				}
+				items[pos].Head = head
 			}
-			items[pos].Head, items[pos].Dirty = fields[index+1], fields[index+2] != ""
+			items[pos].Dirty = fields[index+2] != ""
 		}
 	}
 	return items, nil

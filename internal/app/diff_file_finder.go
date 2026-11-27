@@ -23,7 +23,7 @@ func (app *nativeApp) openDiffFileFinder() {
 	}
 	entries := app.orderedDiffFiles()
 	working, _, _ := app.diffFileContext()
-	repository, screen := app.repository, app.screen
+	repository, ssh, screen := app.repository, app.ssh, app.screen
 	dialog := &nativeDialog{
 		title: locales.GoToChangedFile(), width: 540, height: min(340, 82+30*float32(len(entries))), closeLabel: locales.Close(),
 	}
@@ -32,7 +32,7 @@ func (app *nativeApp) openDiffFileFinder() {
 	results, selected := entries, 0
 	list := ui.ListState{Selected: &selected}
 	choose := func(index int) {
-		if app.dialog != dialog || app.screen != screen || app.repository != repository ||
+		if app.dialog != dialog || app.screen != screen || app.repository != repository || app.ssh != ssh ||
 			index < 0 || index >= len(results) {
 			return
 		}

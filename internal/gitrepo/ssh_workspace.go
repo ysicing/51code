@@ -113,7 +113,7 @@ func (repo SSHWorkspace) scriptTimeout(ctx context.Context, command string, outp
 	if !validSSHPath(repo.Path) {
 		return errors.New("请输入远端工作区的绝对路径")
 	}
-	prefix := "unset CDPATH\ncd -P " + sshShellWord(repo.Path) + " || exit 2\n" +
+	prefix := "export LC_ALL=C\nunset CDPATH\ncd -P " + sshShellWord(repo.Path) + " || exit 2\n" +
 		"root=$(git rev-parse --show-toplevel) && cd -P \"$root\" || exit 2\n"
 	return runSSHTimeout(ctx, repo.Host, prefix+command, output, timeout)
 }
@@ -149,6 +149,9 @@ func runSSH(ctx context.Context, host, script string, stdout io.Writer) error {
 }
 
 func runSSHTimeout(ctx context.Context, host, script string, stdout io.Writer, timeout time.Duration) error {
+	if strings.ContainsRune(script, 0) {
+		return errors.New("SSH 脚本含有无效字符")
+	}
 	if !ValidSSHHost(host) {
 		return errors.New("SSH 主机须为配置别名、主机名或 user@host")
 	}
@@ -185,7 +188,7 @@ func (repo SSHWorkspace) Snapshot(ctx context.Context) (Snapshot, []string, erro
 	defer cancel()
 	refs := limitedBuffer{cancel: cancel}
 	ref := ""
-	if !branch.detached {
+	if !branch.detached && branch.head != "" {
 		ref = "refs/heads/" + branch.branch
 	}
 	err = repo.script(ctx, `gitdir=$(git rev-parse --absolute-git-dir) && common=$(git rev-parse --git-common-dir) || exit 2
@@ -253,7 +256,7 @@ func (repo SSHWorkspace) HistoryPage(ctx context.Context, ref, query, file strin
 			return nil, err
 		}
 	}
-	if ref != "" && ref != "HEAD" && validCommitHash(ref) != nil && !strings.HasPrefix(ref, "refs/") {
+	if strings.ContainsAny(ref, "\x00\r\n") || ref != "" && ref != "HEAD" && validCommitHash(ref) != nil && !strings.HasPrefix(ref, "refs/") {
 		return nil, errors.New("无效的分支引用")
 	}
 	process, cancel := context.WithCancel(ctx)
@@ -319,19 +322,40 @@ func (repo SSHWorkspace) FileDiff(ctx context.Context, file File, staged bool, c
 			return Diff{}, err
 		}
 	}
-	args := []string{"diff"}
-	untracked := commit == "" && file.Working == "?" && !staged
 	if commit != "" {
 		if err := validCommitHash(commit); err != nil {
 			return Diff{}, err
 		}
-		args = []string{"show", "--format=", "--root", "--diff-merges=first-parent", "--no-show-signature", "--no-notes", commit}
-	} else if staged {
+		selected := CommitFile{Path: file.Path}
+		args := []string{"-c", "core.quotePath=true", "show", "--no-show-signature", "--no-notes", "--format=", "--root",
+			"--diff-merges=first-parent", "--patch", "--no-color", "--src-prefix=a/", "--dst-prefix=b/", "--no-relative",
+			"--submodule=short", "--output-indicator-new=+", "--output-indicator-old=-", "--output-indicator-context= ",
+			"--no-ext-diff", "--no-textconv", "--find-renames", commit, "--", file.Path}
+		if oldPath != file.Path {
+			selected.OriginalPath = oldPath
+			args = append(args, oldPath)
+		}
+		diff, err := selectedPatchPreview(ctx, repo.gitPreview, args, selected)
+		if err != nil {
+			return Diff{}, err
+		}
+		parent, err := repo.read(ctx, "rev-parse", "--verify", "--quiet", commit+"^1")
+		if err != nil && !sshExitCode(err, 1) {
+			return diff, ctx.Err()
+		}
+		return repo.diffWithPreviews(ctx, diff, oldPath, strings.TrimSpace(parent), file.Path, commit)
+	}
+	args := []string{"diff"}
+	if staged {
 		args = append(args, "--cached")
-	} else if untracked {
+	} else if file.Working == "?" {
 		return repo.untrackedDiff(ctx, file.Path)
 	}
-	args = append(args, "--no-ext-diff", "--no-textconv", "--no-color", "--")
+	args = append(args, "--no-ext-diff", "--no-textconv", "--no-color")
+	if oldPath != file.Path {
+		args = append(args, "--find-renames")
+	}
+	args = append(args, "--")
 	if oldPath != file.Path {
 		args = append(args, oldPath)
 	}
@@ -341,18 +365,10 @@ func (repo SSHWorkspace) FileDiff(ctx context.Context, file File, staged bool, c
 	}
 	diff := sshPatch(raw)
 	diff.Truncated = truncated
-	switch {
-	case commit != "":
-		parent, err := repo.read(ctx, "rev-parse", "--verify", "--quiet", commit+"^1")
-		if err != nil && !sshExitCode(err, 1) {
-			return diff, ctx.Err()
-		}
-		return repo.diffWithPreviews(ctx, diff, oldPath, strings.TrimSpace(parent), file.Path, commit)
-	case staged:
+	if staged {
 		return repo.diffWithPreviews(ctx, diff, oldPath, "HEAD", file.Path, "INDEX")
-	default:
-		return repo.diffWithPreviews(ctx, diff, oldPath, "INDEX", file.Path, "WORKTREE")
 	}
+	return repo.diffWithPreviews(ctx, diff, oldPath, "INDEX", file.Path, "WORKTREE")
 }
 
 func (repo SSHWorkspace) untrackedDiff(ctx context.Context, file string) (Diff, error) {

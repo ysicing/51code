@@ -12,6 +12,7 @@ import (
 	"reflect"
 	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -117,9 +118,12 @@ func TestSSHWorkspaceWriteOperations(t *testing.T) {
 		t.Fatal("拉取覆盖了忽略文件")
 	}
 	must(os.Remove(filepath.Join(dir, "extra")))
+	git(t, dir, "switch", "-c", "feat/a=1")
+	git(t, dir, "branch", "--set-upstream-to=origin/main")
+	git(t, dir, "config", "branch.feat/a=1.mergeOptions", "--invalid-merge-option")
 	must(repo.SyncBranch(ctx, snapshot(), false))
-	if snapshot().Head != git(t, writer, "rev-parse", "HEAD") {
-		t.Fatal("远端工作树未快进")
+	if got := snapshot(); got.Branch != "feat/a=1" || got.Head == main.Head || got.Head != git(t, writer, "rev-parse", "HEAD") {
+		t.Fatalf("带等号的远端分支未快进: %+v", got)
 	}
 	git(t, writer, "commit", "--allow-empty", "-m", "upstream")
 	git(t, writer, "push")
@@ -127,6 +131,122 @@ func TestSSHWorkspaceWriteOperations(t *testing.T) {
 	diverged := snapshot()
 	if repo.SyncBranch(ctx, diverged, false) == nil || repo.SyncBranch(ctx, diverged, true) == nil || snapshot().Head != diverged.Head {
 		t.Fatal("分叉不应合并或强制推送")
+	}
+}
+
+func TestSSHWorkspaceBatchesLargeFileLists(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("本地 SSH 替身需要 POSIX shell")
+	}
+	_, dir := fixture(t)
+	write(t, dir, "base", "base\n")
+	git(t, dir, "add", "base")
+	git(t, dir, "commit", "-m", "base")
+	head := git(t, dir, "rev-parse", "HEAD")
+	var paths []string
+	for index := range 200 {
+		name := strconv.Itoa(index) + "-" + strings.Repeat("long-path-'", 17)
+		write(t, dir, name, "large\n")
+		paths = append(paths, name)
+	}
+	write(t, dir, "small", "x")
+	git(t, dir, "add", "small")
+	git(t, dir, "update-index", "--add", "--cacheinfo", "160000,"+head+",vendor/module")
+	gitPath, err := exec.LookPath("git")
+	if err != nil {
+		t.Fatal(err)
+	}
+	bin := t.TempDir()
+	write(t, bin, "ssh", "#!/bin/sh\nexec sh -s\n")
+	write(t, bin, "git", `#!/bin/sh
+case " $* " in
+    *' ls-tree '*)
+        case " $* " in *' ls-tree -l -z '*) ;; *) exit 98;; esac
+        printf 'ls-tree\n' >> "$SSH_TEST_BATCH_LOG"
+        ;;
+    *' add '*) printf 'add\n' >> "$SSH_TEST_BATCH_LOG";;
+    *' restore --staged '*) printf 'restore\n' >> "$SSH_TEST_BATCH_LOG";;
+esac
+exec "$SSH_TEST_GIT" "$@"
+`)
+	for _, name := range []string{"ssh", "git"} {
+		if err := os.Chmod(filepath.Join(bin, name), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	log := filepath.Join(bin, "batches.log")
+	t.Setenv("SSH_TEST_GIT", gitPath)
+	t.Setenv("SSH_TEST_BATCH_LOG", log)
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	ctx := t.Context()
+	repo := SSHWorkspace{Host: "fixture", Path: dir}
+	snapshot, _, err := repo.Snapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.StageFiles(ctx, snapshot, paths, false); err != nil {
+		t.Fatal(err)
+	}
+	prepared, err := repo.PrepareCommit(ctx, snapshot, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	large, err := repo.LargeFiles(ctx, nil, prepared.Token, 2)
+	if err != nil || len(large) != len(paths) {
+		t.Fatalf("应跨批次返回大 blob 并跳过小文件和 gitlink，条目数 %d: %v", len(large), err)
+	}
+	slices.Sort(paths)
+	slices.SortFunc(large, func(a, b FileInspection) int { return strings.Compare(a.Path, b.Path) })
+	for index, file := range large {
+		if file.Path != paths[index] || file.Size != 6 {
+			t.Fatalf("文件大小或路径错误: %+v，预期 %s", file, paths[index])
+		}
+	}
+	if err := repo.StageFiles(ctx, snapshot, paths, true); err != nil {
+		t.Fatal(err)
+	}
+	if got := git(t, dir, "diff", "--cached", "--name-only"); got != "small\nvendor/module" {
+		t.Fatalf("取消暂存后索引内容错误: %q", got)
+	}
+	commands, err := os.ReadFile(log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(string(commands), "add\n") != 1 || strings.Count(string(commands), "restore\n") != 1 ||
+		strings.Count(string(commands), "ls-tree\n") < 2 {
+		t.Fatalf("应一次更新索引并分批检查大小: %s", commands)
+	}
+	write(t, dir, ".gitattributes", strconv.Quote(paths[len(paths)-1])+" filter=unavailable\n")
+	git(t, dir, "config", "filter.unavailable.clean", "false")
+	git(t, dir, "config", "filter.unavailable.required", "true")
+	if err := repo.StageFiles(ctx, snapshot, paths, false); err == nil {
+		t.Fatal("过滤器失败时应拒绝暂存")
+	}
+	if got := git(t, dir, "diff", "--cached", "--name-only"); got != "small\nvendor/module" {
+		t.Fatalf("批量暂存失败后索引应保持原样: %q", got)
+	}
+}
+
+func TestSSHUnbornSnapshotKeepsNestedRefsOutOfUpstream(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("本地 SSH 替身需要 POSIX shell")
+	}
+	_, dir := fixture(t)
+	git(t, dir, "commit", "--allow-empty", "-m", "base")
+	git(t, dir, "branch", "--track", "topic/sub", "main")
+	git(t, dir, "symbolic-ref", "HEAD", "refs/heads/topic")
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "ssh"), []byte("#!/bin/sh\nexec sh -s\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	repo := SSHWorkspace{Host: "fixture", Path: dir}
+	snapshot, refs, err := repo.Snapshot(t.Context())
+	if err != nil || !snapshot.Unborn || snapshot.Branch != "topic" || snapshot.Upstream != "" ||
+		snapshot.SSHRemote != "" || snapshot.SSHRemoteRef != "" || !slices.Equal(refs, []string{"refs/heads/main", "refs/heads/topic/sub"}) {
+		t.Fatalf("未出生分支混入了子命名空间的上游: %+v，引用 %v: %v", snapshot, refs, err)
 	}
 }
 
@@ -174,6 +294,75 @@ fi
 	git(t, dir, "add", "concurrent.txt")
 	if got := git(t, dir, "diff", "--cached", "--name-only"); got != "concurrent.txt" {
 		t.Fatalf("提交后应释放索引锁: %s", got)
+	}
+}
+
+func TestSSHCommitRejectsHookTreeChangesAndPreservesHooks(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("本地 SSH 替身需要 POSIX shell")
+	}
+	_, dir := fixture(t)
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "ssh"), []byte("#!/bin/sh\nexec sh -s\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	git(t, dir, "commit", "--allow-empty", "-m", "base")
+	git(t, dir, "config", "core.hooksPath", ".hooks")
+	if err := os.Mkdir(filepath.Join(dir, ".hooks"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	for name, body := range map[string]string{
+		"pre-commit":            "printf 'normalized\\n' > note.txt && git add -- note.txt",
+		"commit-msg":            "printf '\\nchecked message\\n' >> \"$1\"",
+		"reference-transaction": "cat >> .git/hook-refs\nprintf '%s\\n' \"$1\" >> .git/hook-events",
+		"post-commit":           "touch .git/hook-post",
+	} {
+		if err := os.WriteFile(filepath.Join(dir, ".hooks", name), []byte("#!/bin/sh\n"+body+"\n"), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(t, dir, "note.txt", "normalized   \n")
+	git(t, dir, "add", "note.txt")
+	repo := SSHWorkspace{Host: "fixture", Path: dir}
+	ctx := t.Context()
+	expected, _, err := repo.Snapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	review, err := repo.PrepareCommit(ctx, expected, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.CommitStaged(ctx, expected, "format note", review.Token); err == nil || !strings.Contains(err.Error(), "提交钩子修改") {
+		t.Fatalf("应在写入引用前拒绝格式化后的不同提交树: %v", err)
+	}
+	if git(t, dir, "rev-parse", "HEAD") != expected.Head || git(t, dir, "write-tree") != review.Token {
+		t.Fatal("拒绝提交后应保留分支和原索引")
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".git", "hook-post")); !os.IsNotExist(err) {
+		t.Fatalf("拒绝提交后不应调用 post-commit: %v", err)
+	}
+	git(t, dir, "add", "note.txt")
+	review, err = repo.PrepareCommit(ctx, expected, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.CommitStaged(ctx, expected, "format note", review.Token); err != nil {
+		t.Fatal(err)
+	}
+	if git(t, dir, "rev-parse", "HEAD^{tree}") != review.Token ||
+		!strings.Contains(git(t, dir, "log", "-1", "--format=%B"), "checked message") {
+		t.Fatal("已核对的提交应使用原钩子修改过的提交说明")
+	}
+	events, err := os.ReadFile(filepath.Join(dir, ".git", "hook-events"))
+	if err != nil || !strings.Contains(string(events), "prepared\ncommitted\n") {
+		t.Fatalf("原引用事务钩子应收到准备和提交通知: %q, %v", events, err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".git", "hook-post")); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -244,8 +433,10 @@ func TestSSHWorkspaceBrowseAndInsightsMatchLocal(t *testing.T) {
 	} else if blame, err := remote.BlameLine(ctx, content, 1); err != nil || blame.Hash != first {
 		t.Fatalf("远程行归属: %+v %v", blame, err)
 	}
-	if history, err := remote.FileHistory(ctx, "WORKTREE", file); err != nil || len(history) != 1 || history[0].Hash != first {
-		t.Fatalf("远程文件历史: %+v %v", history, err)
+	for _, revision := range []string{"WORKTREE", first} {
+		if history, err := remote.FileHistory(ctx, revision, file); err != nil || len(history) != 1 || history[0].Hash != first {
+			t.Fatalf("远程文件历史 %s: %+v %v", revision, history, err)
+		}
 	}
 	for _, name := range []string{"ignored.txt", "../outside", ".git/config"} {
 		if _, err := remote.BrowseFileContent(ctx, name, "WORKTREE"); err == nil {
@@ -267,6 +458,9 @@ func TestSSHWorkspaceBrowseAndInsightsMatchLocal(t *testing.T) {
 	}
 	if err := os.Rename(filepath.Join(dir, "sub"), filepath.Join(dir, "moved")); err != nil {
 		t.Fatal(err)
+	}
+	if content, err := remote.BrowseFileContent(ctx, file, "WORKTREE"); err != nil || content.Present || content.Unsupported {
+		t.Fatalf("父目录被删除时应仅标记文件不存在: %+v %v", content, err)
 	}
 	if err := os.Symlink(outside, filepath.Join(dir, "sub")); err != nil {
 		t.Fatal(err)
@@ -338,6 +532,26 @@ func TestSSHWorkspaceRejectsInvalidDestination(t *testing.T) {
 	}
 }
 
+func TestSSHWorkspaceRejectsInvalidGitArgumentsBeforeConnecting(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	ctx := t.Context()
+	repo := SSHWorkspace{Host: "fixture", Path: "/repo"}
+	for _, ref := range []string{"refs/heads/x\x00", "refs/heads/x\r", "refs/heads/x\n"} {
+		if _, err := repo.HistoryPage(ctx, ref, "", "", HistoryFilter{}, 0, 1); err == nil || errors.Is(err, exec.ErrNotFound) {
+			t.Errorf("未在连接前拒绝历史引用 %q: %v", ref, err)
+		}
+		if _, err := repo.Insights(ctx, ref, time.Time{}, time.Time{}); err == nil || errors.Is(err, exec.ErrNotFound) {
+			t.Errorf("未在连接前拒绝洞察引用 %q: %v", ref, err)
+		}
+	}
+	if _, err := repo.PrepareCommit(ctx, Snapshot{Head: "invalid-head"}, false); err == nil || errors.Is(err, exec.ErrNotFound) {
+		t.Errorf("未在连接前拒绝无效 HEAD: %v", err)
+	}
+	if _, err := runSSHScript(ctx, repo.Host, "printf '\x00'"); err == nil || errors.Is(err, exec.ErrNotFound) {
+		t.Errorf("未在连接前拒绝含 NUL 的脚本: %v", err)
+	}
+}
+
 func TestSSHWorkspaceReadsRemoteGitViews(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("本地替身需要 POSIX shell")
@@ -395,10 +609,10 @@ exec sh -c "$3"
 		}
 	}
 	name := "it's a $file\nwith newline"
-	write(t, path, name, "new file\n")
+	write(t, path, name, "a new file\n")
 	diff, err := repo.FileDiff(ctx, File{Path: name, Working: "?"}, false, "")
-	if err != nil || !strings.Contains(diff.Text, "+new file") || diff.Old == nil || diff.Old.Present ||
-		diff.New == nil || diff.New.Text != "new file\n" {
+	if err != nil || !strings.Contains(diff.Text, "+a new file") || diff.Old == nil || diff.Old.Present ||
+		diff.New == nil || diff.New.Text != "a new file\n" {
 		t.Fatalf("untracked file: %q, %v", diff.Text, err)
 	}
 	paths, err := repo.WorktreeSearchPaths(ctx)
@@ -408,14 +622,17 @@ exec sh -c "$3"
 	var matches []WorktreeSearchMatch
 	publish := func(batch []WorktreeSearchMatch) { matches = append(matches, batch...) }
 	write(t, path, "legacy-encoding.txt", "new file\xff\n")
+	git(t, path, "config", "submodule.recurse", "true")
+	git(t, path, "config", "grep.column", "true")
 	if limited, err := repo.SearchWorktree(ctx, "NEW FILE", publish); limited || err != nil ||
-		len(matches) != 1 || matches[0].Path != name || matches[0].Line != 1 {
+		!slices.Equal(matches, []WorktreeSearchMatch{{Path: name, Line: 1, Column: 2, Text: "a new file"}}) {
 		t.Fatalf("worktree grep: %+v, limited %v: %v", matches, limited, err)
 	}
 	matches = nil
 	if limited, err := repo.SearchWorktree(ctx, "absent", publish); limited || err != nil || len(matches) != 0 {
 		t.Fatalf("worktree grep without matches: %+v, limited %v: %v", matches, limited, err)
 	}
+	git(t, path, "config", "--unset", "submodule.recurse")
 	git(t, path, "add", "--", name)
 	if _, err := repo.FileDiff(ctx, File{Path: name, Working: "?"}, false, ""); err == nil {
 		t.Fatal("已暂存的文件仍使用过期的未跟踪状态展示")
@@ -430,6 +647,10 @@ exec sh -c "$3"
 	diff, err = repo.ComparisonDiff(ctx, history[0].Hash, target, CommitFile{Path: "demo.txt", Status: "D"})
 	if err != nil || !strings.Contains(diff.Text, "-base") || strings.Contains(diff.Text, "nested content") {
 		t.Fatalf("文件被同名目录替换，选中文件的补丁错误: %q, %v", diff.Text, err)
+	}
+	diff, err = repo.FileDiff(ctx, File{Path: "demo.txt"}, false, target)
+	if err != nil || !strings.Contains(diff.Text, "-base") || strings.Contains(diff.Text, "nested content") {
+		t.Fatalf("提交文件差异混入了同名目录的补丁: %q, %v", diff.Text, err)
 	}
 	repo.Path = filepath.Join(path, "missing")
 	if _, _, err := repo.Snapshot(ctx); err == nil {
@@ -505,6 +726,15 @@ func TestSSHWorkspaceRepositoryInformation(t *testing.T) {
 	if err != nil || len(modules) != 1 || modules[0].Path != "vendor/child's copy" || !modules[0].Dirty ||
 		modules[0].Head == "" || modules[0].Head != modules[0].Target {
 		t.Fatalf("submodules: %+v, %v", modules, err)
+	}
+	if content, err := repo.BrowseFileContent(t.Context(), "vendor/child's copy", "WORKTREE"); err != nil || !content.Present || !content.Unsupported {
+		t.Fatalf("子模块工作区目录应是存在但不支持预览的条目: %+v, %v", content, err)
+	}
+	git(t, filepath.Join(root, "vendor/child's copy"), "symbolic-ref", "HEAD", "refs/heads/unborn")
+	unborn, err := repo.Submodules(t.Context())
+	if err != nil || len(unborn) != 1 || unborn[0].Path != modules[0].Path || unborn[0].Target != modules[0].Target ||
+		unborn[0].Head != "" || !unborn[0].Dirty {
+		t.Fatalf("应保留未出生子模块及其脏状态: %+v, %v", unborn, err)
 	}
 	stashes, err := repo.Stashes(t.Context())
 	if err != nil || len(stashes) != 1 {

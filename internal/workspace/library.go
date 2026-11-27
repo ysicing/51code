@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -88,14 +89,30 @@ func (manager *Manager) RememberSSH(ctx context.Context, repo gitrepo.SSHWorkspa
 	return manager.OpenSSH(ctx, repo, repo, groupID)
 }
 
+func sshAliasPath(name string) string {
+	// 远端的「链接/..」按物理路径解析，不能据此推断另一条记录也指向同一个仓库。
+	if slices.Contains(strings.Split(name, "/"), "..") {
+		return name
+	}
+	return path.Clean(name)
+}
+
 func (manager *Manager) OpenSSH(ctx context.Context, requested, canonical gitrepo.SSHWorkspace, groupID string) (Library, error) {
+	if !gitrepo.ValidSSHHost(canonical.Host) {
+		return Library{}, errors.New("SSH 主机须为配置别名、主机名或 user@host")
+	}
+	if !strings.HasPrefix(canonical.Path, "/") || strings.ContainsAny(canonical.Path, "\x00\r\n") {
+		return Library{}, errors.New("请输入远端工作区的绝对路径")
+	}
 	return manager.update(func(next *Library) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
+		canonicalPath, requestedPath := sshAliasPath(canonical.Path), sshAliasPath(requested.Path)
 		alias := func(entry SSHRepository) bool {
-			return entry.Host == canonical.Host && (entry.SSHWorkspace == requested ||
-				strings.TrimRight(entry.Path, "/") == strings.TrimRight(canonical.Path, "/"))
+			entryPath := sshAliasPath(entry.Path)
+			return entry.Host == canonical.Host && (entryPath == canonicalPath ||
+				entry.Host == requested.Host && entryPath == requestedPath)
 		}
 		index := next.SSHIndex(canonical)
 		if index < 0 {
@@ -110,7 +127,17 @@ func (manager *Manager) OpenSSH(ctx context.Context, requested, canonical gitrep
 			return nil
 		}
 		entry.GroupID = next.SSHRepositories[index].GroupID
-		entry.LastOpenedAt = max(entry.LastOpenedAt, next.SSHRepositories[index].LastOpenedAt)
+		if !hasGroup(*next, entry.GroupID) {
+			entry.GroupID = ""
+		}
+		for current, candidate := range next.SSHRepositories {
+			if current == index || alias(candidate) {
+				entry.LastOpenedAt = max(entry.LastOpenedAt, candidate.LastOpenedAt)
+				if entry.GroupID == "" && candidate.GroupID != "" && hasGroup(*next, candidate.GroupID) {
+					entry.GroupID = candidate.GroupID
+				}
+			}
+		}
 		entries := next.SSHRepositories[:0]
 		for current, candidate := range next.SSHRepositories {
 			if current == index {

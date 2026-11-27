@@ -12,7 +12,7 @@ import (
 )
 
 func (repo SSHWorkspace) Insights(ctx context.Context, ref string, from, until time.Time) (RepositoryInsights, error) {
-	if ref != "HEAD" && !strings.HasPrefix(ref, "refs/heads/") {
+	if strings.ContainsAny(ref, "\x00\r\n") || ref != "HEAD" && !strings.HasPrefix(ref, "refs/heads/") {
 		return RepositoryInsights{}, errors.New("无效的分支引用")
 	}
 	raw, err := repo.read(ctx, "rev-parse", "--is-shallow-repository")

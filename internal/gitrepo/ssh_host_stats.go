@@ -41,9 +41,10 @@ else
     sysctl -n vm.loadavg 2>/dev/null | awk '$1=="{" {print "load", $2, $3, $4}'
     iface=$(route -n get default 2>/dev/null | awk '$1=="interface:" {print $2; exit}')
     if [ -n "$iface" ]; then
+        # 隧道链路行可能省略 Address，字节计数按距行尾的列数定位。
         netstat -ibn -I "$iface" 2>/dev/null | awk -v dev="$iface" '
-            NR==1 {for(i=1;i<=NF;i++) {if($i=="Ibytes") rx=i; if($i=="Obytes") tx=i}}
-            $1==dev && $3~/^<Link/ && rx && tx {print "net", dev, $rx, $tx; exit}'
+            NR==1 {for(i=1;i<=NF;i++) {if($i=="Ibytes") rx=NF-i; if($i=="Obytes") tx=NF-i}}
+            $1==dev && $3~/^<Link/ && rx!="" && tx!="" && NF>rx && NF>tx {print "net", dev, $(NF-rx), $(NF-tx); exit}'
     fi
 fi
 printf 'cpus %s\n' "$(getconf _NPROCESSORS_ONLN 2>/dev/null)"

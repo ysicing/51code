@@ -43,7 +43,8 @@ func (repo SSHWorkspace) SearchWorktree(ctx context.Context, query string, publi
 	reader, writer := io.Pipe()
 	done := make(chan error, 1)
 	go func() {
-		err := repo.gitTo(process, "", writer, "-c", "grep.threads=1", "grep", "--no-color", "--no-textconv", "--untracked",
+		err := repo.gitTo(process, "", writer, "-c", "grep.threads=1", "-c", "submodule.recurse=false", "-c", "grep.column=false",
+			"grep", "--no-color", "--no-textconv", "--untracked",
 			"--exclude-standard", "-I", "-i", "-F", "-n", "-z", "-e", query, "--")
 		writer.CloseWithError(err)
 		done <- err

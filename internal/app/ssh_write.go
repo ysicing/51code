@@ -62,9 +62,11 @@ func (app *nativeApp) runSSHWriteTask(label string, cancelable bool, write func(
 				state.snapshot.SSHWritable = false
 				return
 			}
+			previous, previousRefs := state.snapshot, state.refs
 			state.update(snapshot, refs)
 			app.fileMetrics = nativeFileMetrics{}
 			clear(app.selectedFiles)
+			app.invalidateSSHCaches(previous, snapshot, previousRefs, refs, false)
 			app.refreshSSHView()
 		}, errors.Join(sshWriteError(writeErr, canceled), refreshErr)
 	})
@@ -169,7 +171,7 @@ func (app *nativeApp) reviewSSHFiles(files []gitrepo.FileInspection, threshold i
 func (app *nativeApp) sshSwitchDialog(name string) {
 	state := app.ssh
 	if state == nil || !state.snapshot.SSHWritable || app.busy || app.closed || app.dialog != nil ||
-		name == state.snapshot.Branch || !slices.Contains(state.refs, "refs/heads/"+name) {
+		!state.snapshot.Detached && name == state.snapshot.Branch || !slices.Contains(state.refs, "refs/heads/"+name) {
 		return
 	}
 	snapshot := state.snapshot
