@@ -76,8 +76,13 @@ func (app *nativeApp) fileSection(staged bool) *nativeFileSection {
 		section = &app.fileMetrics.sections[1]
 	}
 	key := nativeFileSectionKey{repository: app.repository, staged: staged}
+	var files []gitrepo.File
 	if app.repository != nil {
-		files := app.repository.snapshot.Files
+		files = app.repository.snapshot.Files
+	} else if app.ssh != nil {
+		files = app.ssh.snapshot.Files
+	}
+	if app.repository != nil || app.ssh != nil {
 		key.files, key.count = firstFile(files), len(files)
 		key.filtered = app.filesFiltered()
 		if key.filtered {
@@ -88,11 +93,8 @@ func (app *nativeApp) fileSection(staged bool) *nativeFileSection {
 		return section
 	}
 	*section = nativeFileSection{valid: true, key: key}
-	if app.repository == nil {
-		return section
-	}
 	query := strings.ToLower(key.query)
-	for _, file := range app.repository.snapshot.Files {
+	for _, file := range files {
 		if staged && !isStaged(file) || !staged && !isWorking(file) {
 			continue
 		}

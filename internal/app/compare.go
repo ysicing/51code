@@ -39,14 +39,34 @@ func (state *nativeComparison) restoreSelection() {
 	}
 }
 
+type comparisonReader struct {
+	compare func(context.Context, string, string, bool) (gitrepo.Comparison, error)
+	diff    func(context.Context, string, string, gitrepo.CommitFile) (gitrepo.Diff, error)
+}
+
+func (app *nativeApp) comparisonReader() comparisonReader {
+	if app.ssh != nil {
+		return comparisonReader{app.ssh.repo.Compare, app.ssh.repo.ComparisonDiff}
+	}
+	path, service := app.repository.snapshot.Path, app.service
+	return comparisonReader{
+		func(ctx context.Context, base, target string, mergeBase bool) (gitrepo.Comparison, error) {
+			return service.Compare(ctx, path, base, target, mergeBase)
+		},
+		func(ctx context.Context, from, target string, file gitrepo.CommitFile) (gitrepo.Diff, error) {
+			return service.CompareFileDiff(ctx, path, from, target, file.Path)
+		},
+	}
+}
+
 func (app *nativeApp) startComparison() {
-	if app.repository == nil || app.screen != "compare" || app.comparison == nil || app.busy || app.dialog != nil {
+	if app.repository == nil && app.ssh == nil || app.screen != "compare" || app.comparison == nil || app.busy || app.dialog != nil {
 		return
 	}
 	state := app.comparison
-	path, base, target, mergeBase := app.repository.snapshot.Path, state.base, state.target, state.mergeBase
+	reader, base, target, mergeBase := app.comparisonReader(), state.base, state.target, state.mergeBase
 	app.load(locales.ReadingComparison(), nativeReadCommit, func(ctx context.Context) (func(), error) {
-		result, err := app.service.Compare(ctx, path, base, target, mergeBase)
+		result, err := reader.compare(ctx, base, target, mergeBase)
 		if err != nil {
 			return nil, err
 		}
@@ -55,7 +75,7 @@ func (app *nativeApp) startComparison() {
 		var diffErr error
 		if len(result.Files) > 0 {
 			file = result.Files[0].Path
-			diff, diffErr = app.service.CompareFileDiff(ctx, path, result.From, result.Target, file)
+			diff, diffErr = reader.diff(ctx, result.From, result.Target, result.Files[0])
 		}
 		if diffErr != nil {
 			return nil, diffErr
@@ -74,16 +94,26 @@ func (app *nativeApp) startComparison() {
 
 func (app *nativeApp) selectComparisonFile(file string) {
 	state := app.comparison
-	if app.repository == nil || state == nil || state.result == nil ||
+	if app.repository == nil && app.ssh == nil || state == nil || state.result == nil ||
 		app.readTask != nil && app.readTask.kind != nativeReadDiff {
 		return
 	}
 	if file == state.file && app.readTask == nil && app.problem == "" {
 		return
 	}
-	path, from, target := app.repository.snapshot.Path, state.result.From, state.result.Target
+	reader, from, target := app.comparisonReader(), state.result.From, state.result.Target
+	var selected gitrepo.CommitFile
+	for _, entry := range state.result.Files {
+		if entry.Path == file {
+			selected = entry
+			break
+		}
+	}
+	if selected.Path == "" {
+		return
+	}
 	app.load(locales.ReadingFileDiff(), nativeReadDiff, func(ctx context.Context) (func(), error) {
-		diff, err := app.service.CompareFileDiff(ctx, path, from, target, file)
+		diff, err := reader.diff(ctx, from, target, selected)
 		if err != nil {
 			return state.restoreSelection, err
 		}
@@ -103,6 +133,9 @@ func (app *nativeApp) selectComparisonFile(file string) {
 
 // comparisonReferences 返回比较页候选引用，按引用快照缓存在比较状态上，结果只读。
 func (app *nativeApp) comparisonReferences() []string {
+	if app.ssh != nil {
+		return app.ssh.comparisonRefs
+	}
 	cache, source := &app.comparison.references, app.refSource()
 	if cache.valid && cache.source == source {
 		return cache.references

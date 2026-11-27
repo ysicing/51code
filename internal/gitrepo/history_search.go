@@ -268,7 +268,7 @@ func (repo *Repository) CommitFileDiff(ctx context.Context, hash string, path st
 	if selected.OriginalPath != "" {
 		args = append(args, selected.OriginalPath)
 	}
-	diff, err := repo.selectedPatchPreview(ctx, args, *selected)
+	diff, err := selectedPatchPreview(ctx, repo.gitPreview, args, *selected)
 	if err != nil {
 		return Diff{}, err
 	}
@@ -277,8 +277,8 @@ func (repo *Repository) CommitFileDiff(ctx context.Context, hash string, path st
 
 // selectedPatchPreview 读取并筛选单个文件的补丁；输出超过上限时截断展示。截断后若已读部分
 // 中找不到该文件的补丁头，返回空的截断预览，而不是报告“无法定位”。
-func (repo *Repository) selectedPatchPreview(ctx context.Context, args []string, file CommitFile) (Diff, error) {
-	output, truncated, err := repo.gitPreview(ctx, args...)
+func selectedPatchPreview(ctx context.Context, preview func(context.Context, ...string) (string, bool, error), args []string, file CommitFile) (Diff, error) {
+	output, truncated, err := preview(ctx, args...)
 	if err != nil {
 		return Diff{}, err
 	}

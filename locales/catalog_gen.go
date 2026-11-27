@@ -36,6 +36,156 @@ type Messages struct{ locale string }
 // source language.
 func In(locale string) Messages { return Messages{locale} }
 
+// ConnectSshRepository says "连接到主机"
+// in the language the app shows.
+func ConnectSshRepository() string { return In(i18n.Locale()).ConnectSshRepository() }
+
+// ConnectSshRepository says "连接到主机"
+// in the language of msgs.
+func (msgs Messages) ConnectSshRepository() string {
+	return Catalog.Format(msgs.locale, "connectSshRepository", nil)
+}
+
+// SearchSshRepositories says "搜索主机或路径"
+// in the language the app shows.
+func SearchSshRepositories() string { return In(i18n.Locale()).SearchSshRepositories() }
+
+// SearchSshRepositories says "搜索主机或路径"
+// in the language of msgs.
+func (msgs Messages) SearchSshRepositories() string {
+	return Catalog.Format(msgs.locale, "searchSshRepositories", nil)
+}
+
+// NoSshRepositories says "暂无远程仓库"
+// in the language the app shows.
+func NoSshRepositories() string { return In(i18n.Locale()).NoSshRepositories() }
+
+// NoSshRepositories says "暂无远程仓库"
+// in the language of msgs.
+func (msgs Messages) NoSshRepositories() string {
+	return Catalog.Format(msgs.locale, "noSshRepositories", nil)
+}
+
+// SshRepositoryCount says "{count, plural, other {# 个远程仓库}}"
+// in the language the app shows.
+func SshRepositoryCount(count int) string { return In(i18n.Locale()).SshRepositoryCount(count) }
+
+// SshRepositoryCount says "{count, plural, other {# 个远程仓库}}"
+// in the language of msgs.
+func (msgs Messages) SshRepositoryCount(count int) string {
+	return Catalog.Format(msgs.locale, "sshRepositoryCount", map[string]any{"count": count})
+}
+
+// SshReadOnlyWorkspace says "SSH 工作区（只读）"
+// in the language the app shows.
+func SshReadOnlyWorkspace() string { return In(i18n.Locale()).SshReadOnlyWorkspace() }
+
+// SshReadOnlyWorkspace says "SSH 工作区（只读）"
+// in the language of msgs.
+func (msgs Messages) SshReadOnlyWorkspace() string {
+	return Catalog.Format(msgs.locale, "sshReadOnlyWorkspace", nil)
+}
+
+// SshHost says "选择已配置的 SSH 主机或输入 user@host"
+// in the language the app shows.
+func SshHost() string { return In(i18n.Locale()).SshHost() }
+
+// SshHost says "选择已配置的 SSH 主机或输入 user@host"
+// in the language of msgs.
+func (msgs Messages) SshHost() string {
+	return Catalog.Format(msgs.locale, "sshHost", nil)
+}
+
+// SshWorkspacePath says "远端工作区绝对路径"
+// in the language the app shows.
+func SshWorkspacePath() string { return In(i18n.Locale()).SshWorkspacePath() }
+
+// SshWorkspacePath says "远端工作区绝对路径"
+// in the language of msgs.
+func (msgs Messages) SshWorkspacePath() string {
+	return Catalog.Format(msgs.locale, "sshWorkspacePath", nil)
+}
+
+// NoSshHosts says "没有匹配的 SSH 主机"
+// in the language the app shows.
+func NoSshHosts() string { return In(i18n.Locale()).NoSshHosts() }
+
+// NoSshHosts says "没有匹配的 SSH 主机"
+// in the language of msgs.
+func (msgs Messages) NoSshHosts() string {
+	return Catalog.Format(msgs.locale, "noSshHosts", nil)
+}
+
+// UseSshHost says "连接到 {host}"
+// in the language the app shows.
+func UseSshHost(host string) string { return In(i18n.Locale()).UseSshHost(host) }
+
+// UseSshHost says "连接到 {host}"
+// in the language of msgs.
+func (msgs Messages) UseSshHost(host string) string {
+	return Catalog.Format(msgs.locale, "useSshHost", map[string]any{"host": host})
+}
+
+// ChooseSshRepository says "选择远程仓库"
+// in the language the app shows.
+func ChooseSshRepository() string { return In(i18n.Locale()).ChooseSshRepository() }
+
+// ChooseSshRepository says "选择远程仓库"
+// in the language of msgs.
+func (msgs Messages) ChooseSshRepository() string {
+	return Catalog.Format(msgs.locale, "chooseSshRepository", nil)
+}
+
+// ChangeSshHost says "更换主机"
+// in the language the app shows.
+func ChangeSshHost() string { return In(i18n.Locale()).ChangeSshHost() }
+
+// ChangeSshHost says "更换主机"
+// in the language of msgs.
+func (msgs Messages) ChangeSshHost() string {
+	return Catalog.Format(msgs.locale, "changeSshHost", nil)
+}
+
+// RecentSshRepositories says "已保存的远程仓库"
+// in the language the app shows.
+func RecentSshRepositories() string { return In(i18n.Locale()).RecentSshRepositories() }
+
+// RecentSshRepositories says "已保存的远程仓库"
+// in the language of msgs.
+func (msgs Messages) RecentSshRepositories() string {
+	return Catalog.Format(msgs.locale, "recentSshRepositories", nil)
+}
+
+// BrowseSshDirectory says "浏览目录"
+// in the language the app shows.
+func BrowseSshDirectory() string { return In(i18n.Locale()).BrowseSshDirectory() }
+
+// BrowseSshDirectory says "浏览目录"
+// in the language of msgs.
+func (msgs Messages) BrowseSshDirectory() string {
+	return Catalog.Format(msgs.locale, "browseSshDirectory", nil)
+}
+
+// SshParentDirectory says "上一级"
+// in the language the app shows.
+func SshParentDirectory() string { return In(i18n.Locale()).SshParentDirectory() }
+
+// SshParentDirectory says "上一级"
+// in the language of msgs.
+func (msgs Messages) SshParentDirectory() string {
+	return Catalog.Format(msgs.locale, "sshParentDirectory", nil)
+}
+
+// NoSshDirectories says "没有子目录"
+// in the language the app shows.
+func NoSshDirectories() string { return In(i18n.Locale()).NoSshDirectories() }
+
+// NoSshDirectories says "没有子目录"
+// in the language of msgs.
+func (msgs Messages) NoSshDirectories() string {
+	return Catalog.Format(msgs.locale, "noSshDirectories", nil)
+}
+
 // GoToChangedFile says "跳到变更文件"
 // in the language the app shows.
 func GoToChangedFile() string { return In(i18n.Locale()).GoToChangedFile() }

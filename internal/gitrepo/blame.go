@@ -19,10 +19,19 @@ type LineBlame struct {
 }
 
 func (repo *Repository) BlameLine(ctx context.Context, content *FileContent, line int) (LineBlame, error) {
+	return readLineBlame(ctx, content, line, validBrowsePath, repo.head,
+		func(ctx context.Context, input string, args ...string) (string, error) {
+			return run(ctx, repo.Path, input, 10*time.Second, args...)
+		}, exitCode)
+}
+
+func readLineBlame(ctx context.Context, content *FileContent, line int, valid func(string) error,
+	head func(context.Context) (string, error),
+	run func(context.Context, string, ...string) (string, error), hasExitCode func(error, int) bool) (LineBlame, error) {
 	if content == nil || !content.Present || content.Binary || content.Truncated || content.Unsupported || line < 1 {
 		return LineBlame{}, errors.New("无法读取此行的提交归属")
 	}
-	if err := validBrowsePath(content.Path); err != nil {
+	if err := valid(content.Path); err != nil {
 		return LineBlame{}, err
 	}
 	var expected string
@@ -50,19 +59,18 @@ func (repo *Repository) BlameLine(ctx context.Context, content *FileContent, lin
 	var err error
 	if content.Revision == "WORKTREE" || content.Revision == "INDEX" {
 		// 旧版 Git 不允许同时传提交和 --contents。使用已预览的原文，并核对隐式 HEAD。
-		if err := repo.checkBlameHead(ctx, content.blameBase); err != nil {
+		if err := checkBlameHead(ctx, head, content.blameBase); err != nil {
 			return LineBlame{}, err
 		}
-		output, err = run(ctx, repo.Path, content.Text, 10*time.Second,
-			append(args, "--contents", "-", "--", content.Path)...)
-		if headErr := repo.checkBlameHead(ctx, content.blameBase); headErr != nil {
+		output, err = run(ctx, content.Text, append(args, "--contents", "-", "--", content.Path)...)
+		if headErr := checkBlameHead(ctx, head, content.blameBase); headErr != nil {
 			return LineBlame{}, headErr
 		}
-		if exitCode(err, 128) && strings.HasPrefix(err.Error(), "fatal: no such path ") {
+		if hasExitCode(err, 128) && strings.Contains(err.Error(), "fatal: no such path ") {
 			return LineBlame{}, nil
 		}
 	} else {
-		output, err = run(ctx, repo.Path, "", 10*time.Second, append(args, content.blameBase, "--", content.Path)...)
+		output, err = run(ctx, "", append(args, content.blameBase, "--", content.Path)...)
 	}
 	if err != nil {
 		return LineBlame{}, err
@@ -70,12 +78,12 @@ func (repo *Repository) BlameLine(ctx context.Context, content *FileContent, lin
 	return parseLineBlame(output, expected)
 }
 
-func (repo *Repository) checkBlameHead(ctx context.Context, base string) error {
-	head, err := repo.head(ctx)
+func checkBlameHead(ctx context.Context, head func(context.Context) (string, error), base string) error {
+	current, err := head(ctx)
 	if err != nil {
 		return err
 	}
-	if head != base {
+	if current != base {
 		return errors.New("仓库 HEAD 已变化，请刷新文件预览")
 	}
 	return nil

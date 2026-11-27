@@ -31,6 +31,10 @@ func (repo *Repository) stashes(ctx context.Context) ([]Stash, error) {
 	if err != nil {
 		return nil, err
 	}
+	return parseStashes(output)
+}
+
+func parseStashes(output string) ([]Stash, error) {
 	stashes := []Stash{}
 	if output == "" {
 		return stashes, nil

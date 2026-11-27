@@ -73,7 +73,7 @@ func (app *nativeApp) cancelRead() {
 }
 
 func (app *nativeApp) load(label string, kind nativeReadKind, task func(context.Context) (func(), error)) {
-	if app.repository == nil || app.busy || app.closed {
+	if (app.repository == nil && app.ssh == nil) || app.busy || app.closed {
 		return
 	}
 	app.cancelRead()
@@ -319,6 +319,10 @@ func (app *nativeApp) historyRequest() nativeHistoryRequest {
 }
 
 func (app *nativeApp) searchHistory(more bool) {
+	if app.ssh != nil {
+		app.readSSHHistoryPage(more)
+		return
+	}
 	if app.repository == nil || app.busy {
 		return
 	}
@@ -415,7 +419,7 @@ func (app *nativeApp) readCommitFileDiff(ctx context.Context, path, hash, parent
 }
 
 func (app *nativeApp) selectCommitParent(commit gitrepo.Commit, parent string) {
-	if app.repository == nil || app.busy || app.dialog != nil || app.readTask != nil ||
+	if app.repository == nil && app.ssh == nil || app.busy || app.dialog != nil || app.readTask != nil ||
 		app.commitHash != commit.Hash || len(commit.Parents) < 2 || !slices.Contains(commit.Parents, parent) {
 		return
 	}
@@ -423,6 +427,10 @@ func (app *nativeApp) selectCommitParent(commit gitrepo.Commit, parent string) {
 		parent = ""
 	}
 	if parent == app.commitParent {
+		return
+	}
+	if app.ssh != nil {
+		app.loadSSHCommit(commit.Hash, parent)
 		return
 	}
 	path, preferred := app.repository.snapshot.Path, app.commitFile
@@ -544,6 +552,15 @@ func (app *nativeApp) selectHistoryReference(kind, name string, all bool) {
 }
 
 func (app *nativeApp) selectCommitFile(file string) {
+	if app.ssh != nil {
+		for _, entry := range app.commitFiles {
+			if entry.Path == file {
+				app.selectSSHCommitFile(entry)
+				break
+			}
+		}
+		return
+	}
 	if app.repository == nil || app.readTask != nil && app.readTask.kind != nativeReadDiff {
 		return
 	}
@@ -570,6 +587,21 @@ func (app *nativeApp) selectCommitFile(file string) {
 }
 
 func (app *nativeApp) selectStash(hash string) {
+	if app.ssh != nil {
+		repo := app.ssh.repo
+		app.load(locales.ReadingStash(), nativeReadDiff, func(ctx context.Context) (func(), error) {
+			diff, err := repo.StashDiff(ctx, hash)
+			if err != nil {
+				return nil, err
+			}
+			return func() {
+				app.clearDiff()
+				app.stashHash = hash
+				app.setDiff(diff)
+			}, nil
+		})
+		return
+	}
 	if app.repository == nil {
 		return
 	}

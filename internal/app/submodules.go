@@ -5,6 +5,7 @@ package app
 
 import (
 	"context"
+	"path"
 
 	"github.com/ysicing/51code/internal/gitrepo"
 	"github.com/ysicing/51code/locales"
@@ -27,12 +28,18 @@ func (app *nativeApp) readSubmodules(ctx context.Context, path string) ([]gitrep
 }
 
 func (app *nativeApp) loadSubmodules() {
-	if app.repository == nil || app.screen != "submodules" || app.dialog != nil {
+	if app.repository == nil && app.ssh == nil || app.screen != "submodules" || app.dialog != nil {
 		return
 	}
-	path := app.repository.snapshot.Path
+	var read func(context.Context) ([]gitrepo.Submodule, error)
+	if app.ssh != nil {
+		read = app.ssh.repo.Submodules
+	} else {
+		directory := app.repository.snapshot.Path
+		read = func(ctx context.Context) ([]gitrepo.Submodule, error) { return app.readSubmodules(ctx, directory) }
+	}
 	app.load(locales.ReadingSubmodules(), nativeReadSubmodules, func(ctx context.Context) (func(), error) {
-		items, err := app.readSubmodules(ctx, path)
+		items, err := read(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -124,7 +131,11 @@ func (app *nativeApp) openSubmodule(item gitrepo.Submodule) {
 
 func (app *nativeApp) submoduleMenu(menu *ui.Menu, item gitrepo.Submodule) {
 	if menu.Item(locales.Open()).Disabled(app.busy || app.readTask != nil || app.dialog != nil || item.Head == "").Chosen() {
-		app.openSubmodule(item)
+		if app.ssh != nil {
+			app.openSSHSubmodule(item)
+		} else {
+			app.openSubmodule(item)
+		}
 	}
 	label := locales.UpdateSubmodule()
 	if item.Head == "" {
@@ -133,6 +144,17 @@ func (app *nativeApp) submoduleMenu(menu *ui.Menu, item gitrepo.Submodule) {
 	if menu.Item(label).Disabled(!app.canChangeSubmodules() || app.dialog != nil || !item.CanUpdate()).Chosen() {
 		app.updateSubmoduleDialog(item)
 	}
+}
+
+func (app *nativeApp) openSSHSubmodule(item gitrepo.Submodule) {
+	repo := app.ssh.repo
+	app.load(locales.OpeningRepository(), nativeReadSubmodules, func(ctx context.Context) (func(), error) {
+		root, err := repo.RootPath(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return func() { app.openRelatedWorktree(path.Join(root, item.Path)) }, nil
+	})
 }
 
 func submoduleStatus(item gitrepo.Submodule) string {

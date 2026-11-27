@@ -51,6 +51,35 @@ type nativeBrowserResult struct {
 	image    nativeBrowserImage
 }
 
+type nativeBrowserSource struct {
+	files   func(context.Context, string) ([]string, error)
+	content func(context.Context, string, string) (*gitrepo.FileContent, error)
+	blame   func(context.Context, *gitrepo.FileContent, int) (gitrepo.LineBlame, error)
+}
+
+func (app *nativeApp) localBrowserSource(path string) nativeBrowserSource {
+	service := app.service
+	return nativeBrowserSource{
+		files: func(ctx context.Context, revision string) ([]string, error) {
+			return service.BrowseFiles(ctx, path, revision)
+		},
+		content: func(ctx context.Context, file, revision string) (*gitrepo.FileContent, error) {
+			return service.BrowseFileContent(ctx, path, file, revision)
+		},
+		blame: func(ctx context.Context, content *gitrepo.FileContent, line int) (gitrepo.LineBlame, error) {
+			return service.blameLine(ctx, path, content, line)
+		},
+	}
+}
+
+func (app *nativeApp) browserSource() nativeBrowserSource {
+	if app.ssh != nil {
+		repo := app.ssh.repo
+		return nativeBrowserSource{files: repo.BrowseFiles, content: repo.BrowseFileContent, blame: repo.BlameLine}
+	}
+	return app.localBrowserSource(app.repository.snapshot.Path)
+}
+
 func newNativeBrowser() *nativeBrowser {
 	return &nativeBrowser{
 		revision:  "WORKTREE",
@@ -73,8 +102,8 @@ func (state *nativeBrowser) visibleFiles() []gitrepo.CommitFile {
 	return state.filtered
 }
 
-func (app *nativeApp) readBrowser(ctx context.Context, path, revision, file string, allowMissingFile bool) (*nativeBrowserResult, error) {
-	files, err := app.service.BrowseFiles(ctx, path, revision)
+func (source nativeBrowserSource) read(ctx context.Context, revision, file string, allowMissingFile bool) (*nativeBrowserResult, error) {
+	files, err := source.files(ctx, revision)
 	if err != nil {
 		return nil, err
 	}
@@ -82,16 +111,16 @@ func (app *nativeApp) readBrowser(ctx context.Context, path, revision, file stri
 	if allowMissingFile && file != "" && !slices.Contains(files, file) {
 		result.file = ""
 	}
-	return app.readBrowserContent(ctx, path, result)
+	return source.readContent(ctx, result)
 }
 
-func (app *nativeApp) readBrowserContent(ctx context.Context, path string, result *nativeBrowserResult) (*nativeBrowserResult, error) {
+func (source nativeBrowserSource) readContent(ctx context.Context, result *nativeBrowserResult) (*nativeBrowserResult, error) {
 	file, revision := result.file, result.revision
 	if file == "" {
 		return result, nil
 	}
 	var err error
-	result.diff.New, err = app.service.BrowseFileContent(ctx, path, file, revision)
+	result.diff.New, err = source.content(ctx, file, revision)
 	if err != nil {
 		return nil, err
 	}
@@ -124,10 +153,10 @@ func (state *nativeBrowser) apply(result *nativeBrowserResult) bool {
 }
 
 func (app *nativeApp) loadBrowser(revision, file string, position *editor.Pos) {
-	if app.repository == nil || app.browser == nil || app.screen != "files" {
+	if app.repository == nil && app.ssh == nil || app.browser == nil || app.screen != "files" {
 		return
 	}
-	state, path := app.browser, app.repository.snapshot.Path
+	state, source := app.browser, app.browserSource()
 	state.pending = true
 	files := state.files
 	versionChanged := revision != state.revision
@@ -136,9 +165,9 @@ func (app *nativeApp) loadBrowser(revision, file string, position *editor.Pos) {
 		var result *nativeBrowserResult
 		var err error
 		if contentOnly {
-			result, err = app.readBrowserContent(ctx, path, &nativeBrowserResult{files: files, revision: revision, file: file})
+			result, err = source.readContent(ctx, &nativeBrowserResult{files: files, revision: revision, file: file})
 		} else {
-			result, err = app.readBrowser(ctx, path, revision, file, versionChanged && position == nil)
+			result, err = source.read(ctx, revision, file, versionChanged && position == nil)
 		}
 		if err != nil {
 			return nil, err
@@ -244,6 +273,10 @@ func (app *nativeApp) browserFilePanel(c *ui.Context) {
 			if state.file != "" {
 				ui.Button(c, locales.FileHistory()).OnClick(func() {
 					file := state.file
+					if app.ssh != nil {
+						app.startSSHHistory(state.revision, file)
+						return
+					}
 					app.switchWorkspace("search")
 					app.historyFile, app.historyQuery, app.historyFilter = file, "", gitrepo.HistoryFilter{}
 					app.searchDateEnabled = false

@@ -153,6 +153,14 @@ func (app *nativeApp) fileHistoryAction() {
 			file = source.Path
 		}
 	}
+	if app.ssh != nil {
+		revision := "WORKTREE"
+		if source := app.fileViewer.sources[app.fileViewer.side]; source != nil && source.Revision != "" {
+			revision = source.Revision
+		}
+		app.startSSHHistory(revision, file)
+		return
+	}
 	app.switchWorkspace("search")
 	app.historyFile, app.historyQuery, app.historyFilter = file, "", gitrepo.HistoryFilter{}
 	app.searchDateEnabled = false
@@ -200,18 +208,33 @@ func (app *nativeApp) diffBrowserContext() (*gitrepo.FileContent, editor.Pos) {
 }
 
 func (app *nativeApp) browseDiffFile() {
-	if app.repository == nil || app.busy || app.readTask != nil {
+	if app.repository == nil && app.ssh == nil || app.busy || app.readTask != nil {
 		return
 	}
-	source, position := app.diffBrowserContext()
-	if source == nil || !source.Present || source.Path == "" {
+	var jump nativeBrowserJump
+	if app.ssh != nil && app.diff.Old == nil && app.diff.New == nil {
+		jump.file = app.selectedFile
+		jump.revision = "WORKTREE"
+		if app.screen == "sshHistory" || app.screen == "search" {
+			jump.revision = app.commitHash
+		} else if app.staged {
+			jump.revision = "INDEX"
+		}
+	} else {
+		source, position := app.diffBrowserContext()
+		if source == nil || !source.Present {
+			return
+		}
+		jump = nativeBrowserJump{revision: source.Revision, file: source.Path, position: position}
+	}
+	if jump.file == "" {
 		return
 	}
 	// 跳转直接加载目标版本，避免先启动默认 WORKTREE 读取再取消。
 	if app.browser == nil {
 		app.browser = newNativeBrowser()
 	}
-	app.browser.jump = &nativeBrowserJump{revision: source.Revision, file: source.Path, position: position}
+	app.browser.jump = &jump
 	app.switchWorkspace("files")
 }
 
@@ -261,8 +284,16 @@ func (app *nativeApp) fileDiffPanel(c *ui.Context) {
 			if full == 0 && !hasImageDiff(app.diff) {
 				app.diffLayoutControl(c)
 			}
-			if app.canReviewDiffSelection() || app.repository != nil && len(app.reviewNotes[app.repository.snapshot.Path]) > 0 {
+			if app.canReviewDiffSelection() || len(app.reviewNotes[app.reviewRepositoryKey()]) > 0 {
 				app.reviewNotesControl(c)
+			}
+			if app.ssh != nil && !hasSources {
+				if app.screen == "stash" {
+					return
+				}
+				iconButton(c, locales.BrowseFile(), nativeIcons["file"]).Shrink(0).
+					Disabled(app.selectedFile == "" || app.readTask != nil).OnClick(app.browseDiffFile)
+				return
 			}
 			source, _ := app.diffBrowserContext()
 			iconButton(c, locales.BrowseFile(), nativeIcons["file"]).Shrink(0).
@@ -319,7 +350,7 @@ func (app *nativeApp) fileDiffPanel(c *ui.Context) {
 				message := locales.SelectFileOrCommit()
 				if app.screen == "stash" {
 					message = locales.SelectStash()
-					if len(app.repository.stashes) == 0 {
+					if app.ssh != nil && len(app.ssh.stashes) == 0 || app.repository != nil && len(app.repository.stashes) == 0 {
 						message = locales.EmptyStashDiff()
 					}
 				}

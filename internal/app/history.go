@@ -201,12 +201,23 @@ func (app *nativeApp) historyPanel(c *ui.Context) {
 		})
 		return
 	}
-	// 图谱、图谱列宽与引用列宽一起缓存，失效条件见 historyGraphCache；翻页时只续算新增部分。
+	app.historyRows(c, app.repository.snapshot.Head, len(app.repository.snapshot.Files), workingOffset, app.selectCommit)
+	if app.screen == "search" {
+		ui.Text(c, app.searchSummary()).FontSize(11).TextColor(c.Theme().TextMuted).Padding(4, 10)
+	}
+	if app.historyMore && app.historyPagePaused {
+		ui.Button(c, locales.Retry()).Disabled(app.busy || app.readTask != nil).
+			OnClick(func() { app.searchHistory(true) })
+	}
+	app.loadHistoryNearEnd(c)
+}
+
+func (app *nativeApp) historyRows(c *ui.Context, head string, changes, workingOffset int, selectCommit func(string)) {
 	if app.historyGraphCache == nil {
 		app.historyGraphCache = &historyGraphCache{}
 	}
 	cache := app.historyGraphCache
-	app.historyGraph = cache.update(c, app.history, app.repository.snapshot.Head, workingOffset != 0)
+	app.historyGraph = cache.update(c, app.history, head, workingOffset != 0)
 	app.historyGraphSource = firstCommit(app.history)
 	graphWidth := cache.width
 	app.historyTableSelected = -1
@@ -217,7 +228,7 @@ func (app *nativeApp) historyPanel(c *ui.Context) {
 	}
 	app.historyList.Selected = &app.historyTableSelected
 	history := app.history
-	workingLabel := locales.UncommittedFiles(fmt.Sprint(len(app.repository.snapshot.Files)))
+	workingLabel := locales.UncommittedFiles(fmt.Sprint(changes))
 	app.historyList.Key = func(index int) any {
 		if workingOffset != 0 && index == 0 {
 			return "working-tree"
@@ -311,18 +322,10 @@ func (app *nativeApp) historyPanel(c *ui.Context) {
 			}
 			hash := app.history[index].Hash
 			if app.historyWorking || hash != app.commitHash || app.readTask != nil || app.problem != "" {
-				app.selectCommit(hash)
+				selectCommit(hash)
 			}
 		}
 	})
-	if app.screen == "search" {
-		ui.Text(c, app.searchSummary()).FontSize(11).TextColor(c.Theme().TextMuted).Padding(4, 10)
-	}
-	if app.historyMore && app.historyPagePaused {
-		ui.Button(c, locales.Retry()).Disabled(app.busy || app.readTask != nil).
-			OnClick(func() { app.searchHistory(true) })
-	}
-	app.loadHistoryNearEnd(c)
 }
 
 func (app *nativeApp) selectedHistoryCommit() *gitrepo.Commit {

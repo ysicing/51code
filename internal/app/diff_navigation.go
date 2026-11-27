@@ -28,9 +28,9 @@ type nativeDiffBoundary struct {
 
 func (app *nativeApp) diffFileContext() (working bool, files []gitrepo.CommitFile, current nativeDiffFile) {
 	switch app.screen {
-	case "changes":
+	case "changes", "sshChanges":
 		working = true
-	case "history":
+	case "history", "sshHistory":
 		working = app.historyWorking
 		files, current.path = app.commitFiles, app.commitFile
 	case "search":
@@ -49,7 +49,7 @@ func (app *nativeApp) diffFileContext() (working bool, files []gitrepo.CommitFil
 }
 
 func (app *nativeApp) hasDiffFiles() bool {
-	if app.repository == nil || app.closed || app.busy || app.readTask != nil || app.dialog != nil {
+	if app.repository == nil && app.ssh == nil || app.closed || app.busy || app.readTask != nil || app.dialog != nil {
 		return false
 	}
 	working, files, _ := app.diffFileContext()
@@ -107,6 +107,13 @@ func (app *nativeApp) openDiffFile(file nativeDiffFile, direction int) {
 		return
 	}
 	switch {
+	case working && app.ssh != nil:
+		for _, entry := range app.ssh.snapshot.Files {
+			if entry.Path == file.path {
+				app.selectSSHFile(entry, file.staged, "")
+				break
+			}
+		}
 	case working && app.historyWorking && app.screen == "history":
 		app.selectHistoryWorkingFile(file.path, file.staged)
 	case working:

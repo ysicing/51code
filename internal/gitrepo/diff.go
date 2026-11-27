@@ -109,26 +109,31 @@ func (repo *Repository) untrackedDiff(path string) (Diff, error) {
 			return Diff{}, err
 		}
 	}
+	return untrackedPatch(path, content), nil
+}
+
+func untrackedPatch(path string, content []byte) Diff {
 	truncated := len(content) > 256<<10
 	if truncated {
 		content = content[:256<<10]
 	}
 	if strings.ContainsRune(string(content), 0) || !utf8.Valid(content) {
-		return Diff{Text: "二进制文件不提供文本预览", Binary: true, Truncated: truncated}, nil
+		return Diff{Text: "二进制文件不提供文本预览", Binary: true, Truncated: truncated}
 	}
 	lines := strings.Split(strings.TrimSuffix(string(content), "\n"), "\n")
 	if len(content) == 0 {
 		lines = nil
 	}
 	var preview strings.Builder
-	fmt.Fprintf(&preview, "diff --git a/%s b/%s\nnew file\n--- /dev/null\n+++ b/%s\n@@ -0,0 +1,%d @@\n", path, path, path, len(lines))
+	target := quoteCommitDiffPath("b/" + path)
+	fmt.Fprintf(&preview, "diff --git %s %s\nnew file\n--- /dev/null\n+++ %s\n@@ -0,0 +1,%d @@\n", quoteCommitDiffPath("a/"+path), target, target, len(lines))
 	for _, line := range lines {
 		preview.WriteString("+" + line + "\n")
 	}
 	if len(content) > 0 && content[len(content)-1] != '\n' && !truncated {
 		preview.WriteString("\\ No newline at end of file\n")
 	}
-	return Diff{Text: preview.String(), Truncated: truncated}, nil
+	return Diff{Text: preview.String(), Truncated: truncated}
 }
 
 func (repo *Repository) CommitDiff(ctx context.Context, hash string) (Diff, error) {

@@ -176,8 +176,16 @@ func (repo *Repository) readHistory(ctx context.Context, path string, filter His
 	processCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	stdout.cancel = cancel
-	args := []string{"--no-pager", "--literal-pathspecs", "-C", repo.Path, "-c", "color.ui=false",
-		"log", "--no-show-signature", "--decorate=short", "--decorate-refs-exclude=refs/stash", "--topo-order", "-z",
+	logArgs, err := historyArguments(ctx, repo.git, path, "", filter, stdout)
+	if err != nil || logArgs == nil {
+		return err
+	}
+	args := append([]string{"--no-pager", "--literal-pathspecs", "-C", repo.Path, "-c", "color.ui=false"}, logArgs...)
+	return runLocalHistory(ctx, processCtx, args, stdout)
+}
+
+func historyArguments(ctx context.Context, read readGitCommand, path, ref string, filter HistoryFilter, stdout *historyLogWriter) ([]string, error) {
+	args := []string{"log", "--no-show-signature", "--decorate=short", "--decorate-refs-exclude=refs/stash", "--topo-order", "-z",
 		historyFormat}
 	if filter.HideRemotes {
 		args = append(args, "--decorate-refs-exclude=refs/remotes/*")
@@ -191,10 +199,12 @@ func (repo *Repository) readHistory(ctx context.Context, path string, filter His
 		args = append(args, "-G"+regexp.QuoteMeta(stdout.query), "--regexp-ignore-case", "--diff-merges=first-parent",
 			"--no-patch", "--no-ext-diff", "--no-textconv")
 	}
-	if filter.Mode == "branch" && stdout.query != "" {
-		refs, err := repo.git(ctx, "for-each-ref", "--format=%(refname)", "refs/heads/", "refs/remotes/")
+	if ref != "" {
+		args = append(args, "--end-of-options", ref)
+	} else if filter.Mode == "branch" && stdout.query != "" {
+		refs, err := read(ctx, "for-each-ref", "--format=%(refname)", "refs/heads/", "refs/remotes/")
 		if err != nil {
-			return err
+			return nil, err
 		}
 		matched := false
 		for _, ref := range strings.Fields(refs) {
@@ -208,7 +218,7 @@ func (repo *Repository) readHistory(ctx context.Context, path string, filter His
 			}
 		}
 		if !matched {
-			return nil
+			return nil, nil
 		}
 	} else if filter.CurrentBranch {
 		args = append(args, "HEAD")
@@ -226,6 +236,10 @@ func (repo *Repository) readHistory(ctx context.Context, path string, filter His
 	if path != "" {
 		args = append(args, path)
 	}
+	return args, nil
+}
+
+func runLocalHistory(ctx, processCtx context.Context, args []string, stdout *historyLogWriter) error {
 	cmd, err := gitCommand(processCtx, args...)
 	if err != nil {
 		return err

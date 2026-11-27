@@ -54,14 +54,18 @@ func newNativeHistoryState() nativeHistoryState {
 }
 
 func (app *nativeApp) switchWorkspace(screen string) {
+	if app.ssh != nil && screen == "changes" {
+		app.switchSSH("screen:sshChanges")
+		return
+	}
 	if app.screen == screen {
 		return
 	}
 	app.cancelRead()
-	if app.screen == "history" || app.screen == "search" {
+	if app.screen == "history" || app.screen == "sshHistory" || app.screen == "search" {
 		app.historyRepository = app.repository
 		app.savedDiff, app.savedFile, app.savedStaged = app.diff, app.selectedFile, app.staged
-		if app.screen == "history" {
+		if app.screen == "history" || app.screen == "sshHistory" {
 			app.browseState = app.nativeHistoryState
 		} else {
 			app.searchState = app.nativeHistoryState
@@ -109,7 +113,7 @@ func (app *nativeApp) switchWorkspace(screen string) {
 		}
 		app.setDiff(app.comparison.diff)
 		return
-	case "history":
+	case "history", "sshHistory":
 		app.nativeHistoryState = app.browseState
 	case "search":
 		app.nativeHistoryState = app.searchState
@@ -206,6 +210,12 @@ func (app *nativeApp) searchPlaceholder() string {
 }
 
 func (app *nativeApp) revealHistoryCommit(hash string) {
+	if app.ssh != nil {
+		if !app.busy && app.readTask == nil {
+			app.startSSHHistory(hash, "")
+		}
+		return
+	}
 	if app.repository == nil || app.busy || app.readTask != nil {
 		return
 	}

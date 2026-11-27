@@ -94,11 +94,11 @@ func (app *nativeApp) browserBlameMenu(state *nativeBrowser, viewer *editor.Stat
 }
 
 func (app *nativeApp) loadBrowserBlame(state *nativeBrowser, buffer *editor.Buffer, line int, openCommit bool) {
-	if app.repository == nil || app.busy || app.closed || app.dialog != nil || app.problem != "" && !openCommit {
+	if app.repository == nil && app.ssh == nil || app.busy || app.closed || app.dialog != nil || app.problem != "" && !openCommit {
 		return
 	}
 	state.cancelBlame()
-	path, service, post := app.repository.snapshot.Path, app.service, app.post
+	read, post := app.browserSource().blame, app.post
 	source := state.viewer.sources[state.viewer.side]
 	ctx, cancel := context.WithCancel(app.ctx)
 	blame := &nativeBrowserLineBlame{source: source, buffer: buffer, line: line, cancel: cancel, open: openCommit}
@@ -114,7 +114,7 @@ func (app *nativeApp) loadBrowserBlame(state *nativeBrowser, buffer *editor.Buff
 			case <-timer.C:
 			}
 		}
-		info, err := service.blameLine(ctx, path, source, line+1)
+		info, err := read(ctx, source, line+1)
 		if ctx.Err() != nil {
 			return
 		}

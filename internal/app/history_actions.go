@@ -24,6 +24,9 @@ func (app *nativeApp) historyCommitMenu(menu *ui.Menu, commit gitrepo.Commit, se
 			}
 		})
 	}
+	if app.ssh != nil {
+		return
+	}
 	menu.Separator()
 	unavailable := !app.canCreateReference() || app.readTask != nil && app.readTask.kind == nativeReadHistory
 	if menu.Item(locales.BranchFromCommit()).Disabled(unavailable).Chosen() {
@@ -43,6 +46,9 @@ func (app *nativeApp) historyCommitMenu(menu *ui.Menu, commit gitrepo.Commit, se
 }
 
 func (app *nativeApp) canCompareCommit() bool {
+	if app.ssh != nil {
+		return app.ssh.snapshot.Head != "" && !app.busy && app.readTask == nil && app.dialog == nil
+	}
 	return app.repository != nil && app.repository.snapshot.Head != "" && !app.busy && app.readTask == nil && app.dialog == nil
 }
 

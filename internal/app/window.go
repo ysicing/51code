@@ -76,6 +76,7 @@ type repositoryView struct {
 
 type nativeApp struct {
 	nativeHistoryState
+	ssh               *nativeSSHWorkspace
 	browseState       nativeHistoryState
 	searchState       nativeHistoryState
 	searchInput       ui.Handle
@@ -118,6 +119,8 @@ type nativeApp struct {
 	commitGraphs          *nativeCommitGraphs
 	insights              *nativeInsights
 	group                 string
+	remoteLibrary         bool
+	remoteQuery           string
 	query                 string
 	screen                string
 	repository            *repositoryView
@@ -295,6 +298,10 @@ func (app *nativeApp) open() {
 	if app.desktop != nil {
 		title = locales.LocalRepositories() + " — 51Code"
 		stateKey = "library"
+		if app.ssh != nil {
+			title = app.ssh.title() + " — 51Code"
+			stateKey = repositoryWindowKey(app.ssh.address())
+		}
 		if app.repository != nil {
 			title = app.repository.snapshot.Name + " — 51Code"
 			stateKey = repositoryWindowKey(app.repository.snapshot.Path)
@@ -362,7 +369,7 @@ func (app *nativeApp) open() {
 	if directory, err := os.UserCacheDir(); err == nil {
 		cacheDir = filepath.Join(directory, "51code", "repository-languages")
 	}
-	if app.repository == nil {
+	if app.repository == nil && app.ssh == nil {
 		app.startRepositoryLanguages(cacheDir)
 	}
 	app.startCommitGraphs()
@@ -582,6 +589,14 @@ func (app *nativeApp) openRepository(path string) {
 
 func (app *nativeApp) refresh() {
 	if app.busy {
+		return
+	}
+	if app.ssh != nil {
+		app.refreshSSH()
+		return
+	}
+	if app.screen == "library" && app.remoteLibrary {
+		app.library = app.service.Library()
 		return
 	}
 	if app.screen == "library" || app.repository == nil {
@@ -846,13 +861,20 @@ func (app *nativeApp) showLibrary() {
 		if app.desktop.checkingQuit || app.desktop.quitting {
 			return
 		}
-		app.desktop.showLibrary()
+		library := app.desktop.showLibrary()
+		if app.ssh != nil {
+			library.remoteLibrary, library.group = true, ""
+			if library.win != nil {
+				library.win.Invalidate()
+			}
+		}
 		return
 	}
 	app.leaveConflict(func() {
 		app.cancelRead()
 		app.stopCommitAI()
 		app.stopRepositoryBackground()
+		app.ssh = nil
 		app.screen = "library"
 		app.refreshRepositoryLanguages(false)
 	})

@@ -132,9 +132,10 @@ func Run(info BuildInfo) {
 				{Role: mygo.RoleQuit},
 			}},
 			{Label: locales.FilesMenu(), Submenu: []*mygo.MenuItem{
-				{ID: shortcutLibrary, Label: locales.LocalRepositories(), Accelerator: shortcuts.Library, Click: func(_ *mygo.MenuItem, _ *mygo.Window) { open() }},
+				{ID: shortcutLibrary, Label: locales.LocalRepositories(), Accelerator: shortcuts.Library, Click: libraryCommand(func(desktop *nativeApp) { desktop.remoteLibrary, desktop.group = false, "" })},
 				{ID: shortcutAddRepo, Label: locales.AddLocalRepositoryMenu(), Accelerator: shortcuts.AddRepository, Click: libraryCommand(func(desktop *nativeApp) { desktop.chooseLocal() })},
 				{Label: locales.Clone(), Click: libraryCommand(func(desktop *nativeApp) { desktop.cloneDialog() })},
+				{Label: locales.ConnectSshRepository(), Click: libraryCommand(func(desktop *nativeApp) { desktop.sshWorkspaceDialog() })},
 				{ID: shortcutScan, Label: locales.ScanFoldersMenu(), Accelerator: shortcuts.Scan, Click: libraryCommand(func(desktop *nativeApp) { desktop.chooseScan() })},
 				{Label: locales.NewGroupMenu(), Click: libraryCommand(func(desktop *nativeApp) { desktop.groupDialog("") })},
 				mygo.Separator(),

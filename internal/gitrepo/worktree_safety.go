@@ -61,6 +61,10 @@ func worktreeCommonDir(ctx context.Context, path string) (string, error) {
 }
 
 func parseWorktrees(output string) ([]Worktree, error) {
+	return parseWorktreePaths(output, filepath.IsAbs)
+}
+
+func parseWorktreePaths(output string, isAbs func(string) bool) ([]Worktree, error) {
 	if output == "" || !strings.HasSuffix(output, "\x00\x00") {
 		return nil, errors.New("Git 工作树列表不完整")
 	}
@@ -73,7 +77,7 @@ func parseWorktrees(output string) ([]Worktree, error) {
 		}
 		key, value, _ := strings.Cut(record, " ")
 		if key == "worktree" {
-			if current != nil || !filepath.IsAbs(value) {
+			if current != nil || !isAbs(value) {
 				return nil, errors.New("无法解析 Git 工作树路径")
 			}
 			result = append(result, Worktree{Path: value, Main: len(result) == 0})

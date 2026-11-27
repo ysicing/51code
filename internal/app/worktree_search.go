@@ -41,7 +41,7 @@ type nativeWorktreeSearch struct {
 }
 
 func (app *nativeApp) searchWorkspace(c *ui.Context) {
-	if app.repository == nil {
+	if app.repository == nil && app.ssh == nil {
 		return
 	}
 	ui.Column(c).Fill().MinHeight(0).Children(func() {
@@ -60,7 +60,11 @@ func (app *nativeApp) searchWorkspace(c *ui.Context) {
 			app.worktreeSearchPanel(c, &app.pathSearch, true)
 		default:
 			c.Key("commit-search")
-			app.historyWorkspace(c)
+			if app.ssh != nil {
+				app.sshHistoryPanel(c)
+			} else {
+				app.historyWorkspace(c)
+			}
 		}
 	})
 }
@@ -80,7 +84,7 @@ func (app *nativeApp) setSearchMode(mode int) {
 }
 
 func (app *nativeApp) openQuickSearch() {
-	if app.repository == nil || app.busy || app.closed || app.screen == "library" {
+	if app.repository == nil && app.ssh == nil || app.busy || app.closed || app.screen == "library" {
 		return
 	}
 	app.leaveConflict(func() {
@@ -223,7 +227,7 @@ func (state *nativeWorktreeSearch) invalidateQuickPaths() {
 }
 
 func (app *nativeApp) startWorktreeSearch(state *nativeWorktreeSearch, paths, debounce bool) {
-	if app.repository == nil || app.busy || app.closed || app.screen != "search" {
+	if app.repository == nil && app.ssh == nil || app.busy || app.closed || app.screen != "search" {
 		return
 	}
 	query := state.query
@@ -234,8 +238,7 @@ func (app *nativeApp) startWorktreeSearch(state *nativeWorktreeSearch, paths, de
 	state.submitted = true
 	generation := state.generation
 	quickPaths, pathsVersion := state.quickPaths, state.pathsVersion
-	repository, post := app.repository, app.post
-	path := repository.snapshot.Path
+	repository, remote, post := app.repository, app.ssh, app.post
 	app.load(locales.WorktreeSearch(), nativeReadWorktreeSearch, func(ctx context.Context) (func(), error) {
 		if debounce {
 			timer := time.NewTimer(150 * time.Millisecond)
@@ -246,12 +249,23 @@ func (app *nativeApp) startWorktreeSearch(state *nativeWorktreeSearch, paths, de
 			case <-timer.C:
 			}
 		}
-		repo, err := app.service.manager.Get(path)
-		if err != nil {
-			return nil, err
+		var repo *gitrepo.Repository
+		if remote == nil {
+			var err error
+			repo, err = app.service.manager.Get(repository.snapshot.Path)
+			if err != nil {
+				return nil, err
+			}
 		}
 		if paths {
-			results, snapshot, err := quickWorktreeFiles(ctx, repo, quickPaths, query)
+			var results []gitrepo.WorktreeSearchMatch
+			var snapshot []nativeQuickPath
+			var err error
+			if remote != nil {
+				results, snapshot, err = quickSSHFiles(ctx, remote.repo, quickPaths, query)
+			} else {
+				results, snapshot, err = quickWorktreeFiles(ctx, repo, quickPaths, query)
+			}
 			return func() {
 				// 监听事件可能在读取期间使快照失效。
 				if state.pathsVersion == pathsVersion {
@@ -277,7 +291,11 @@ func (app *nativeApp) startWorktreeSearch(state *nativeWorktreeSearch, paths, de
 		}
 		var matches []gitrepo.WorktreeSearchMatch
 		var lastUpdate time.Time
-		limited, err := repo.SearchWorktree(ctx, query, func(batch []gitrepo.WorktreeSearchMatch) {
+		search := repo.SearchWorktree
+		if remote != nil {
+			search = remote.repo.SearchWorktree
+		}
+		limited, err := search(ctx, query, func(batch []gitrepo.WorktreeSearchMatch) {
 			matches = append(matches, batch...)
 			if time.Since(lastUpdate) < 150*time.Millisecond {
 				return
@@ -285,7 +303,7 @@ func (app *nativeApp) startWorktreeSearch(state *nativeWorktreeSearch, paths, de
 			lastUpdate = time.Now()
 			results := rankWorktreeMatches(matches, query)
 			post(func() {
-				if !app.closed && app.repository == repository && app.screen == "search" && app.searchMode == nativeSearchContent &&
+				if !app.closed && app.repository == repository && app.ssh == remote && app.screen == "search" && app.searchMode == nativeSearchContent &&
 					state.generation == generation && app.readTask != nil && app.readTask.kind == nativeReadWorktreeSearch {
 					state.results = results
 				}
@@ -294,6 +312,27 @@ func (app *nativeApp) startWorktreeSearch(state *nativeWorktreeSearch, paths, de
 		results := rankWorktreeMatches(matches, query)
 		return func() { state.results, state.searched, state.limited = results, err == nil, limited }, err
 	})
+}
+
+func quickSSHFiles(ctx context.Context, repo gitrepo.SSHWorkspace, snapshot []nativeQuickPath, query string) ([]gitrepo.WorktreeSearchMatch, []nativeQuickPath, error) {
+	if snapshot == nil {
+		paths, err := repo.WorktreeSearchPaths(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		snapshot = make([]nativeQuickPath, len(paths))
+		for index, path := range paths {
+			snapshot[index] = nativeQuickPath{path: path, chars: util.ToChars([]byte(path))}
+		}
+	}
+	var results []gitrepo.WorktreeSearchMatch
+	for _, ranked := range rankQuickPaths(ctx, snapshot, query) {
+		results = append(results, gitrepo.WorktreeSearchMatch{Path: ranked.path})
+		if len(results) == 200 {
+			break
+		}
+	}
+	return results, snapshot, ctx.Err()
 }
 
 func quickWorktreeFiles(ctx context.Context, repo *gitrepo.Repository, snapshot []nativeQuickPath, query string) ([]gitrepo.WorktreeSearchMatch, []nativeQuickPath, error) {
@@ -334,7 +373,7 @@ func quickWorktreeFiles(ctx context.Context, repo *gitrepo.Repository, snapshot 
 }
 
 func (app *nativeApp) openWorktreeSearchMatch(match gitrepo.WorktreeSearchMatch) {
-	if app.repository == nil || app.busy || app.screen != "search" {
+	if app.repository == nil && app.ssh == nil || app.busy || app.screen != "search" {
 		return
 	}
 	if app.browser == nil {

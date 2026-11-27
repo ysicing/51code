@@ -6,6 +6,7 @@ package gitrepo
 import (
 	"context"
 	"errors"
+	"io"
 	"strconv"
 	"strings"
 	"time"
@@ -30,7 +31,17 @@ func (repo *Repository) LostCommits(ctx context.Context) (LostCommits, error) {
 		return LostCommits{}, err
 	}
 	defer repo.mu.Unlock()
-	head, err := repo.head(ctx)
+	return readLostCommits(ctx, repo.head, func(ctx context.Context, record func(string) error, args ...string) error {
+		return runRecords(ctx, repo.Path, 30*time.Second, record, args...)
+	}, func(ctx context.Context, input string, stdout io.Writer, args ...string) error {
+		return runTo(ctx, repo.Path, input, 30*time.Second, stdout, func() string { return "" }, args...)
+	})
+}
+
+func readLostCommits(ctx context.Context, resolveHead func(context.Context) (string, error),
+	records func(context.Context, func(string) error, ...string) error,
+	run func(context.Context, string, io.Writer, ...string) error) (LostCommits, error) {
+	head, err := resolveHead(ctx)
 	if err != nil {
 		return LostCommits{}, err
 	}
@@ -46,7 +57,7 @@ func (repo *Repository) LostCommits(ctx context.Context) (LostCommits, error) {
 	var input strings.Builder
 	var fields [4]string
 	count, field := 0, 0
-	err = runRecords(ctx, repo.Path, 30*time.Second, func(value string) error {
+	err = records(ctx, func(value string) error {
 		fields[field] = value
 		field++
 		if field != len(fields) {
@@ -91,7 +102,7 @@ func (repo *Repository) LostCommits(ctx context.Context) (LostCommits, error) {
 		}
 		return nil
 	}}
-	if err := runTo(ctx, repo.Path, input.String(), 30*time.Second, &writer, func() string { return "" },
+	if err := run(ctx, input.String(), &writer,
 		"log", "--stdin", "--not", "--all", "-z", "--no-show-signature", "--no-notes", "--format=%H", "--"); err != nil {
 		return LostCommits{}, err
 	}

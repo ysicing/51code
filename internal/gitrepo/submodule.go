@@ -56,13 +56,19 @@ func (repo *Repository) Submodules(ctx context.Context) ([]Submodule, error) {
 }
 
 func (repo *Repository) submoduleIndex(ctx context.Context, path string) ([]Submodule, error) {
+	return readSubmoduleIndex(ctx, path, func(ctx context.Context, record func(string) error, args ...string) error {
+		return runRecords(ctx, repo.Path, 30*time.Second, record, args...)
+	})
+}
+
+func readSubmoduleIndex(ctx context.Context, path string, records func(context.Context, func(string) error, ...string) error) ([]Submodule, error) {
 	args := []string{"ls-files", "--stage", "-z", "--"}
 	if path != "" {
 		args = append(args, path)
 	}
 	entries := make(map[string]Submodule)
 	conflicts := make(map[string]bool)
-	err := runRecords(ctx, repo.Path, 30*time.Second, func(record string) error {
+	err := records(ctx, func(record string) error {
 		metadata, name, ok := strings.Cut(record, "\t")
 		fields := strings.Fields(metadata)
 		if !ok || len(fields) != 3 {

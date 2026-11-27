@@ -24,6 +24,7 @@ var nativeIcons = map[string]*ui.SVG{
 	"branch":   nativeSymbol(`<circle cx="6" cy="5" r="3"/><circle cx="6" cy="19" r="3"/><circle cx="18" cy="5" r="3"/><path d="M6 8v8M18 8a10 10 0 0 1-12 8"/>`),
 	"merge":    nativeSymbol(`<circle cx="12" cy="5" r="3"/><circle cx="6" cy="19" r="3"/><circle cx="18" cy="19" r="3"/><path d="M6 16v-1c0-4 6-2 6-7M18 16v-1c0-4-6-2-6-7"/>`),
 	"history":  nativeSymbol(`<path d="M3 11a9 9 0 1 1 2.5 7M3 4v7h7M12 7v5l3 2"/>`),
+	"insights": nativeSymbol(`<path d="M4 4v16h16M9 15v-3m5 3V8m5 7V5"/>`),
 	"stash":    nativeSymbol(`<path d="M3 3h18v5H3ZM5 8v13h14V8M10 12h4"/>`),
 	"tag":      nativeSymbol(`<path d="m20 13-7 7a2 2 0 0 1-3 0l-8-8V2h10l8 8a2 2 0 0 1 0 3Z"/><circle cx="7" cy="7" r="1"/>`),
 	"cloud":    nativeSymbol(`<path d="M6 17a4 4 0 0 1-.6-8A6 6 0 0 1 17 9h1a4 4 0 0 1 0 8Z"/>`),
@@ -125,11 +126,17 @@ func (app *nativeApp) view(c *ui.Context) {
 		bar := c.TitleBar()
 		ui.Row(c).Height(52).Shrink(0).Padding(0, bar.Right+12, 0, bar.Left+12).AlignItems(ui.Center).Gap(12).DragWindow().Children(func() {
 			title := locales.Repository()
+			if app.ssh != nil {
+				title = app.ssh.title()
+			}
 			if app.repository != nil && app.screen != "library" {
 				title = app.repository.snapshot.Name
 			}
 			ui.Column(c).Width(220).MinWidth(0).Shrink(1).Gap(2).Children(func() {
 				ui.Text(c, title).Bold().FontSize(14).MaxLines(1).FillWidth().Tooltip(title)
+				if app.ssh != nil {
+					ui.Text(c, app.ssh.snapshot.Branch).SingleLine().FontSize(11).TextColor(c.Theme().TextMuted)
+				}
 				if app.repository != nil && app.screen != "library" {
 					snapshot := app.repository.snapshot
 					ui.Row(c).AlignItems(ui.Center).Gap(5).Children(func() {
@@ -150,6 +157,8 @@ func (app *nativeApp) view(c *ui.Context) {
 			ui.Split(c, &app.prefs.Sidebar, func() { app.sidebar(c) }, func() {
 				ui.Column(c).Fill().MinWidth(0).Children(func() {
 					switch app.screen {
+					case "sshChanges", "sshHistory":
+						app.sshPanel(c)
 					case "insights":
 						app.insightsPanel(c)
 					case "library":
@@ -193,12 +202,20 @@ func (app *nativeApp) view(c *ui.Context) {
 						app.operationCancel()
 					}
 				}
+			} else if app.ssh != nil {
+				ui.Text(c, locales.SshReadOnlyWorkspace()).FontSize(12).TextColor(c.Theme().TextMuted)
+				ui.Text(c, app.ssh.address()).SingleLine().MinWidth(0).Shrink(1).Selectable().Tooltip(app.ssh.address()).FontSize(12).TextColor(c.Theme().TextMuted)
+				if app.readTask != nil {
+					ui.Spinner(c).Size(14, 14).Label(app.readTask.label)
+				}
 			} else if app.trashUndo.id != "" {
 				app.trashUndoNotice(c)
 			} else if app.remoteProgress != nil && !app.remoteProgress.failed && app.screen != "library" {
 				ui.Text(c, app.remoteProgress.successLabel()).FontSize(12).TextColor(c.Theme().Success)
 			} else if app.repository != nil && app.screen != "library" {
 				app.repositoryPathStatus(c, app.repository.snapshot.Path)
+			} else if app.screen == "library" && app.remoteLibrary {
+				ui.Text(c, locales.SshRepositoryCount(len(app.library.SSHRepositories))).FontSize(12).TextColor(c.Theme().TextMuted)
 			} else {
 				ui.Text(c, locales.LocalRepositoryCount(len(app.library.Repositories))).FontSize(12).TextColor(c.Theme().TextMuted)
 			}
@@ -234,14 +251,24 @@ const ungroupedLibraryView = "ungrouped"
 
 func (app *nativeApp) sidebar(c *ui.Context) {
 	ui.Column(c).Fill().Background(c.Theme().Surface).Children(func() {
-		inLibrary := app.repository == nil || app.screen == "library"
+		inLibrary := app.ssh == nil && (app.repository == nil || app.screen == "library")
 		selected := "screen:" + app.screen
-		if app.screen == "library" && app.group != "" {
+		if app.screen == "library" && app.remoteLibrary {
+			selected = "ssh-library"
+		} else if app.screen == "library" && app.group != "" {
 			selected = "group:" + app.group
 		}
+		if app.ssh != nil && app.screen == "sshHistory" && strings.HasPrefix(app.ssh.ref, "refs/") {
+			selected = app.ssh.ref
+		}
 		if ui.Sidebar(c, &selected, func() {
+			if app.ssh != nil {
+				app.sshSidebar(c)
+				return
+			}
 			if inLibrary {
 				ui.SidebarItem(c, "screen:library", nativeIcons["folder"], locales.LocalRepositories())
+				ui.SidebarItem(c, "ssh-library", nativeIcons["cloud"], locales.RemoteRepositories())
 				ui.SidebarSection(c, locales.RepositoryGroups(), nil, func() {
 					count := 0
 					for _, entry := range app.library.Repositories {
@@ -313,10 +340,15 @@ func (app *nativeApp) sidebar(c *ui.Context) {
 			app.remoteSidebar(c)
 		}).Label(locales.RepositoryNavigation()).Grow(1).MinHeight(0).FillWidth().Changed() {
 			switch {
+			case app.ssh != nil:
+				app.switchSSH(selected)
+			case selected == "ssh-library":
+				app.remoteLibrary, app.group = true, ""
 			case strings.HasPrefix(selected, "screen:"):
 				screen := strings.TrimPrefix(selected, "screen:")
 				app.leaveConflict(func() {
 					app.switchWorkspace(screen)
+					app.remoteLibrary = false
 					app.group = ""
 					if screen == "worktrees" {
 						app.loadWorktrees()
@@ -332,7 +364,9 @@ func (app *nativeApp) sidebar(c *ui.Context) {
 					}
 				})
 			case strings.HasPrefix(selected, "group:"):
-				app.leaveConflict(func() { app.screen, app.group = "library", strings.TrimPrefix(selected, "group:") })
+				app.leaveConflict(func() {
+					app.screen, app.group, app.remoteLibrary = "library", strings.TrimPrefix(selected, "group:"), false
+				})
 			}
 		}
 		if inLibrary {
@@ -366,7 +400,9 @@ func (app *nativeApp) toolbar(c *ui.Context) {
 	ui.Toolbar(c, func() {
 		ui.Spacer(c)
 		if app.screen == "library" {
-			if !app.libraryEmpty() {
+			if app.remoteLibrary {
+				ui.PrimaryButton(c, locales.ConnectSshRepository()).Disabled(disabled).OnClick(app.sshWorkspaceDialog)
+			} else if !app.libraryEmpty() {
 				if ui.PrimaryButton(c, locales.Add()).Disabled(disabled).Clicked() {
 					app.chooseLocal()
 				}
@@ -409,6 +445,12 @@ func (app *nativeApp) toolbar(c *ui.Context) {
 				app.repositorySettingsDialog()
 			}
 			iconButton(c, locales.More(), nativeIcons["more"]).Disabled(disabled).Menu(app.repositoryActions)
+		} else if app.ssh != nil {
+			iconButton(c, locales.More(), nativeIcons["more"]).Disabled(disabled).Menu(func(menu *ui.Menu) {
+				if menu.Item(locales.FindLostCommits()).Chosen() {
+					app.lostCommitsDialog()
+				}
+			})
 		}
 		if iconButton(c, locales.Refresh(), nativeIcons["refresh"]).Disabled(disabled).Clicked() {
 			app.refresh()
@@ -460,6 +502,10 @@ func (app *nativeApp) emptyLibraryActions(c *ui.Context) {
 }
 
 func (app *nativeApp) libraryView(c *ui.Context) {
+	if app.remoteLibrary {
+		app.sshLibraryView(c)
+		return
+	}
 	ui.Column(c).FillWidth().Grow(1).MinHeight(0).Padding(22).Gap(16).Children(func() {
 		if app.group == ungroupedLibraryView {
 			ui.Text(c, locales.Ungrouped()).FontSize(24).Bold()
@@ -553,6 +599,9 @@ func (app *nativeApp) libraryView(c *ui.Context) {
 func (app *nativeApp) repositoryPanel(c *ui.Context) {
 	ui.Column(c).Fill().MinWidth(0).Children(func() {
 		if app.repository == nil {
+			if app.ssh != nil && app.screen == "stash" {
+				app.stashPanel(c)
+			}
 			return
 		}
 		app.operationBar(c)
@@ -707,6 +756,9 @@ func (app *nativeApp) changesSection(c *ui.Context, staged bool) {
 			if staged && app.historyWorking && app.screen == "history" {
 				app.diffFileFinderButton(c)
 			}
+			if app.ssh != nil {
+				return
+			}
 			if staged && app.prefs.SecretScanEnabled {
 				ui.Button(c, locales.ScanStagedSecrets()).FontSize(12).Disabled(!app.canScanStagedSecrets()).
 					OnClick(app.scanStagedSecrets)
@@ -762,17 +814,23 @@ func (app *nativeApp) changesSection(c *ui.Context, staged bool) {
 }
 
 func (app *nativeApp) stashPanel(c *ui.Context) {
+	var stashes []gitrepo.Stash
+	if app.ssh != nil {
+		stashes = app.ssh.stashes
+	} else {
+		stashes = app.repository.stashes
+	}
 	ui.Column(c).Padding(12).Gap(8).FillWidth().Children(func() {
 		ui.Text(c, locales.Stash()).FontSize(18).Bold()
-		if ui.Button(c, locales.NewStash()).FillWidth().Disabled(!app.writable || len(app.repository.snapshot.Files) == 0 || app.repository.snapshot.Operation.Kind != "").Clicked() {
+		if app.ssh == nil && ui.Button(c, locales.NewStash()).FillWidth().Disabled(!app.writable || len(app.repository.snapshot.Files) == 0 || app.repository.snapshot.Operation.Kind != "").Clicked() {
 			app.stashDialog()
 		}
 	})
 	ui.Scroll(c).Grow(1).MinHeight(0).FillWidth().Padding(12).Children(func() {
-		if len(app.repository.stashes) == 0 {
+		if len(stashes) == 0 && app.readTask == nil {
 			ui.Text(c, locales.EmptyStashes()).TextColor(c.Theme().TextMuted)
 		}
-		for _, stash := range app.repository.stashes {
+		for _, stash := range stashes {
 			stash := stash
 			row := listRow(c, stash.Message, app.stashHash == stash.Hash).ContextMenu(func(menu *ui.Menu) {
 				actionsDisabled := app.busy || !app.writable || app.readTask != nil || app.dialog != nil

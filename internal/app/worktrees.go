@@ -71,13 +71,20 @@ func (app *nativeApp) openWorktrees() {
 }
 
 func (app *nativeApp) loadWorktrees() {
-	if app.repository == nil || app.screen != "worktrees" || app.worktrees == nil || app.busy || app.dialog != nil {
+	if app.repository == nil && app.ssh == nil || app.screen != "worktrees" || app.worktrees == nil || app.busy || app.dialog != nil {
 		return
 	}
-	state, path := app.worktrees, app.repository.snapshot.Path
+	state := app.worktrees
+	var read func(context.Context) ([]gitrepo.Worktree, error)
+	if app.ssh != nil {
+		read = app.ssh.repo.Worktrees
+	} else {
+		path := app.repository.snapshot.Path
+		read = func(ctx context.Context) ([]gitrepo.Worktree, error) { return app.service.Worktrees(ctx, path) }
+	}
 	state.canceled = false
 	app.load(locales.ReadingWorktrees(), nativeReadCommit, func(ctx context.Context) (func(), error) {
-		items, err := app.service.Worktrees(ctx, path)
+		items, err := read(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -230,7 +237,7 @@ func worktreeContainedBranches(item gitrepo.Worktree) string {
 
 func (app *nativeApp) worktreeMenu(menu *ui.Menu, item gitrepo.Worktree, services ui.Services) {
 	if menu.Item(locales.Open()).Disabled(app.busy || item.Current || item.Bare || item.Prunable).Chosen() {
-		app.openRepository(item.Path)
+		app.openRelatedWorktree(item.Path)
 	}
 	if menu.Item(locales.CopyFullPath()).Chosen() {
 		services.WriteClipboard(item.Path)
@@ -254,12 +261,14 @@ func (app *nativeApp) worktreeMenu(menu *ui.Menu, item gitrepo.Worktree, service
 }
 
 func (app *nativeApp) worktreePanel(c *ui.Context) {
-	if app.repository == nil || app.worktrees == nil {
+	if app.repository == nil && app.ssh == nil || app.worktrees == nil {
 		return
 	}
 	state := app.worktrees
 	ui.Column(c).Fill().MinWidth(0).Children(func() {
-		app.operationBar(c)
+		if app.ssh == nil {
+			app.operationBar(c)
+		}
 		ui.Row(c).FillWidth().Padding(10, 12).Gap(8).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, locales.Worktrees()).Bold().Grow(1).MinWidth(0).SingleLine()
 			if app.readTask != nil {
@@ -283,16 +292,18 @@ func (app *nativeApp) worktreePanel(c *ui.Context) {
 			if state.candidatesOnly {
 				filter = 1
 			}
-			ui.Segmented(c, &filter, locales.AttachedWorktrees(), locales.WorktreeCleanupCandidates()).
-				Label(locales.Worktrees()).OnChange(func() {
-				state.candidatesOnly = filter == 1
-				state.filterItems()
-			})
+			if app.ssh == nil {
+				ui.Segmented(c, &filter, locales.AttachedWorktrees(), locales.WorktreeCleanupCandidates()).
+					Label(locales.Worktrees()).OnChange(func() {
+					state.candidatesOnly = filter == 1
+					state.filterItems()
+				})
+			}
 			for _, item := range state.allItems {
 				if item.Main && !item.Current && !item.Bare && !item.Prunable {
 					ui.Spacer(c)
 					ui.Button(c, locales.OpenMainWorktree()).Disabled(app.busy).
-						OnClick(func() { app.openRepository(item.Path) })
+						OnClick(func() { app.openRelatedWorktree(item.Path) })
 					break
 				}
 			}
@@ -382,7 +393,7 @@ func (app *nativeApp) worktreeTable(c *ui.Context, state *nativeWorktrees) {
 				}
 				ui.Row(c).FillWidth().Gap(6).AlignItems(ui.Center).Justify(ui.End).Children(func() {
 					ui.Button(c, locales.Open()).Disabled(app.busy || item.Current || item.Bare || item.Prunable).
-						OnClick(func() { app.openRepository(item.Path) })
+						OnClick(func() { app.openRelatedWorktree(item.Path) })
 					iconButton(c, locales.WorktreeActions(), nativeIcons["more"]).Shrink(0).Disabled(app.busy).Menu(func(menu *ui.Menu) {
 						app.worktreeMenu(menu, item, services)
 					})
@@ -425,7 +436,7 @@ func (app *nativeApp) worktreeStatus(c *ui.Context, item gitrepo.Worktree) {
 			app.inlineProblem(c, problem)
 		}
 	}
-	if app.repository.snapshot.Operation.Kind == "merge" {
+	if app.repository != nil && app.repository.snapshot.Operation.Kind == "merge" {
 		ui.Row(c).FillWidth().Padding(6, 12).Children(func() {
 			ui.Button(c, locales.FileChanges()).OnClick(func() {
 				app.leaveConflict(func() { app.switchWorkspace("changes") })

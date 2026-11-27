@@ -113,6 +113,21 @@ func (repo *Repository) InsightsSource(ctx context.Context, ref string) (Insight
 
 // Insights 以本地自然日分桶，使用提交者时间筛选，合并提交不计入任何指标。
 func (repo *Repository) Insights(ctx context.Context, source InsightsSourceInfo, from, until time.Time) (RepositoryInsights, error) {
+	result, err := calculateInsights(ctx, source, from, until, func(ctx context.Context, stdin string, stdout io.Writer, args ...string) error {
+		return runTo(ctx, repo.Path, stdin, 20*time.Second, stdout, func() string { return "" }, args...)
+	})
+	if err != nil {
+		return RepositoryInsights{}, err
+	}
+	mailmap, err := insightsFingerprint(filepath.Join(repo.Path, ".mailmap"))
+	if err != nil || mailmap != source.Mailmap {
+		return RepositoryInsights{}, errors.New("作者映射已变化，请刷新洞察")
+	}
+	return result, nil
+}
+
+func calculateInsights(ctx context.Context, source InsightsSourceInfo, from, until time.Time,
+	run func(context.Context, string, io.Writer, ...string) error) (RepositoryInsights, error) {
 	if err := ctx.Err(); err != nil {
 		return RepositoryInsights{}, err
 	}
@@ -121,12 +136,14 @@ func (repo *Repository) Insights(ctx context.Context, source InsightsSourceInfo,
 	}
 	parser := newInsightsParser(from, until)
 	if source.Commit != "" {
-		noDetails := func() string { return "" }
+		if err := validCommitHash(source.Commit); err != nil {
+			return RepositoryInsights{}, err
+		}
 		// 固定 mailmap 来源，避免外部配置文件悄悄改变同一缓存键的作者统计。
 		logArgs := []string{"-c", "mailmap.file=", "-c", "mailmap.blob=", "-c", "log.showSignature=false",
 			"log", "--format=%x1e%H%x00%ct%x00%aN%x00%aE%x00", "--numstat", "-z",
 			"--no-merges", "--no-ext-diff", "--no-textconv", "--find-renames", "-l200"}
-		err := runTo(ctx, repo.Path, "", 20*time.Second, parser, noDetails, append(slices.Clip(logArgs),
+		err := run(ctx, "", parser, append(slices.Clip(logArgs),
 			"--since-as-filter="+from.Format(time.RFC3339), "--until="+until.Format(time.RFC3339),
 			"--max-count=20001", source.Commit, "--")...)
 		// Git 2.37 之前没有 --since-as-filter（如 Ubuntu 22.04 的 2.34）。不能退回 --since：
@@ -134,10 +151,10 @@ func (repo *Repository) Insights(ctx context.Context, source InsightsSourceInfo,
 		if err != nil && ctx.Err() == nil && strings.Contains(err.Error(), "since-as-filter") {
 			parser = newInsightsParser(from, until)
 			var commits string
-			commits, err = repo.insightsCommits(ctx, source.Commit, from, until)
+			commits, err = insightsCommits(ctx, source.Commit, from, until, run)
 			// 空列表必须跳过：log --stdin 没有输入时会退回显示 HEAD。
 			if err == nil && commits != "" {
-				err = runTo(ctx, repo.Path, commits, 20*time.Second, parser, noDetails,
+				err = run(ctx, commits, parser,
 					append(slices.Clip(logArgs), "--no-walk=unsorted", "--stdin", "--")...)
 			}
 		}
@@ -148,10 +165,6 @@ func (repo *Repository) Insights(ctx context.Context, source InsightsSourceInfo,
 	if len(parser.pending) != 0 || parser.field != 0 || parser.rename != 0 {
 		return RepositoryInsights{}, errors.New("洞察 Git 输出不完整")
 	}
-	mailmap, err := insightsFingerprint(filepath.Join(repo.Path, ".mailmap"))
-	if err != nil || mailmap != source.Mailmap {
-		return RepositoryInsights{}, errors.New("作者映射已变化，请刷新洞察")
-	}
 	result := parser.result()
 	result.Shallow = source.Shallow != ""
 	return result, nil
@@ -159,9 +172,10 @@ func (repo *Repository) Insights(ctx context.Context, source InsightsSourceInfo,
 
 // insightsCommits 为旧版 Git 完整遍历可达提交（不计算 diff），按提交者时间过滤后返回换行分隔的 SHA。
 // 遍历受 20 秒超时约束，范围内超过 20000 条时报错，不返回部分列表。
-func (repo *Repository) insightsCommits(ctx context.Context, commit string, from, until time.Time) (string, error) {
+func insightsCommits(ctx context.Context, commit string, from, until time.Time,
+	run func(context.Context, string, io.Writer, ...string) error) (string, error) {
 	list := &insightsRevisions{from: from.Unix(), until: until.Unix()}
-	err := runTo(ctx, repo.Path, "", 20*time.Second, list, func() string { return "" },
+	err := run(ctx, "", list,
 		"rev-list", "--no-merges", "--timestamp", commit, "--")
 	if err != nil {
 		return "", err
@@ -203,6 +217,9 @@ func (list *insightsRevisions) Write(data []byte) (int, error) {
 		}
 		if stamp < list.from || stamp >= list.until {
 			continue
+		}
+		if err := validCommitHash(fields[1]); err != nil {
+			return 0, err
 		}
 		if list.count++; list.count > 20000 {
 			return 0, errors.New("洞察超过 20000 条提交，请缩短日期范围")

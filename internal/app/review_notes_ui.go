@@ -47,12 +47,12 @@ func (app *nativeApp) canReviewDiffSelection() bool {
 func (app *nativeApp) reviewNotesControl(c *ui.Context) {
 	services := c.Services()
 	iconButton(c, locales.ReviewNotes(), nativeIcons["feedback"]).Shrink(0).
-		Disabled(app.repository == nil || app.busy || app.dialog != nil).
+		Disabled(app.reviewRepositoryKey() == "" || app.busy || app.dialog != nil).
 		Menu(func(menu *ui.Menu) {
-			if app.repository == nil {
+			repo := app.reviewRepositoryKey()
+			if repo == "" {
 				return
 			}
-			repo := app.repository.snapshot.Path
 			count := len(app.reviewNotes[repo])
 			if app.canReviewDiffSelection() {
 				state, unified := app.diffViews[0], &app.unifiedDiffs[0]
@@ -90,10 +90,10 @@ func (app *nativeApp) addReviewNoteMenu(menu *ui.Menu, excerpts []reviewExcerpt)
 }
 
 func (app *nativeApp) addReviewNote(excerpts []reviewExcerpt) {
-	if app.repository == nil || app.busy || app.readTask != nil || app.dialog != nil || len(excerpts) == 0 {
+	repo := app.reviewRepositoryKey()
+	if repo == "" || app.busy || app.readTask != nil || app.dialog != nil || len(excerpts) == 0 {
 		return
 	}
-	repo := app.repository.snapshot.Path
 	if len(app.diffViews) == 1 {
 		for index := range excerpts {
 			source := app.diff.New

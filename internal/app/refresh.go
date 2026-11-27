@@ -96,7 +96,7 @@ func (app *nativeApp) refreshRepositoryView(watch bool) {
 		}
 		var browsing *nativeBrowserResult
 		if err == nil && screen == "files" && browser != nil {
-			browsing, err = app.readBrowser(ctx, path, browserRevision, browserFile, false)
+			browsing, err = app.localBrowserSource(path).read(ctx, browserRevision, browserFile, false)
 		}
 		refreshedToken := ""
 		if err == nil && blockedToken != "" {

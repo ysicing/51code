@@ -15,6 +15,33 @@ import (
 	"github.com/ysicing/51code/internal/gitrepo"
 )
 
+func TestRemoteLibraryPersistsHostAndPath(t *testing.T) {
+	store := filepath.Join(t.TempDir(), "library.json")
+	manager, err := New(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := gitrepo.SSHWorkspace{Host: "devbox", Path: "/srv/api"}
+	second := gitrepo.SSHWorkspace{Host: "staging", Path: "/srv/api"}
+	for _, repo := range []gitrepo.SSHWorkspace{first, second, first} {
+		if _, err := manager.RememberSSH(t.Context(), repo); err != nil {
+			t.Fatal(err)
+		}
+	}
+	reloaded, err := New(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	library := reloaded.Library()
+	if len(library.Repositories) != 0 || !slices.Equal(library.SSHRepositories, []gitrepo.SSHWorkspace{second, first}) {
+		t.Fatalf("远端记录未正确保存: %+v", library)
+	}
+	remaining, err := reloaded.ForgetSSH(first)
+	if err != nil || !slices.Equal(remaining.SSHRepositories, []gitrepo.SSHWorkspace{second}) {
+		t.Fatalf("移除影响其他主机的同名仓库: %+v, %v", remaining, err)
+	}
+}
+
 func TestLibraryRepositoryOrderKeepsLegacyAndTiedEntriesStable(t *testing.T) {
 	library := Library{Groups: []Group{}, Repositories: []LocalRepository{
 		{Name: "legacy-z", Path: "/z"},

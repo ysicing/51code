@@ -27,19 +27,29 @@ func (repo *Repository) Compare(ctx context.Context, base, target string, mergeB
 		return Comparison{}, err
 	}
 	defer repo.mu.Unlock()
+	result, err := compareRevisions(ctx, repo.git, exitCode, base, target, mergeBase)
+	if err == nil {
+		repo.rememberChanges(compareChangesKey(result.From, result.Target), result.Files)
+	}
+	return result, err
+}
+
+type readGitCommand func(context.Context, ...string) (string, error)
+
+func compareRevisions(ctx context.Context, read readGitCommand, isExitCode func(error, int) bool, base, target string, mergeBase bool) (Comparison, error) {
 	var result Comparison
 	var err error
-	if result.Base, err = repo.comparisonCommit(ctx, base); err != nil {
+	if result.Base, err = read.comparisonCommit(ctx, base); err != nil {
 		return result, err
 	}
-	if result.Target, err = repo.comparisonCommit(ctx, target); err != nil {
+	if result.Target, err = read.comparisonCommit(ctx, target); err != nil {
 		return result, err
 	}
 	result.From = result.Base
 	if mergeBase {
-		output, err := repo.git(ctx, "merge-base", "--all", result.Base, result.Target)
+		output, err := read(ctx, "merge-base", "--all", result.Base, result.Target)
 		if err != nil {
-			if exitCode(err, 1) {
+			if isExitCode(err, 1) {
 				return result, errors.New("两个版本没有共同祖先，请使用两端快照比较")
 			}
 			return result, fmt.Errorf("无法确定共同祖先：%w", err)
@@ -49,20 +59,24 @@ func (repo *Repository) Compare(ctx context.Context, base, target string, mergeB
 			return result, errors.New("存在多个共同祖先，请使用两端快照比较")
 		}
 		result.From = ancestors[0]
+		if err := validCommitHash(result.From); err != nil {
+			return result, err
+		}
 	}
-	result.Files, err = repo.comparisonFiles(ctx, result.From, result.Target)
-	if err == nil {
-		repo.rememberChanges(compareChangesKey(result.From, result.Target), result.Files)
-	}
+	result.Files, err = read.comparisonFiles(ctx, result.From, result.Target)
 	return result, err
 }
 
 func (repo *Repository) comparisonCommit(ctx context.Context, revision string) (string, error) {
+	return readGitCommand(repo.git).comparisonCommit(ctx, revision)
+}
+
+func (read readGitCommand) comparisonCommit(ctx context.Context, revision string) (string, error) {
 	revision = strings.TrimSpace(revision)
 	if revision == "" || strings.ContainsRune(revision, 0) {
 		return "", errors.New("比较版本不能为空或包含无效字符")
 	}
-	output, err := repo.git(ctx, "rev-parse", "--verify", "--end-of-options", revision+"^{commit}")
+	output, err := read(ctx, "rev-parse", "--verify", "--end-of-options", revision+"^{commit}")
 	if err != nil {
 		return "", fmt.Errorf("无法读取比较版本 %s：%w", revision, err)
 	}
@@ -70,8 +84,8 @@ func (repo *Repository) comparisonCommit(ctx context.Context, revision string) (
 	return hash, validCommitHash(hash)
 }
 
-func (repo *Repository) comparisonFiles(ctx context.Context, from, target string) ([]CommitFile, error) {
-	output, err := repo.git(ctx, "diff", "--name-status", "-z", "--no-relative",
+func (read readGitCommand) comparisonFiles(ctx context.Context, from, target string) ([]CommitFile, error) {
+	output, err := read(ctx, "diff", "--name-status", "-z", "--no-relative",
 		"--no-ext-diff", "--no-textconv", "--find-renames", from, target, "--")
 	if err != nil {
 		return nil, err
@@ -100,7 +114,7 @@ func (repo *Repository) CompareFileDiff(ctx context.Context, from, target, path 
 	files, ok := repo.cachedChanges(compareChangesKey(from, target))
 	if !ok {
 		var err error
-		if files, err = repo.comparisonFiles(ctx, from, target); err != nil {
+		if files, err = readGitCommand(repo.git).comparisonFiles(ctx, from, target); err != nil {
 			return Diff{}, err
 		}
 		repo.rememberChanges(compareChangesKey(from, target), files)
@@ -115,16 +129,11 @@ func (repo *Repository) CompareFileDiff(ctx context.Context, from, target, path 
 	if selected == nil {
 		return Diff{}, errors.New("文件不在此比较的变更中")
 	}
-	args := []string{"-c", "core.quotePath=true", "diff", "--patch", "--no-color",
-		"--src-prefix=a/", "--dst-prefix=b/", "--no-relative", "--submodule=short",
-		"--output-indicator-new=+", "--output-indicator-old=-", "--output-indicator-context= ",
-		"--no-ext-diff", "--no-textconv", "--find-renames", from, target, "--", selected.Path}
 	oldPath := selected.Path
 	if selected.OriginalPath != "" {
 		oldPath = selected.OriginalPath
-		args = append(args, oldPath)
 	}
-	diff, err := repo.selectedPatchPreview(ctx, args, *selected)
+	diff, err := selectedPatchPreview(ctx, repo.gitPreview, comparisonPatchArgs(from, target, *selected), *selected)
 	if err != nil {
 		return Diff{}, err
 	}
@@ -136,4 +145,15 @@ func (repo *Repository) CompareFileDiff(ctx context.Context, from, target, path 
 		diff.Generated = repo.isGeneratedDiff(ctx, diff)
 	}
 	return diff, err
+}
+
+func comparisonPatchArgs(from, target string, file CommitFile) []string {
+	args := []string{"-c", "core.quotePath=true", "diff", "--patch", "--no-color",
+		"--src-prefix=a/", "--dst-prefix=b/", "--no-relative", "--submodule=short",
+		"--output-indicator-new=+", "--output-indicator-old=-", "--output-indicator-context= ",
+		"--no-ext-diff", "--no-textconv", "--find-renames", from, target, "--", file.Path}
+	if file.OriginalPath != "" {
+		args = append(args, file.OriginalPath)
+	}
+	return args
 }

@@ -161,7 +161,7 @@ func pruneInsightsCache(cacheFile string, paths []string) {
 }
 
 func (app *nativeApp) refreshInsights(force bool) {
-	if app.repository == nil || app.screen != "insights" || !app.prefs.SidebarItems.Insights || app.closed {
+	if app.repository == nil && app.ssh == nil || app.screen != "insights" || !app.prefs.SidebarItems.Insights || app.closed {
 		return
 	}
 	if app.insights == nil {
@@ -190,32 +190,44 @@ func (app *nativeApp) refreshInsights(force bool) {
 	}
 	state.from, state.until, state.checked, state.problem = from, until, now, ""
 	state.requestRef = state.ref
-	path, ref := app.repository.snapshot.Path, state.ref
-	cacheFile := app.insightsCacheFile(path)
-	known := make([]string, 0, len(app.library.Repositories))
-	for _, entry := range app.library.Repositories {
-		known = append(known, entry.Path)
+	ref := state.ref
+	var read func(context.Context) (*gitrepo.RepositoryInsights, error)
+	if app.ssh != nil {
+		repo := app.ssh.repo
+		read = func(ctx context.Context) (*gitrepo.RepositoryInsights, error) {
+			result, err := repo.Insights(ctx, ref, from, until)
+			return &result, err
+		}
+	} else {
+		path := app.repository.snapshot.Path
+		cacheFile := app.insightsCacheFile(path)
+		known := make([]string, 0, len(app.library.Repositories))
+		for _, entry := range app.library.Repositories {
+			known = append(known, entry.Path)
+		}
+		read = func(ctx context.Context) (*gitrepo.RepositoryInsights, error) {
+			source, err := app.service.InsightsSource(ctx, path, ref)
+			if err != nil {
+				return nil, err
+			}
+			key := insightsCacheKey(path, ref, source, from, until)
+			if !force {
+				if result := readInsightsCache(cacheFile, key, from, until); result != nil {
+					return result, nil
+				}
+			}
+			result, err := app.service.Insights(ctx, path, source, from, until)
+			if err == nil && ctx.Err() == nil {
+				pruneInsightsCache(cacheFile, known)
+				writeInsightsCache(cacheFile, key, result)
+			}
+			return &result, err
+		}
 	}
 	app.load(locales.InsightsLoading(), nativeReadInsights, func(ctx context.Context) (func(), error) {
 		ctx, cancel := context.WithTimeout(ctx, 25*time.Second)
 		defer cancel()
-		var result *gitrepo.RepositoryInsights
-		source, err := app.service.InsightsSource(ctx, path, ref)
-		if err == nil {
-			key := insightsCacheKey(path, ref, source, from, until)
-			if !force {
-				result = readInsightsCache(cacheFile, key, from, until)
-			}
-			if result == nil {
-				var data gitrepo.RepositoryInsights
-				data, err = app.service.Insights(ctx, path, source, from, until)
-				if err == nil && ctx.Err() == nil {
-					result = &data
-					pruneInsightsCache(cacheFile, known)
-					writeInsightsCache(cacheFile, key, data)
-				}
-			}
-		}
+		result, err := read(ctx)
 		return func() {
 			if app.insights != state || state.ref != ref || !state.from.Equal(from) || !state.until.Equal(until) {
 				return
@@ -231,9 +243,17 @@ func (app *nativeApp) refreshInsights(force bool) {
 
 func (app *nativeApp) insightsRefs() []string {
 	refs := []string{"HEAD"}
-	for _, branch := range app.repository.branches {
-		if !branch.Remote {
-			refs = append(refs, "refs/heads/"+branch.Name)
+	if app.ssh != nil {
+		for _, ref := range app.ssh.refs {
+			if strings.HasPrefix(ref, "refs/heads/") {
+				refs = append(refs, ref)
+			}
+		}
+	} else {
+		for _, branch := range app.repository.branches {
+			if !branch.Remote {
+				refs = append(refs, "refs/heads/"+branch.Name)
+			}
 		}
 	}
 	if app.insights != nil && !slices.Contains(refs, app.insights.ref) {

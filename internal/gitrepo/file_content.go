@@ -101,6 +101,12 @@ func (repo *Repository) treeFileContent(ctx context.Context, path, revision, has
 }
 
 func (repo *Repository) readTreeFileContent(ctx context.Context, side *FileContent, hash string) (*FileContent, error) {
+	return readTreeFileContent(ctx, side, hash, repo.git, repo.blobFileContentSized)
+}
+
+func readTreeFileContent(ctx context.Context, side *FileContent, hash string,
+	git func(context.Context, ...string) (string, error),
+	blob func(context.Context, *FileContent, string, string, int64) (*FileContent, error)) (*FileContent, error) {
 	path := side.Path
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -109,7 +115,7 @@ func (repo *Repository) readTreeFileContent(ctx context.Context, side *FileConte
 		return side, nil
 	}
 	// -l 同时给出 blob 大小，省去单独的 cat-file -s。
-	output, err := repo.git(ctx, "ls-tree", "-l", "-z", hash, "--", path)
+	output, err := git(ctx, "ls-tree", "-l", "-z", hash, "--", path)
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +138,7 @@ func (repo *Repository) readTreeFileContent(ctx context.Context, side *FileConte
 				return nil, errors.New("文件对象大小无效")
 			}
 		}
-		return repo.blobFileContentSized(ctx, side, fields[0], fields[2], size)
+		return blob(ctx, side, fields[0], fields[2], size)
 	}
 	return side, nil
 }
@@ -142,8 +148,14 @@ func (repo *Repository) indexFileContent(ctx context.Context, path string) (*Fil
 }
 
 func (repo *Repository) readIndexFileContent(ctx context.Context, side *FileContent) (*FileContent, error) {
+	return readIndexFileContent(ctx, side, repo.git, repo.blobFileContentSized)
+}
+
+func readIndexFileContent(ctx context.Context, side *FileContent,
+	git func(context.Context, ...string) (string, error),
+	blob func(context.Context, *FileContent, string, string, int64) (*FileContent, error)) (*FileContent, error) {
 	path := side.Path
-	output, err := repo.git(ctx, "ls-files", "--stage", "-z", "--", path)
+	output, err := git(ctx, "ls-files", "--stage", "-z", "--", path)
 	if err != nil {
 		return nil, err
 	}
@@ -161,13 +173,9 @@ func (repo *Repository) readIndexFileContent(ctx context.Context, side *FileCont
 			side.Present, side.Unsupported = true, true
 			return side, nil
 		}
-		return repo.blobFileContent(ctx, side, fields[0], fields[1])
+		return blob(ctx, side, fields[0], fields[1], -1)
 	}
 	return side, nil
-}
-
-func (repo *Repository) blobFileContent(ctx context.Context, side *FileContent, mode, hash string) (*FileContent, error) {
-	return repo.blobFileContentSized(ctx, side, mode, hash, -1)
 }
 
 // blobFileContentSized 的 size 为 -1 时表示大小未知；已从 ls-tree -l 得到大小时可直接跳过大对象。

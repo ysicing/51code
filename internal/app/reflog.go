@@ -13,14 +13,28 @@ import (
 )
 
 func (app *nativeApp) canReadReflog() bool {
-	return app.repository != nil && app.screen != "library" && !app.closed && !app.busy && app.dialog == nil
+	return (app.repository != nil || app.ssh != nil) && app.screen != "library" && !app.closed && !app.busy && app.dialog == nil
 }
 
 func (app *nativeApp) lostCommitsDialog() {
 	if !app.canReadReflog() {
 		return
 	}
-	path := app.repository.snapshot.Path
+	var read func(context.Context) (gitrepo.LostCommits, error)
+	var head string
+	if app.ssh != nil {
+		read, head = app.ssh.repo.LostCommits, app.ssh.snapshot.Head
+	} else {
+		path := app.repository.snapshot.Path
+		head = app.repository.snapshot.Head
+		read = func(ctx context.Context) (gitrepo.LostCommits, error) {
+			repo, err := app.service.manager.Get(path)
+			if err != nil {
+				return gitrepo.LostCommits{}, err
+			}
+			return repo.LostCommits(ctx)
+		}
+	}
 	var result gitrepo.LostCommits
 	loading, selected := true, -1
 	list := ui.ListState{Selected: &selected}
@@ -71,7 +85,7 @@ func (app *nativeApp) lostCommitsDialog() {
 					}
 				})
 			}).Label(locales.FindLostCommits()).FillWidth().Height(listHeight)
-			disabled := !hasSelection() || app.readTask != nil || app.repository.snapshot.Head == ""
+			disabled := !hasSelection() || app.readTask != nil || head == ""
 			ui.Row(c).FillWidth().Justify(ui.End).Children(func() {
 				ui.Button(c, locales.CompareCommitWithHead()).Disabled(disabled).OnClick(func() {
 					if app.dialog != dialog || !hasSelection() {
@@ -89,11 +103,7 @@ func (app *nativeApp) lostCommitsDialog() {
 	}
 	app.dialog = dialog
 	app.load(locales.ReadingReflog(), nativeReadReflog, func(ctx context.Context) (func(), error) {
-		repo, err := app.service.manager.Get(path)
-		var commits gitrepo.LostCommits
-		if err == nil {
-			commits, err = repo.LostCommits(ctx)
-		}
+		commits, err := read(ctx)
 		return func() {
 			if app.dialog != dialog {
 				return

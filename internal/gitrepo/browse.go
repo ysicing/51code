@@ -20,6 +20,13 @@ func (repo *Repository) BrowseFiles(ctx context.Context, revision string) ([]str
 	if err != nil {
 		return nil, err
 	}
+	return browsePaths(ctx, revision, hash, validBrowsePath, func(ctx context.Context, addPath func(string) error, args ...string) error {
+		return runRecords(ctx, repo.Path, 30*time.Second, addPath, args...)
+	})
+}
+
+func browsePaths(ctx context.Context, revision, hash string, valid func(string) error,
+	records func(context.Context, func(string) error, ...string) error) ([]string, error) {
 	paths := map[string]bool{}
 	addPath := func(path string) error {
 		if path != "" {
@@ -32,18 +39,18 @@ func (repo *Repository) BrowseFiles(ctx context.Context, revision string) ([]str
 		if revision == "WORKTREE" {
 			args = append(args, "--others", "--exclude-standard")
 		}
-		if err := runRecords(ctx, repo.Path, 30*time.Second, addPath, append(args, "--")...); err != nil {
+		if err := records(ctx, addPath, append(args, "--")...); err != nil {
 			return nil, err
 		}
 	}
 	if hash != "" && revision != "INDEX" {
-		if err := runRecords(ctx, repo.Path, 30*time.Second, addPath, "ls-tree", "-r", "--name-only", "-z", hash, "--"); err != nil {
+		if err := records(ctx, addPath, "ls-tree", "-r", "--name-only", "-z", hash, "--"); err != nil {
 			return nil, err
 		}
 	}
 	files := make([]string, 0, len(paths))
 	for path := range paths {
-		if err := validBrowsePath(path); err != nil {
+		if err := valid(path); err != nil {
 			return nil, err
 		}
 		files = append(files, path)
@@ -67,33 +74,8 @@ func (repo *Repository) BrowseFileContent(ctx context.Context, path, revision st
 	side.blameBase = hash
 	switch revision {
 	case "WORKTREE":
-		output, err := repo.git(ctx, "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", path)
-		if err != nil {
+		if err := checkBrowseWorktreeMember(ctx, repo.git, path, hash); err != nil {
 			return nil, err
-		}
-		member := false
-		for _, name := range strings.Split(output, "\x00") {
-			if strings.TrimSuffix(name, "/") == path {
-				member = true
-				break
-			}
-		}
-		if !member && hash != "" {
-			output, err = repo.git(ctx, "ls-tree", "-z", hash, "--", path)
-			if err != nil {
-				return nil, err
-			}
-			for _, record := range strings.Split(output, "\x00") {
-				metadata, name, ok := strings.Cut(record, "\t")
-				fields := strings.Fields(metadata)
-				if ok && name == path && len(fields) == 3 && fields[1] != "tree" {
-					member = true
-					break
-				}
-			}
-		}
-		if !member {
-			return nil, errors.New("文件不在仓库浏览范围内")
 		}
 		return repo.readWorktreeFileContent(ctx, side)
 	case "INDEX":
@@ -110,10 +92,40 @@ func (repo *Repository) BrowseFileContent(ctx context.Context, path, revision st
 	}
 }
 
+func checkBrowseWorktreeMember(ctx context.Context, git func(context.Context, ...string) (string, error), path, hash string) error {
+	output, err := git(ctx, "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", path)
+	if err != nil {
+		return err
+	}
+	for name := range strings.SplitSeq(output, "\x00") {
+		if strings.TrimSuffix(name, "/") == path {
+			return nil
+		}
+	}
+	if hash != "" {
+		output, err = git(ctx, "ls-tree", "-z", hash, "--", path)
+		if err != nil {
+			return err
+		}
+		for record := range strings.SplitSeq(output, "\x00") {
+			metadata, name, ok := strings.Cut(record, "\t")
+			fields := strings.Fields(metadata)
+			if ok && name == path && len(fields) == 3 && fields[1] != "tree" {
+				return nil
+			}
+		}
+	}
+	return errors.New("文件不在仓库浏览范围内")
+}
+
 func (repo *Repository) browseRevision(ctx context.Context, revision string) (string, error) {
+	return resolveBrowseRevision(ctx, revision, repo.head)
+}
+
+func resolveBrowseRevision(ctx context.Context, revision string, head func(context.Context) (string, error)) (string, error) {
 	switch revision {
 	case "HEAD", "WORKTREE":
-		return repo.head(ctx)
+		return head(ctx)
 	case "INDEX":
 		return "", ctx.Err()
 	default:

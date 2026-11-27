@@ -39,9 +39,10 @@ type Group struct {
 }
 
 type Library struct {
-	Repositories   []LocalRepository `json:"repositories"`
-	Groups         []Group           `json:"groups"`
-	DefaultGroupID string            `json:"defaultGroupID,omitempty"`
+	Repositories    []LocalRepository      `json:"repositories"`
+	SSHRepositories []gitrepo.SSHWorkspace `json:"sshRepositories,omitempty"`
+	Groups          []Group                `json:"groups"`
+	DefaultGroupID  string                 `json:"defaultGroupID,omitempty"`
 }
 
 func emptyLibrary() Library {
@@ -50,10 +51,35 @@ func emptyLibrary() Library {
 
 func copyLibrary(library Library) Library {
 	return Library{
-		Repositories:   append([]LocalRepository{}, library.Repositories...),
-		Groups:         append([]Group{}, library.Groups...),
-		DefaultGroupID: library.DefaultGroupID,
+		Repositories:    append([]LocalRepository{}, library.Repositories...),
+		SSHRepositories: slices.Clone(library.SSHRepositories),
+		Groups:          append([]Group{}, library.Groups...),
+		DefaultGroupID:  library.DefaultGroupID,
 	}
+}
+
+func (manager *Manager) RememberSSH(ctx context.Context, repo gitrepo.SSHWorkspace) (Library, error) {
+	return manager.update(func(next *Library) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if slices.Contains(next.SSHRepositories, repo) {
+			return errUnchanged
+		}
+		next.SSHRepositories = append([]gitrepo.SSHWorkspace{repo}, next.SSHRepositories...)
+		return nil
+	}, nil)
+}
+
+func (manager *Manager) ForgetSSH(repo gitrepo.SSHWorkspace) (Library, error) {
+	return manager.update(func(next *Library) error {
+		index := slices.Index(next.SSHRepositories, repo)
+		if index < 0 {
+			return errUnchanged
+		}
+		next.SSHRepositories = slices.Delete(next.SSHRepositories, index, index+1)
+		return nil
+	}, nil)
 }
 
 func (manager *Manager) Library() Library {

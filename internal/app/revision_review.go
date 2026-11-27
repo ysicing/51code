@@ -16,11 +16,20 @@ type revisionReviewScope struct {
 	repository, base, target string
 }
 
-func (app *nativeApp) revisionReviewScope() revisionReviewScope {
+func (app *nativeApp) reviewRepositoryKey() string {
+	if app.ssh != nil {
+		return "ssh:" + app.ssh.address()
+	}
 	if app.repository != nil {
-		path := app.repository.snapshot.Path
+		return app.repository.snapshot.Path
+	}
+	return ""
+}
+
+func (app *nativeApp) revisionReviewScope() revisionReviewScope {
+	if path := app.reviewRepositoryKey(); path != "" {
 		switch app.screen {
-		case "history", "search":
+		case "history", "sshHistory", "search":
 			if !app.historyWorking && app.commitHash != "" && app.diff.Old != nil &&
 				app.diff.New != nil && app.diff.New.Revision == app.commitHash {
 				return revisionReviewScope{path, app.diff.Old.Revision, app.commitHash}

@@ -79,11 +79,17 @@ func (app *nativeApp) insightsPanel(c *ui.Context) {
 func (app *nativeApp) insightsControls(c *ui.Context) {
 	state := app.insights
 	refs := app.insightsRefs()
+	var branch string
+	if app.ssh != nil {
+		branch = app.ssh.snapshot.Branch
+	} else {
+		branch = app.repository.snapshot.Branch
+	}
 	labels := make([]string, len(refs))
 	for index, ref := range refs {
 		labels[index] = strings.TrimPrefix(ref, "refs/heads/")
 		if ref == "HEAD" {
-			labels[index] = locales.CurrentBranch() + " · " + app.repository.snapshot.Branch
+			labels[index] = locales.CurrentBranch() + " · " + branch
 		}
 	}
 	selected := labels[max(0, slices.Index(refs, state.ref))]
