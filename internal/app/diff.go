@@ -307,15 +307,23 @@ func (app *nativeApp) fileDiffPanel(c *ui.Context) {
 			app.fullFilePanel(c)
 			return
 		}
-		if app.workingFileActions() {
+		workingFileActions := app.workingFileActions()
+		if workingFileActions {
 			ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(4).Padding(0, 10).Children(func() {
 				app.patchToolbar(c)
 			})
 		}
 		ui.Divider(c)
 		app.diffBoundaryNotice(c)
-		if app.diff.Generated && generatedDiffDisclosure(c, &app.fileViewer.generatedExpanded) {
-			return
+		if app.diff.Generated {
+			if !workingFileActions {
+				ui.Row(c).Key("generated-diff-disclosure").FillWidth().Padding(8, 12).Children(func() {
+					generatedDiffDisclosure(c, &app.fileViewer.generatedExpanded)
+				})
+			}
+			if !app.fileViewer.generatedExpanded {
+				return
+			}
 		}
 		if app.imageDiffPanel(c) {
 			return

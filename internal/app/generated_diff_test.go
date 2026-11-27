@@ -23,18 +23,23 @@ func TestGeneratedFileInChangesWorkspace(t *testing.T) {
 	tester := ui.NewTester(app.view, 1024, 680)
 	for _, dark := range []bool{false, true} {
 		tester.SetDark(dark)
-		for _, label := range []string{locales.StageFile(), locales.ExpandGeneratedDiff()} {
-			item, ok := tester.AccessByRole(ui.RoleButton, label)
-			if !ok || item.Offscreen || item.Disabled {
-				t.Fatalf("入口不可用 %q: %+v", label, item)
-			}
-		}
 		if directory := os.Getenv("XSOURCETREE_TEST_SCREENSHOTS"); directory != "" {
 			name := "generated-diff-light.png"
 			if dark {
 				name = "generated-diff-dark.png"
 			}
 			saveNativeScreenshot(t, tester, directory, name)
+		}
+		stage, ok := tester.AccessByRole(ui.RoleButton, locales.StageFile())
+		if !ok || stage.Offscreen || stage.Disabled {
+			t.Fatalf("暂存入口不可用: %+v", stage)
+		}
+		disclosure, ok := tester.AccessByRole(ui.RoleButton, locales.ExpandGeneratedDiff())
+		if !ok || disclosure.Offscreen || disclosure.Disabled {
+			t.Fatalf("展开入口不可用: %+v", disclosure)
+		}
+		if stage.Bounds.Y+stage.Bounds.H/2 != disclosure.Bounds.Y+disclosure.Bounds.H/2 {
+			t.Fatalf("暂存和展开按钮不在同一行: 暂存 %+v，展开 %+v", stage.Bounds, disclosure.Bounds)
 		}
 	}
 	if err := tester.Click(locales.ExpandGeneratedDiff()); err != nil {

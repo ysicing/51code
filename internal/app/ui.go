@@ -930,6 +930,9 @@ func (app *nativeApp) patchToolbar(c *ui.Context) {
 		if ui.Button(c, action).Disabled(!app.writable).Clicked() {
 			app.stageSelectedFile()
 		}
+		if app.diff.Generated {
+			generatedDiffDisclosure(c, &app.fileViewer.generatedExpanded)
+		}
 		if ui.Button(c, locales.FileHistory()).Clicked() {
 			app.fileHistoryAction()
 		}

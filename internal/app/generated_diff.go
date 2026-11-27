@@ -9,15 +9,13 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-func generatedDiffDisclosure(c *ui.Context, expanded *bool) bool {
+func generatedDiffDisclosure(c *ui.Context, expanded *bool) {
 	label := locales.ExpandGeneratedDiff()
 	if *expanded {
 		label = locales.CollapseGeneratedDiff()
 	}
-	ui.Row(c).Key("generated-diff-disclosure").FillWidth().Padding(8, 12).Children(func() {
-		ui.Button(c, label).OnClick(func() {
-			*expanded = !*expanded
-		})
+	c.Key("generated-diff-toggle")
+	ui.Button(c, label).OnClick(func() {
+		*expanded = !*expanded
 	})
-	return !*expanded
 }
