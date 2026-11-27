@@ -54,7 +54,11 @@ func (app *nativeApp) scanStagedSecrets() {
 }
 
 func (app *nativeApp) secretScanDialog(path string, scan gitrepo.SecretScan, proceed func()) {
-	if !app.showsStagedChanges() || app.repository.snapshot.Path != path {
+	if app.ssh != nil {
+		if app.screen != "sshChanges" || app.ssh.address() != path {
+			return
+		}
+	} else if !app.showsStagedChanges() || app.repository.snapshot.Path != path {
 		return
 	}
 	dialog := &nativeDialog{title: locales.SecretScanTitle(), width: 560, dismiss: locales.Close()}

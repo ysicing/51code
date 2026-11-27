@@ -106,12 +106,16 @@ func (repo SSHWorkspace) readInput(ctx context.Context, input string, args ...st
 }
 
 func (repo SSHWorkspace) script(ctx context.Context, command string, output io.Writer) error {
+	return repo.scriptTimeout(ctx, command, output, 30*time.Second)
+}
+
+func (repo SSHWorkspace) scriptTimeout(ctx context.Context, command string, output io.Writer, timeout time.Duration) error {
 	if !validSSHPath(repo.Path) {
 		return errors.New("请输入远端工作区的绝对路径")
 	}
 	prefix := "unset CDPATH\ncd -P " + sshShellWord(repo.Path) + " || exit 2\n" +
 		"root=$(git rev-parse --show-toplevel) && cd -P \"$root\" || exit 2\n"
-	return runSSH(ctx, repo.Host, prefix+command, output)
+	return runSSHTimeout(ctx, repo.Host, prefix+command, output, timeout)
 }
 
 const sshGit = "git --no-pager --no-optional-locks --literal-pathspecs -c core.fsmonitor=false -c color.ui=false -c core.quotePath=false"
@@ -141,10 +145,14 @@ func runSSHScript(ctx context.Context, host, script string) (string, error) {
 }
 
 func runSSH(ctx context.Context, host, script string, stdout io.Writer) error {
+	return runSSHTimeout(ctx, host, script, stdout, 30*time.Second)
+}
+
+func runSSHTimeout(ctx context.Context, host, script string, stdout io.Writer, timeout time.Duration) error {
 	if !ValidSSHHost(host) {
 		return errors.New("SSH 主机须为配置别名、主机名或 user@host")
 	}
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "ssh", "-T", "-a", "-x", "-oBatchMode=yes",
 		"-oStrictHostKeyChecking=yes", "-oClearAllForwardings=yes", "-oConnectTimeout=10", "--", host, "sh -s")
@@ -165,7 +173,7 @@ func runSSH(ctx context.Context, host, script string, stdout io.Writer) error {
 }
 
 func (repo SSHWorkspace) Snapshot(ctx context.Context) (Snapshot, []string, error) {
-	raw, err := repo.read(ctx, "status", "--porcelain=v2", "-z", "--branch", "--untracked-files=all")
+	raw, err := repo.read(ctx, "status", "--porcelain=v2", "-z", "--branch", "--ahead-behind", "--untracked-files=all")
 	if err != nil {
 		return Snapshot{}, nil, err
 	}
@@ -173,11 +181,41 @@ func (repo SSHWorkspace) Snapshot(ctx context.Context) (Snapshot, []string, erro
 	if err != nil {
 		return Snapshot{}, nil, err
 	}
-	refs, err := repo.read(ctx, "for-each-ref", "--format=%(refname)", "refs/heads", "refs/remotes", "refs/tags")
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	refs := limitedBuffer{cancel: cancel}
+	ref := ""
+	if !branch.detached {
+		ref = "refs/heads/" + branch.branch
+	}
+	err = repo.script(ctx, `gitdir=$(git rev-parse --absolute-git-dir) && common=$(git rev-parse --git-common-dir) || exit 2
+printf '%s\n' "$PWD"
+if [ -w . ] && [ -w "$gitdir" ] && [ -w "$common" ] && [ -w "$common/objects" ]; then printf 'writable\n'; else printf 'readonly\n'; fi
+ref=`+sshShellWord(ref)+`
+upstream=''
+if [ -n "$ref" ]; then
+    upstream=$(git for-each-ref '--format=%(upstream:short)%09%(upstream:remotename)%09%(upstream:remoteref)' -- "$ref") || exit 2
+fi
+printf '%s\n' "$upstream"
+exec `+sshGit+` for-each-ref '--format=%(refname)' refs/heads refs/remotes refs/tags`, &refs)
+	if refs.overflow {
+		return Snapshot{}, nil, errOutputTooLarge
+	}
+	if err != nil {
+		return Snapshot{}, nil, err
+	}
+	header := strings.SplitN(refs.String(), "\n", 4)
+	if len(header) != 4 || !validSSHPath(header[0]) {
+		return Snapshot{}, nil, errors.New("无法读取远端工作区根路径")
+	}
+	upstream, rest, _ := strings.Cut(header[2], "\t")
+	remote, remoteRef, _ := strings.Cut(rest, "\t")
 	if branch.detached {
 		branch.branch = branch.head[:min(8, len(branch.head))]
 	}
-	return Snapshot{Branch: branch.branch, Head: branch.head, Files: files}, strings.Fields(refs), err
+	return Snapshot{Path: header[0], Branch: branch.branch, Head: branch.head, Files: files, Detached: branch.detached,
+		Unborn: branch.head == "", Upstream: upstream, Ahead: branch.ahead, Behind: branch.behind,
+		SSHWritable: header[1] == "writable", SSHRemote: remote, SSHRemoteRef: remoteRef}, strings.Fields(header[3]), nil
 }
 
 func (repo SSHWorkspace) History(ctx context.Context, ref string) ([]Commit, error) {

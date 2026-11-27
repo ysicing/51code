@@ -24,9 +24,14 @@ type nativeSSHWorkspace struct {
 	ref            string
 	historyFile    string
 	stashes        []gitrepo.Stash
+	stopStats      context.CancelFunc
+	stats          gitrepo.SSHHostStats
+	down, up       string
 }
 
 func (state *nativeSSHWorkspace) address() string { return state.repo.Host + ":" + state.repo.Path }
+
+func sshRepositoryKey(repo gitrepo.SSHWorkspace) string { return "ssh:" + repo.Host + ":" + repo.Path }
 
 func (state *nativeSSHWorkspace) title() string {
 	return path.Base(state.repo.Path) + " · " + state.repo.Host
@@ -46,25 +51,19 @@ func (app *nativeApp) connectSSHRepository(saved gitrepo.SSHWorkspace) {
 
 func (app *nativeApp) openSSHRepository(form *nativeDialog, repo gitrepo.SSHWorkspace) {
 	state := &nativeSSHWorkspace{repo: repo}
-	key := "ssh:" + state.address()
 	if form.cancel != nil {
 		form.cancel()
 		form.cancel = nil
 	}
-	if app.desktop != nil {
-		if existing := app.desktop.repositories[key]; existing != nil && !existing.closed && slices.Contains(app.library.SSHRepositories, state.repo) {
-			app.closeDialog(form)
-			app.desktop.present(existing)
-			return
-		}
-	}
 	ctx, cancel := context.WithCancel(app.ctx)
+	groupID := app.addRepositoryGroup()
 	form.cancel, form.blocked, form.problem = cancel, true, ""
 	go func() {
 		snapshot, refs, err := state.repo.Snapshot(ctx)
 		var library workspace.Library
 		if err == nil {
-			library, err = app.service.manager.RememberSSH(ctx, state.repo)
+			state.repo.Path = snapshot.Path
+			library, err = app.service.manager.OpenSSH(ctx, repo, state.repo, groupID)
 		}
 		app.post(func() {
 			defer cancel()
@@ -80,6 +79,8 @@ func (app *nativeApp) openSSHRepository(form *nativeDialog, repo gitrepo.SSHWork
 			app.library = library
 			window := app
 			if app.desktop != nil {
+				key := sshRepositoryKey(state.repo)
+				app.desktop.refreshLibraries()
 				if existing := app.desktop.repositories[key]; existing != nil && !existing.closed {
 					app.desktop.present(existing)
 					return
@@ -101,40 +102,16 @@ func (app *nativeApp) openSSHRepository(form *nativeDialog, repo gitrepo.SSHWork
 func (app *nativeApp) sshLibraryView(c *ui.Context) {
 	ui.Column(c).FillWidth().Grow(1).MinHeight(0).Padding(22).Gap(16).Children(func() {
 		ui.TextInput(c, &app.remoteQuery).Search().Placeholder(locales.SearchSshRepositories()).Label(locales.SearchSshRepositories()).FillWidth()
-		query := strings.ToLower(strings.TrimSpace(app.remoteQuery))
+		entries := app.sshLibraryEntries(app.remoteQuery)
 		if len(app.library.SSHRepositories) == 0 {
 			ui.Column(c).Fill().Center().Children(func() { ui.Text(c, locales.NoSshRepositories()).TextColor(c.Theme().TextMuted) })
 			return
 		}
-		matched := false
 		ui.Scroll(c).Grow(1).MinHeight(0).FillWidth().Children(func() {
-			for _, repo := range app.library.SSHRepositories {
-				if !strings.Contains(strings.ToLower(repo.Host+":"+repo.Path), query) {
-					continue
-				}
-				matched = true
-				name, address := path.Base(repo.Path), repo.Host+" · "+repo.Path
-				ui.Row(c).Key(repo).FillWidth().Padding(4, 0).Gap(8).AlignItems(ui.Center).Children(func() {
-					listRow(c, name, false).Description(address).Grow(1).Padding(14, 12).Children(func() {
-						ui.Icon(c, nativeIcons["cloud"]).FontSize(24).TextColor(c.Theme().TextMuted)
-						ui.Column(c).Grow(1).MinWidth(0).Gap(5).Children(func() {
-							ui.Text(c, name).FontSize(14).Bold().SingleLine()
-							ui.Text(c, address).FontSize(12).TextColor(c.Theme().TextMuted).SingleLine().Tooltip(address)
-						})
-					}).OnClick(func() { app.connectSSHRepository(repo) })
-					iconButton(c, locales.Manage()+" "+address, nativeIcons["more"]).Menu(func(menu *ui.Menu) {
-						if menu.Item(locales.RemoveFromListMenu()).Chosen() {
-							app.confirm(locales.RemoveFromListMenu(), address, locales.Remove(), func() {
-								app.libraryChange(locales.RemovingRecord(), func(context.Context) (workspace.Library, error) {
-									return app.service.manager.ForgetSSH(repo)
-								})
-							})
-						}
-					})
-				})
-				ui.Divider(c)
+			for _, entry := range entries {
+				app.sshLibraryRow(c, entry)
 			}
-			if !matched {
+			if len(entries) == 0 {
 				ui.Column(c).FillWidth().Center().Gap(8).Padding(22).Children(func() {
 					ui.Text(c, locales.NoMatchingRepositories()).TextColor(c.Theme().TextMuted)
 					ui.Button(c, locales.ClearSearch()).OnClick(func() { app.remoteQuery = "" })
@@ -144,49 +121,94 @@ func (app *nativeApp) sshLibraryView(c *ui.Context) {
 	})
 }
 
+func (app *nativeApp) sshLibraryEntries(query string) []workspace.SSHRepository {
+	query = strings.ToLower(strings.TrimSpace(query))
+	var entries []workspace.SSHRepository
+	for _, entry := range app.library.SSHRepositories {
+		if (app.remoteLibrary || app.group != "" && app.groupMatches(entry.GroupID)) &&
+			strings.Contains(strings.ToLower(entry.Host+":"+entry.Path), query) {
+			entries = append(entries, entry)
+		}
+	}
+	return entries
+}
+
+func (app *nativeApp) sshLibraryRow(c *ui.Context, entry workspace.SSHRepository) {
+	repo := entry.SSHWorkspace
+	name, address := path.Base(repo.Path), repo.Host+":"+repo.Path
+	ui.Row(c).Key(repo).FillWidth().Padding(4, 0).Gap(8).AlignItems(ui.Center).Children(func() {
+		listRow(c, name, false).Description(address).Grow(1).Padding(14, 12).Children(func() {
+			ui.Icon(c, nativeIcons["cloud"]).FontSize(24).TextColor(c.Theme().TextMuted)
+			ui.Column(c).Grow(1).MinWidth(0).Gap(5).Children(func() {
+				ui.Text(c, name).FontSize(14).Bold().SingleLine()
+				ui.Text(c, address).FontSize(12).TextColor(c.Theme().TextMuted).SingleLine().Tooltip(address)
+			})
+		}).OnClick(func() { app.connectSSHRepository(repo) })
+		iconButton(c, locales.Manage()+" "+address, nativeIcons["more"]).Disabled(app.busy || app.closed || app.dialog != nil).Menu(func(menu *ui.Menu) {
+			app.moveToGroupMenu(menu, entry.GroupID, func(id string) (workspace.Library, error) {
+				return app.service.manager.MoveSSH(repo, id)
+			})
+			menu.Separator()
+			if menu.Item(locales.RemoveFromListMenu()).Danger().Chosen() {
+				app.confirm(locales.RemoveFromListMenu(), address, locales.Remove(), func() {
+					app.libraryChange(locales.RemovingRecord(), func(context.Context) (workspace.Library, error) {
+						return app.service.manager.ForgetSSH(repo)
+					})
+				})
+			}
+		})
+	})
+	ui.Divider(c)
+}
+
 func (app *nativeApp) refreshSSH() {
 	state := app.ssh
 	app.load(locales.OpeningRepository(), nativeReadDiff, func(ctx context.Context) (func(), error) {
 		snapshot, refs, err := state.repo.Snapshot(ctx)
 		if err != nil {
-			return nil, err
+			return func() { state.snapshot.SSHWritable = false }, err
 		}
 		return func() {
 			state.update(snapshot, refs)
 			app.fileMetrics = nativeFileMetrics{}
-			switch app.screen {
-			case "worktrees":
-				app.loadWorktrees()
-			case "submodules":
-				app.loadSubmodules()
-			case "stash":
-				app.loadSSHStashes()
-			case "sshChanges":
-				app.selectSSHWorkingFile()
-			case "files":
-				app.loadBrowser(app.browser.revision, app.browser.file, nil)
-			case "insights":
-				app.refreshInsights(true)
-			case "sshHistory":
-				if strings.HasPrefix(state.ref, "refs/") && !slices.Contains(refs, state.ref) {
-					state.ref = ""
-				}
-				app.loadSSHHistory()
-			case "compare":
-				app.startComparison()
-			case "search":
-				app.pathSearch.invalidateQuickPaths()
-				switch app.searchMode {
-				case nativeSearchCommits:
-					app.searchHistory(false)
-				case nativeSearchPaths:
-					app.startWorktreeSearch(&app.pathSearch, true, false)
-				case nativeSearchContent:
-					app.startWorktreeSearch(&app.contentSearch, false, false)
-				}
-			}
+			app.refreshSSHView()
 		}, nil
 	})
+}
+
+func (app *nativeApp) refreshSSHView() {
+	state := app.ssh
+	switch app.screen {
+	case "worktrees":
+		app.loadWorktrees()
+	case "submodules":
+		app.loadSubmodules()
+	case "stash":
+		app.loadSSHStashes()
+	case "sshChanges":
+		app.selectSSHWorkingFile()
+	case "files":
+		app.loadBrowser(app.browser.revision, app.browser.file, nil)
+	case "insights":
+		app.refreshInsights(true)
+	case "sshHistory":
+		if strings.HasPrefix(state.ref, "refs/") && !slices.Contains(state.refs, state.ref) {
+			state.ref = ""
+		}
+		app.loadSSHHistory()
+	case "compare":
+		app.startComparison()
+	case "search":
+		app.pathSearch.invalidateQuickPaths()
+		switch app.searchMode {
+		case nativeSearchCommits:
+			app.searchHistory(false)
+		case nativeSearchPaths:
+			app.startWorktreeSearch(&app.pathSearch, true, false)
+		case nativeSearchContent:
+			app.startWorktreeSearch(&app.contentSearch, false, false)
+		}
+	}
 }
 
 func (app *nativeApp) switchSSH(selected string) {
@@ -410,7 +432,17 @@ func (app *nativeApp) sshSidebar(c *ui.Context) {
 		ui.SidebarSection(c, group.label, nil, func() {
 			for _, ref := range app.ssh.refs {
 				if name, ok := strings.CutPrefix(ref, group.prefix); ok {
-					ui.SidebarItem(c, ref, nativeIcons[group.icon], name).Tooltip(name)
+					item := ui.SidebarItem(c, ref, nativeIcons[group.icon], name).Tooltip(name)
+					if group.prefix == "refs/heads/" {
+						item.ContextMenu(func(menu *ui.Menu) {
+							if menu.Item(locales.Checkout()).Disabled(!app.ssh.snapshot.SSHWritable || name == app.ssh.snapshot.Branch || app.busy).Chosen() {
+								app.sshSwitchDialog(name)
+							}
+						})
+						if item.DoubleClicked() {
+							app.sshSwitchDialog(name)
+						}
+					}
 				}
 			}
 		})
@@ -420,8 +452,7 @@ func (app *nativeApp) sshSidebar(c *ui.Context) {
 func (app *nativeApp) sshPanel(c *ui.Context) {
 	if app.screen == "sshChanges" {
 		ui.Split(c, &app.prefs.Files, func() {
-			app.fileControls(c)
-			app.changesFileSections(c)
+			app.changesPanel(c)
 		}, func() { app.fileDiffPanel(c) }).Fill()
 		return
 	}

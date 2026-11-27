@@ -489,17 +489,9 @@ func (app *nativeApp) repositoryEntryMenu(menu *ui.Menu, entry workspace.LocalRe
 			app.problem = err.Error()
 		}
 	}
-	options, ids := app.groupChoices()
-	menu.Submenu(locales.MoveToGroup(), func(groups *ui.Menu) {
-		for _, label := range options {
-			group := ids[label]
-			if groups.Item(label).Checked(group == entry.GroupID).Disabled(unavailable).Chosen() && group != entry.GroupID {
-				app.libraryChange(locales.MovingRepository(), func(_ context.Context) (workspace.Library, error) {
-					return app.service.MoveRepository(entry.Path, group)
-				})
-			}
-		}
-	}).Disabled(unavailable)
+	app.moveToGroupMenu(menu, entry.GroupID, func(id string) (workspace.Library, error) {
+		return app.service.MoveRepository(entry.Path, id)
+	})
 	if menu.Item(locales.RelocateRepositoryMenu()).Disabled(unavailable || app.libraryRelocationBlocked(entry.Path)).Chosen() {
 		app.chooseRelocateRepository(entry)
 	}
@@ -511,6 +503,21 @@ func (app *nativeApp) repositoryEntryMenu(menu *ui.Menu, entry workspace.LocalRe
 			})
 		})
 	}
+}
+
+func (app *nativeApp) moveToGroupMenu(menu *ui.Menu, current string, move func(string) (workspace.Library, error)) {
+	unavailable := app.busy || app.closed || app.dialog != nil
+	options, ids := app.groupChoices()
+	menu.Submenu(locales.MoveToGroup(), func(groups *ui.Menu) {
+		for _, label := range options {
+			group := ids[label]
+			if groups.Item(label).Checked(group == current).Disabled(unavailable).Chosen() && group != current {
+				app.libraryChange(locales.MovingRepository(), func(context.Context) (workspace.Library, error) {
+					return move(group)
+				})
+			}
+		}
+	}).Disabled(unavailable)
 }
 
 func (app *nativeApp) chooseScan() {

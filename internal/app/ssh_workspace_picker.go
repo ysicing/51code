@@ -19,7 +19,9 @@ func (app *nativeApp) sshWorkspaceDialog() {
 	if app.screen != "library" || app.busy || app.closed || app.dialog != nil {
 		return
 	}
-	app.remoteLibrary, app.group = true, ""
+	if app.group == "" {
+		app.remoteLibrary = true
+	}
 	dialog := &nativeDialog{
 		title: locales.ConnectSshRepository(), width: 540, closeLabel: locales.Close(),
 		onClose: func() { app.dialog = nil },

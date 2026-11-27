@@ -38,11 +38,17 @@ type Group struct {
 	Name string `json:"name"`
 }
 
+type SSHRepository struct {
+	gitrepo.SSHWorkspace
+	GroupID      string `json:"groupID,omitempty"`
+	LastOpenedAt int64  `json:"lastOpenedAt,omitempty"`
+}
+
 type Library struct {
-	Repositories    []LocalRepository      `json:"repositories"`
-	SSHRepositories []gitrepo.SSHWorkspace `json:"sshRepositories,omitempty"`
-	Groups          []Group                `json:"groups"`
-	DefaultGroupID  string                 `json:"defaultGroupID,omitempty"`
+	Repositories    []LocalRepository `json:"repositories"`
+	SSHRepositories []SSHRepository   `json:"sshRepositories,omitempty"`
+	Groups          []Group           `json:"groups"`
+	DefaultGroupID  string            `json:"defaultGroupID,omitempty"`
 }
 
 func emptyLibrary() Library {
@@ -58,26 +64,87 @@ func copyLibrary(library Library) Library {
 	}
 }
 
-func (manager *Manager) RememberSSH(ctx context.Context, repo gitrepo.SSHWorkspace) (Library, error) {
+func (library Library) SSHIndex(repo gitrepo.SSHWorkspace) int {
+	return slices.IndexFunc(library.SSHRepositories, func(entry SSHRepository) bool {
+		return entry.SSHWorkspace == repo
+	})
+}
+
+func (library Library) GroupCounts(groupID string) (local, remote int) {
+	for _, entry := range library.Repositories {
+		if entry.GroupID == groupID {
+			local++
+		}
+	}
+	for _, entry := range library.SSHRepositories {
+		if entry.GroupID == groupID {
+			remote++
+		}
+	}
+	return local, remote
+}
+
+func (manager *Manager) RememberSSH(ctx context.Context, repo gitrepo.SSHWorkspace, groupID string) (Library, error) {
+	return manager.OpenSSH(ctx, repo, repo, groupID)
+}
+
+func (manager *Manager) OpenSSH(ctx context.Context, requested, canonical gitrepo.SSHWorkspace, groupID string) (Library, error) {
 	return manager.update(func(next *Library) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if slices.Contains(next.SSHRepositories, repo) {
-			return errUnchanged
+		alias := func(entry SSHRepository) bool {
+			return entry.Host == canonical.Host && (entry.SSHWorkspace == requested ||
+				strings.TrimRight(entry.Path, "/") == strings.TrimRight(canonical.Path, "/"))
 		}
-		next.SSHRepositories = append([]gitrepo.SSHWorkspace{repo}, next.SSHRepositories...)
+		index := next.SSHIndex(canonical)
+		if index < 0 {
+			index = slices.IndexFunc(next.SSHRepositories, alias)
+		}
+		if index < 0 && !hasGroup(*next, groupID) {
+			return errors.New("仓库组不存在")
+		}
+		entry := SSHRepository{SSHWorkspace: canonical, GroupID: groupID, LastOpenedAt: time.Now().UnixNano()}
+		if index < 0 {
+			next.SSHRepositories = append([]SSHRepository{entry}, next.SSHRepositories...)
+			return nil
+		}
+		entry.GroupID = next.SSHRepositories[index].GroupID
+		entry.LastOpenedAt = max(entry.LastOpenedAt, next.SSHRepositories[index].LastOpenedAt)
+		entries := next.SSHRepositories[:0]
+		for current, candidate := range next.SSHRepositories {
+			if current == index {
+				entries = append(entries, entry)
+			} else if !alias(candidate) {
+				entries = append(entries, candidate)
+			}
+		}
+		next.SSHRepositories = entries
 		return nil
 	}, nil)
 }
 
 func (manager *Manager) ForgetSSH(repo gitrepo.SSHWorkspace) (Library, error) {
 	return manager.update(func(next *Library) error {
-		index := slices.Index(next.SSHRepositories, repo)
+		index := next.SSHIndex(repo)
 		if index < 0 {
 			return errUnchanged
 		}
 		next.SSHRepositories = slices.Delete(next.SSHRepositories, index, index+1)
+		return nil
+	}, nil)
+}
+
+func (manager *Manager) MoveSSH(repo gitrepo.SSHWorkspace, groupID string) (Library, error) {
+	return manager.update(func(next *Library) error {
+		if !hasGroup(*next, groupID) {
+			return errors.New("仓库组不存在")
+		}
+		index := next.SSHIndex(repo)
+		if index < 0 {
+			return errors.New("仓库不在远程列表中")
+		}
+		next.SSHRepositories[index].GroupID = groupID
 		return nil
 	}, nil)
 }
@@ -441,6 +508,11 @@ func (manager *Manager) RemoveGroup(id string) (Library, error) {
 		for index := range next.Repositories {
 			if next.Repositories[index].GroupID == id {
 				next.Repositories[index].GroupID = ""
+			}
+		}
+		for index := range next.SSHRepositories {
+			if next.SSHRepositories[index].GroupID == id {
+				next.SSHRepositories[index].GroupID = ""
 			}
 		}
 		return nil

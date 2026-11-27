@@ -24,7 +24,7 @@ func TestRemoteLibraryPersistsHostAndPath(t *testing.T) {
 	first := gitrepo.SSHWorkspace{Host: "devbox", Path: "/srv/api"}
 	second := gitrepo.SSHWorkspace{Host: "staging", Path: "/srv/api"}
 	for _, repo := range []gitrepo.SSHWorkspace{first, second, first} {
-		if _, err := manager.RememberSSH(t.Context(), repo); err != nil {
+		if _, err := manager.RememberSSH(t.Context(), repo, ""); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -33,12 +33,76 @@ func TestRemoteLibraryPersistsHostAndPath(t *testing.T) {
 		t.Fatal(err)
 	}
 	library := reloaded.Library()
-	if len(library.Repositories) != 0 || !slices.Equal(library.SSHRepositories, []gitrepo.SSHWorkspace{second, first}) {
+	if len(library.Repositories) != 0 || len(library.SSHRepositories) != 2 ||
+		library.SSHRepositories[0].SSHWorkspace != second || library.SSHRepositories[1].SSHWorkspace != first ||
+		library.SSHRepositories[1].LastOpenedAt < library.SSHRepositories[0].LastOpenedAt {
 		t.Fatalf("远端记录未正确保存: %+v", library)
 	}
 	remaining, err := reloaded.ForgetSSH(first)
-	if err != nil || !slices.Equal(remaining.SSHRepositories, []gitrepo.SSHWorkspace{second}) {
+	if err != nil || len(remaining.SSHRepositories) != 1 || remaining.SSHRepositories[0].SSHWorkspace != second {
 		t.Fatalf("移除影响其他主机的同名仓库: %+v, %v", remaining, err)
+	}
+}
+
+func TestSSHCanonicalOpenConsolidatesLegacyGroupRecords(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "library.json")
+	raw := `{"groups":[{"id":"team","name":"Team"}],"sshRepositories":[{"host":"dev","path":"/srv/app/subdir","groupID":"team"},{"host":"dev","path":"/srv/app/"},{"host":"staging","path":"/srv/app"},{"host":"dev","path":"/srv/other-worktree","groupID":"team"}]}`
+	if err := os.WriteFile(file, []byte(raw), 0600); err != nil {
+		t.Fatal(err)
+	}
+	manager, err := New(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	canonical := gitrepo.SSHWorkspace{Host: "dev", Path: "/srv/app"}
+	alias := gitrepo.SSHWorkspace{Host: canonical.Host, Path: "/srv/app/subdir"}
+	library, err := manager.OpenSSH(t.Context(), alias, canonical, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(library.SSHRepositories) != 3 || library.SSHRepositories[0].SSHWorkspace != canonical ||
+		library.SSHRepositories[0].GroupID != "team" || library.SSHRepositories[0].LastOpenedAt == 0 {
+		t.Fatalf("旧条目未按工作树合并并保留分组: %+v", library.SSHRepositories)
+	}
+}
+
+func TestSSHRepositoryGroupSurvivesReconnectAndReload(t *testing.T) {
+	store := filepath.Join(t.TempDir(), "library.json")
+	if err := os.WriteFile(store, []byte(`{"groups":[{"id":"team","name":"Team"}],"defaultGroupID":"team","sshRepositories":[{"host":"legacy","path":"/srv/api"}]}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	manager, err := New(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy := gitrepo.SSHWorkspace{Host: "legacy", Path: "/srv/api"}
+	second := gitrepo.SSHWorkspace{Host: "staging", Path: legacy.Path}
+	if _, err := manager.RememberSSH(t.Context(), legacy, "team"); err != nil {
+		t.Fatal(err)
+	}
+	library, err := manager.RememberSSH(t.Context(), second, "team")
+	if err != nil || len(library.SSHRepositories) != 2 || library.SSHRepositories[1].GroupID != "" {
+		t.Fatalf("重连改变了旧记录或分组: %+v, %v", library, err)
+	}
+	if _, err := manager.MoveSSH(legacy, "missing"); err == nil {
+		t.Fatal("接受了失效的分组")
+	}
+	manager, err = New(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if local, remote := manager.Library().GroupCounts("team"); local != 0 || remote != 1 {
+		t.Fatalf("重新加载后分组数量错误: %d, %d", local, remote)
+	}
+	if _, err := manager.MoveSSH(legacy, "team"); err != nil {
+		t.Fatal(err)
+	}
+	library, err = manager.RemoveGroup("team")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, remote := library.GroupCounts(""); remote != 2 || library.DefaultGroupID != "" {
+		t.Fatalf("删除分组未还原到未分组: %+v", library)
 	}
 }
 

@@ -86,6 +86,58 @@ func (msgs Messages) SshReadOnlyWorkspace() string {
 	return Catalog.Format(msgs.locale, "sshReadOnlyWorkspace", nil)
 }
 
+// SshWorkspace says "SSH 工作区"
+// in the language the app shows.
+func SshWorkspace() string { return In(i18n.Locale()).SshWorkspace() }
+
+// SshWorkspace says "SSH 工作区"
+// in the language of msgs.
+func (msgs Messages) SshWorkspace() string {
+	return Catalog.Format(msgs.locale, "sshWorkspace", nil)
+}
+
+// SshSyncCanceled says "已取消等待 SSH 同步。远端可能已完成部分或全部操作，请核对刷新后的仓库状态。"
+// in the language the app shows.
+func SshSyncCanceled() string { return In(i18n.Locale()).SshSyncCanceled() }
+
+// SshSyncCanceled says "已取消等待 SSH 同步。远端可能已完成部分或全部操作，请核对刷新后的仓库状态。"
+// in the language of msgs.
+func (msgs Messages) SshSyncCanceled() string {
+	return Catalog.Format(msgs.locale, "sshSyncCanceled", nil)
+}
+
+// SshHostLoad says "负载 {value}"
+// in the language the app shows.
+func SshHostLoad(value string) string { return In(i18n.Locale()).SshHostLoad(value) }
+
+// SshHostLoad says "负载 {value}"
+// in the language of msgs.
+func (msgs Messages) SshHostLoad(value string) string {
+	return Catalog.Format(msgs.locale, "sshHostLoad", map[string]any{"value": value})
+}
+
+// SshLoadDetails says "1 / 5 / 15 分钟平均负载：{averages} · 逻辑 CPU 数：{cpus}"
+// in the language the app shows.
+func SshLoadDetails(averages string, cpus string) string {
+	return In(i18n.Locale()).SshLoadDetails(averages, cpus)
+}
+
+// SshLoadDetails says "1 / 5 / 15 分钟平均负载：{averages} · 逻辑 CPU 数：{cpus}"
+// in the language of msgs.
+func (msgs Messages) SshLoadDetails(averages string, cpus string) string {
+	return Catalog.Format(msgs.locale, "sshLoadDetails", map[string]any{"averages": averages, "cpus": cpus})
+}
+
+// SshNetworkDetails says "远端网卡：{device} · ↓ 接收 / ↑ 发送"
+// in the language the app shows.
+func SshNetworkDetails(device string) string { return In(i18n.Locale()).SshNetworkDetails(device) }
+
+// SshNetworkDetails says "远端网卡：{device} · ↓ 接收 / ↑ 发送"
+// in the language of msgs.
+func (msgs Messages) SshNetworkDetails(device string) string {
+	return Catalog.Format(msgs.locale, "sshNetworkDetails", map[string]any{"device": device})
+}
+
 // SshHost says "选择已配置的 SSH 主机或输入 user@host"
 // in the language the app shows.
 func SshHost() string { return In(i18n.Locale()).SshHost() }

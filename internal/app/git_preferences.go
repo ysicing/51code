@@ -65,9 +65,9 @@ func (app *nativeApp) wrapPreference(c *ui.Context) {
 }
 
 func (app *nativeApp) stageDoubleClickedFile(file gitrepo.File, staged bool) {
-	if !app.prefs.DoubleClickStage || app.busy || app.closed || !app.writable || app.dialog != nil ||
-		file.Conflict || app.conflictDirty() || app.repository == nil ||
-		!(app.screen == "changes" || app.screen == "history" && app.historyWorking) ||
+	if !app.prefs.DoubleClickStage || app.busy || app.closed || !app.changesWritable() || app.dialog != nil ||
+		file.Conflict || app.conflictDirty() ||
+		!(app.screen == "sshChanges" || app.screen == "changes" || app.screen == "history" && app.historyWorking) ||
 		app.readTask != nil && app.readTask.kind != nativeReadDiff {
 		return
 	}

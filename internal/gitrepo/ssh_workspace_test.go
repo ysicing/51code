@@ -17,6 +17,166 @@ import (
 	"time"
 )
 
+func TestSSHWorkspaceWriteOperations(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("本地 SSH 替身需要 POSIX shell")
+	}
+	_, dir := fixture(t)
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "ssh"), []byte("#!/bin/sh\nexec sh -s\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	ctx := t.Context()
+	repo := SSHWorkspace{Host: "fixture", Path: dir}
+	snapshot := func() Snapshot {
+		t.Helper()
+		result, _, err := repo.Snapshot(ctx)
+		if err != nil || !result.SSHWritable {
+			t.Fatalf("远端工作树不可写: %+v %v", result, err)
+		}
+		return result
+	}
+	must := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	file := "-it's [a] file"
+	write(t, dir, file, "first\n")
+	initial := snapshot()
+	large, err := repo.LargeFiles(ctx, []string{file}, "", 2)
+	must(err)
+	if len(large) != 1 || large[0].Path != file || large[0].Size != 6 {
+		t.Fatalf("暂存前大文件检查错误: %+v", large)
+	}
+	must(repo.StageFiles(ctx, initial, []string{file}, false))
+	must(repo.StageFiles(ctx, initial, []string{file}, true))
+	if len(git(t, dir, "ls-files")) != 0 {
+		t.Fatal("未出生分支取消暂存失败")
+	}
+	must(repo.StageFiles(ctx, initial, []string{file}, false))
+	inspection, err := repo.PrepareCommit(ctx, initial, true)
+	must(err)
+	large, err = repo.LargeFiles(ctx, nil, inspection.Token, 2)
+	must(err)
+	if len(large) != 1 || large[0].Path != file || large[0].Size != 6 {
+		t.Fatalf("提交前大文件检查错误: %+v", large)
+	}
+	write(t, dir, file, "second\n")
+	must(repo.StageFiles(ctx, initial, []string{file}, false))
+	if err := repo.CommitStaged(ctx, initial, "stale", inspection.Token); err == nil {
+		t.Fatal("暂存内容变化后仍允许提交")
+	}
+	inspection, err = repo.PrepareCommit(ctx, initial, true)
+	must(err)
+	message := "first 'commit'\n\nwith a body"
+	must(repo.CommitStaged(ctx, initial, message, inspection.Token))
+	if git(t, dir, "log", "-1", "--format=%B") != message {
+		t.Fatal("提交说明未保留")
+	}
+	main := snapshot()
+	git(t, dir, "branch", "topic")
+	must(repo.SwitchLocalBranch(ctx, main, "topic"))
+	if err := repo.SwitchLocalBranch(ctx, main, "main"); err == nil {
+		t.Fatal("分支改变后仍接受旧窗口的操作")
+	}
+	must(repo.SwitchLocalBranch(ctx, snapshot(), "main"))
+	bare := t.TempDir()
+	git(t, bare, "init", "--bare", "-b", "main")
+	git(t, dir, "remote", "add", "origin", bare)
+	must(repo.SyncBranch(ctx, snapshot(), true))
+	if git(t, bare, "rev-parse", "main") != main.Head || snapshot().Upstream != "origin/main" {
+		t.Fatal("首次推送未发布当前分支或建立跟踪")
+	}
+	git(t, dir, "update-ref", "-d", "refs/remotes/origin/main")
+	missingTracking := snapshot()
+	if missingTracking.Upstream != "origin/main" || missingTracking.SSHRemoteRef != "refs/heads/main" {
+		t.Fatalf("丢失跟踪引用后应保留已配置的上游: %+v", missingTracking)
+	}
+	must(repo.SyncBranch(ctx, missingTracking, true))
+	writer := t.TempDir()
+	git(t, writer, "clone", bare, ".")
+	git(t, writer, "config", "user.name", "Writer")
+	git(t, writer, "config", "user.email", "user@example.test")
+	write(t, writer, "extra", "remote")
+	git(t, writer, "add", "extra")
+	git(t, writer, "commit", "-m", "extra")
+	git(t, writer, "push")
+	write(t, dir, ".git/info/exclude", "extra\n")
+	write(t, dir, "extra", "private")
+	if err := repo.SyncBranch(ctx, snapshot(), false); err == nil {
+		t.Fatal("拉取可能覆盖被忽略文件时应拒绝")
+	}
+	kept, err := os.ReadFile(filepath.Join(dir, "extra"))
+	must(err)
+	if string(kept) != "private" {
+		t.Fatal("拉取覆盖了忽略文件")
+	}
+	must(os.Remove(filepath.Join(dir, "extra")))
+	must(repo.SyncBranch(ctx, snapshot(), false))
+	if snapshot().Head != git(t, writer, "rev-parse", "HEAD") {
+		t.Fatal("远端工作树未快进")
+	}
+	git(t, writer, "commit", "--allow-empty", "-m", "upstream")
+	git(t, writer, "push")
+	git(t, dir, "commit", "--allow-empty", "-m", "local")
+	diverged := snapshot()
+	if repo.SyncBranch(ctx, diverged, false) == nil || repo.SyncBranch(ctx, diverged, true) == nil || snapshot().Head != diverged.Head {
+		t.Fatal("分叉不应合并或强制推送")
+	}
+}
+
+func TestSSHCommitKeepsReviewedIndexWhileAnotherProcessStages(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("本地 SSH 替身需要 POSIX shell")
+	}
+	_, dir := fixture(t)
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "ssh"), []byte("#!/bin/sh\nexec sh -s\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	write(t, dir, "reviewed.txt", "reviewed\n")
+	write(t, dir, "concurrent.txt", "concurrent\n")
+	git(t, dir, "add", "reviewed.txt")
+	hook := `#!/bin/sh
+if (unset GIT_INDEX_FILE; git add -- concurrent.txt 2>/dev/null); then
+    printf 'accepted' > .git/parallel-stage
+else
+    printf 'blocked' > .git/parallel-stage
+fi
+`
+	if err := os.WriteFile(filepath.Join(dir, ".git", "hooks", "pre-commit"), []byte(hook), 0700); err != nil {
+		t.Fatal(err)
+	}
+	repo := SSHWorkspace{Host: "fixture", Path: dir}
+	snapshot, _, err := repo.Snapshot(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	review, err := repo.PrepareCommit(t.Context(), snapshot, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.CommitStaged(t.Context(), snapshot, "reviewed commit", review.Token); err != nil {
+		t.Fatal(err)
+	}
+	result, err := os.ReadFile(filepath.Join(dir, ".git", "parallel-stage"))
+	if err != nil || string(result) != "blocked" || git(t, dir, "rev-parse", "HEAD^{tree}") != review.Token {
+		t.Fatalf("提交期间应保护已检查的暂存树: %q, %v", result, err)
+	}
+	git(t, dir, "add", "concurrent.txt")
+	if got := git(t, dir, "diff", "--cached", "--name-only"); got != "concurrent.txt" {
+		t.Fatalf("提交后应释放索引锁: %s", got)
+	}
+}
+
 func TestSSHWorkspaceBrowseAndInsightsMatchLocal(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("本地替身需要 POSIX shell")

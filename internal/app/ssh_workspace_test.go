@@ -4,11 +4,13 @@
 package app
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ysicing/51code/internal/gitrepo"
 	"github.com/ysicing/51code/locales"
@@ -21,7 +23,7 @@ func TestNativeRemoteLibrarySearchAndRemove(t *testing.T) {
 	app.showLibrary()
 	for _, repo := range []gitrepo.SSHWorkspace{{Host: "staging", Path: "/opt/web"}, {Host: "devbox", Path: "/srv/api"}} {
 		var err error
-		app.library, err = app.service.manager.RememberSSH(t.Context(), repo)
+		app.library, err = app.service.manager.RememberSSH(t.Context(), repo, "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -47,7 +49,7 @@ func TestNativeRemoteLibrarySearchAndRemove(t *testing.T) {
 	if !tester.HasText("api") || tester.HasText("web") {
 		t.Fatal("路径搜索没有筛选仓库")
 	}
-	if err := tester.Click(locales.Manage() + " devbox · /srv/api"); err != nil {
+	if err := tester.Click(locales.Manage() + " devbox:/srv/api"); err != nil {
 		t.Fatal(err)
 	}
 	if err := tester.ChooseMenuItem(locales.RemoveFromListMenu()); err != nil {
@@ -69,6 +71,78 @@ func TestNativeRemoteLibrarySearchAndRemove(t *testing.T) {
 	}
 }
 
+func TestNativeSharedRepositoryGroups(t *testing.T) {
+	app, _, finish := nativeFixture(t)
+	localPath := app.repository.snapshot.Path
+	app.showLibrary()
+	library, err := app.service.CreateGroup("团队")
+	if err != nil {
+		t.Fatal(err)
+	}
+	group := library.Groups[0]
+	repo := gitrepo.SSHWorkspace{Host: "staging", Path: "/srv/remote-api"}
+	app.library, err = app.service.manager.RememberSSH(t.Context(), repo, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tester := ui.NewTester(app.view, 1024, 680)
+	click := func(label string) {
+		t.Helper()
+		if err := tester.Click(label); err != nil {
+			t.Fatal(err)
+		}
+	}
+	visible := func(local, remote bool) {
+		t.Helper()
+		if tester.HasText(localPath) != local || tester.HasText("staging:/srv/remote-api") != remote {
+			t.Fatalf("列表内容不符，预期本地 %v，远程 %v", local, remote)
+		}
+	}
+	visible(true, false)
+	click(locales.Ungrouped())
+	visible(true, true)
+	if !tester.HasText("2") {
+		t.Fatal("未分组未合计本地和远程仓库")
+	}
+	localName := filepath.Base(localPath)
+	checkOrder := func(remoteFirst bool) {
+		t.Helper()
+		localRow, localFound := tester.AccessByRole(ui.RoleButton, localName)
+		remoteRow, remoteFound := tester.AccessByRole(ui.RoleButton, "remote-api")
+		if !localFound || !remoteFound || (remoteRow.Bounds.Y < localRow.Bounds.Y) != remoteFirst {
+			t.Fatal("排序未覆盖组内的两类仓库")
+		}
+	}
+	checkOrder(false)
+	app.prefs.LibraryOrder = "recent"
+	tester.Frame()
+	checkOrder(true)
+	app.query = "staging"
+	tester.Frame()
+	visible(false, true)
+	app.query = ""
+	tester.Frame()
+	click(locales.Manage() + " staging:/srv/remote-api")
+	if err := tester.ChooseMenuItem(locales.MoveToGroup(), group.Name); err != nil {
+		t.Fatal(err)
+	}
+	finish()
+	tester.Frame()
+	visible(true, false)
+	click(group.Name)
+	visible(false, true)
+	click(locales.ConnectSshRepository())
+	if app.group != group.ID || app.addRepositoryGroup() != group.ID || app.dialog == nil {
+		t.Fatal("分组中连接 SSH 未保留当前入口")
+	}
+	app.closeDialog(app.dialog)
+	tester.Frame()
+	click(locales.RemoteRepositories())
+	visible(false, true)
+	click(locales.LocalRepositories())
+	visible(true, false)
+}
+
 func TestNativeSSHWorkspaceWindow(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("SSH 替身需要 POSIX shell")
@@ -80,6 +154,220 @@ func TestNativeSSHWorkspaceWindow(t *testing.T) {
 	}
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 	checkSSHWorkspaceWindow(t, "devbox")
+}
+
+func TestNativeSSHWriteControls(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("本地 SSH 替身需要 POSIX shell")
+	}
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "ssh"), []byte("#!/bin/sh\nexec sh -s\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	desktop, dir, updates, _ := desktopFixture(t)
+	window := desktop.newApp()
+	repo := gitrepo.SSHWorkspace{Host: "fixture", Path: dir}
+	nativeGit(t, dir, "branch", "topic")
+	writeNativeFile(t, dir, "hello.txt", "ssh changes\n")
+	snapshot, refs, err := repo.Snapshot(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	window.ssh = &nativeSSHWorkspace{repo: repo}
+	window.ssh.update(snapshot, refs)
+	window.screen = "sshChanges"
+	desktop.showWindow(window)
+	tester := ui.NewTester(window.view, 1024, 680)
+	click := func(label string) {
+		t.Helper()
+		tester.Frame()
+		if err := tester.Click(label); err != nil {
+			t.Fatal(err)
+		}
+	}
+	finish := func() {
+		t.Helper()
+		runBackgroundUpdates(t, updates, func() bool { return !window.busy && window.readTask == nil })
+		if window.problem != "" {
+			t.Fatal(window.problem)
+		}
+		tester.Frame()
+	}
+	click(locales.StageAll())
+	finish()
+	if !isStaged(window.ssh.snapshot.Files[0]) {
+		t.Fatal("暂存后没有刷新远端状态")
+	}
+	click(locales.UnstageAll())
+	finish()
+	click(locales.SelectUnstagedFile("hello.txt"))
+	click(locales.StageSelected())
+	finish()
+	click(locales.CommitMessage())
+	tester.Type("commit from SSH window")
+	if !window.prepareClose() {
+		t.Fatal("SSH 草稿无法保存")
+	}
+	reopened := newNativeApp(window.service, window.stateFile)
+	t.Cleanup(reopened.cancel)
+	reopened.ssh, reopened.screen = window.ssh, "sshChanges"
+	field, found := ui.NewTester(reopened.view, 1024, 680).AccessByRole(ui.RoleTextField, locales.CommitMessage())
+	if !found || field.Value != "commit from SSH window" {
+		t.Fatalf("重新打开窗口后未恢复草稿: %q", field.Value)
+	}
+	click(locales.CommitFiles(1))
+	finish()
+	if window.prefs.Drafts[sshRepositoryKey(repo)] != "" || nativeGit(t, dir, "log", "-1", "--format=%s") != "commit from SSH window" {
+		t.Fatal("远端提交未成功或未清除草稿")
+	}
+	window.sshSwitchDialog("topic")
+	click(locales.Cancel())
+	if nativeGit(t, dir, "branch", "--show-current") == "topic" {
+		t.Fatal("取消后不应切换分支")
+	}
+	window.sshSwitchDialog("topic")
+	click(locales.Checkout())
+	finish()
+	if window.ssh.snapshot.Branch != "topic" {
+		t.Fatal("切换分支后未刷新")
+	}
+	window.ssh.snapshot.SSHWritable = false
+	tester.Frame()
+	if !tester.HasText(locales.SshReadOnlyWorkspace()) {
+		t.Fatal("缺少写权限时应标识只读")
+	}
+	window.sshSyncDialog(true)
+	if window.dialog != nil {
+		t.Fatal("只读仓库不能推送")
+	}
+}
+
+func TestNativeSSHSyncCancelRefreshesRepository(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("本地 SSH 替身需要 POSIX shell")
+	}
+	bin := t.TempDir()
+	shim := `#!/bin/sh
+script=$(cat)
+case "$script" in
+  *' push --no-follow-tags '*) printf started > "$SSH_TEST_SYNC_STARTED"; exec sleep 30 ;;
+esac
+printf '%s\n' "$script" | sh -s
+`
+	if err := os.WriteFile(filepath.Join(bin, "ssh"), []byte(shim), 0700); err != nil {
+		t.Fatal(err)
+	}
+	started := filepath.Join(bin, "started")
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("SSH_TEST_SYNC_STARTED", started)
+	desktop, dir, updates, _ := desktopFixture(t)
+	window := desktop.newApp()
+	repo := gitrepo.SSHWorkspace{Host: "fixture", Path: dir}
+	snapshot, refs, err := repo.Snapshot(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	window.ssh = &nativeSSHWorkspace{repo: repo}
+	window.ssh.update(snapshot, refs)
+	window.screen = "sshChanges"
+	desktop.showWindow(window)
+	window.sshSyncDialog(true)
+	syncDialog := window.dialog
+	syncDialog.submit(syncDialog)
+	tester := ui.NewTester(window.view, 1024, 680)
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if _, err := os.Stat(started); err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("SSH 传输没有开始")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	writeNativeFile(t, dir, "after-sync-start.txt", "new remote state\n")
+	if err := tester.Click(locales.CancelOperation()); err != nil {
+		t.Fatal(err)
+	}
+	runBackgroundUpdates(t, updates, func() bool { return !window.busy && window.readTask == nil })
+	if window.operationCancel != nil || window.dialog == syncDialog || !window.ssh.snapshot.SSHWritable ||
+		!fileExists(window.ssh.snapshot.Files, "after-sync-start.txt", false) || window.problem != locales.SshSyncCanceled() {
+		t.Fatalf("取消后未独立刷新或没有反馈: %q %+v", window.problem, window.ssh.snapshot)
+	}
+}
+
+func TestSSHStatusRates(t *testing.T) {
+	initial := sshStatusSample{gitrepo.SSHHostStats{Interface: "eth0", Received: 100, Transmitted: 200}, time.Now()}
+	sample := initial
+	sample.at = initial.at.Add(5 * time.Second)
+	sample.Received += 640000
+	sample.Transmitted += 180000
+	if down, up := sample.rates(initial); down != "128 KB/s" || up != "36 KB/s" {
+		t.Fatalf("网速错误: %s / %s", down, up)
+	}
+	for _, previous := range []sshStatusSample{{}, sample, {SSHHostStats: gitrepo.SSHHostStats{Interface: "wlan0"}, at: initial.at},
+		{SSHHostStats: gitrepo.SSHHostStats{Interface: "eth0", Transmitted: sample.Transmitted + 1}, at: initial.at}} {
+		if down, up := sample.rates(previous); down != "" || up != "" {
+			t.Fatalf("无可比基线却显示速率: %s / %s", down, up)
+		}
+	}
+}
+
+func TestSSHStatsFocusLifecycle(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("SSH 替身需要 POSIX shell")
+	}
+	bin := t.TempDir()
+	shim := "#!/bin/sh\ncat >/dev/null\nprintf 'load 0.42 0.40 0.38\\ncpus 4\\nnet eth0 1234 5678\\n'\n"
+	if err := os.WriteFile(filepath.Join(bin, "ssh"), []byte(shim), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	updates := make(chan func(), 8)
+	state := &nativeSSHWorkspace{repo: gitrepo.SSHWorkspace{Host: "fixture"}}
+	ctx, cancel := context.WithTimeout(t.Context(), 12*time.Second)
+	defer cancel()
+	app := &nativeApp{ctx: ctx, ssh: state, post: func(update func()) { updates <- update }}
+	next := func() func() {
+		t.Helper()
+		select {
+		case update := <-updates:
+			return update
+		case <-ctx.Done():
+			t.Fatal("没有收到前台采样")
+			return nil
+		}
+	}
+	app.startSSHStats()
+	app.startSSHStats()
+	next()()
+	if state.stats.Interface != "eth0" || state.down != "" {
+		t.Fatal("首个样本应显示网卡并等待速率基线")
+	}
+	next()()
+	if state.up != "0 B/s" || state.down != "0 B/s" {
+		t.Fatal("第二个有效样本应显示零流量")
+	}
+	app.stopSSHStats()
+	if state.up != "0 B/s" || state.stopStats != nil {
+		t.Fatal("切到后台时应暂停且保留上次读数")
+	}
+	app.startSSHStats()
+	stale := next()
+	app.stopSSHStats()
+	stale()
+	if state.down != "0 B/s" {
+		t.Fatal("失焦后不应应用已经排队的旧样本")
+	}
+	app.startSSHStats()
+	next()()
+	app.stopSSHStats()
+	if state.down != "" || state.stats.Load[0] != 0.42 {
+		t.Fatal("重新聚焦应建立新的采样基线")
+	}
 }
 
 func checkSSHWorkspaceWindow(t *testing.T, host string) {
@@ -204,6 +492,19 @@ func checkSSHWorkspaceWindow(t *testing.T, host string) {
 		t.Fatal("远端仓库应使用独立窗口，并与本地 Git 操作隔离")
 	}
 	tester := ui.NewTester(window.view, 1024, 680)
+	if !tester.HasText(locales.SshHostLoad("—")) || library.HasText(locales.SshHostLoad("—")) {
+		t.Fatal("负载占位应只出现在 SSH 仓库窗口")
+	}
+	window.ssh.stats = gitrepo.SSHHostStats{HasLoad: true, Load: [3]float64{0.42, 0.40, 0.38}, CPUs: 4, Interface: "eth0"}
+	window.ssh.down, window.ssh.up = "128 KB/s", "36 KB/s"
+	for _, dark := range []bool{false, true} {
+		tester.SetDark(dark)
+		tester.Frame()
+		if !tester.HasText(locales.SshHostLoad("0.42")) || !tester.HasText("↓ 128 KB/s   ↑ 36 KB/s") {
+			t.Fatal("紧凑窗口应同时显示主机负载和双向网速")
+		}
+	}
+	tester.SetDark(false)
 	finish := func() {
 		runBackgroundUpdates(t, updates, func() bool { return window.readTask == nil })
 		tester.Frame()
@@ -362,6 +663,7 @@ func checkSSHWorkspaceWindow(t *testing.T, host string) {
 	if err := library.Click(filepath.Base(path)); err != nil {
 		t.Fatal(err)
 	}
+	runBackgroundUpdates(t, updates, func() bool { return desktop.library.dialog == nil })
 	if desktop.active != window || len(desktop.repositories) != 1 || len(desktop.library.library.SSHRepositories) != 1 {
 		t.Fatal("重复打开远端路径应复用原窗口")
 	}
@@ -375,8 +677,20 @@ func checkSSHWorkspaceWindow(t *testing.T, host string) {
 	if err := library.Click(path); err != nil {
 		t.Fatal(err)
 	}
+	runBackgroundUpdates(t, updates, func() bool { return desktop.library.dialog == nil })
 	if desktop.library.dialog != nil || desktop.active != window {
 		t.Fatal("点击已保存仓库应直接回到原窗口")
+	}
+	alias := filepath.Join(path, "subdir")
+	if err := os.Mkdir(alias, 0700); err != nil {
+		t.Fatal(err)
+	}
+	form = &nativeDialog{}
+	desktop.library.dialog = form
+	desktop.library.openSSHRepository(form, gitrepo.SSHWorkspace{Host: host, Path: alias})
+	runBackgroundUpdates(t, updates, func() bool { return desktop.library.dialog == nil })
+	if desktop.active != window || len(desktop.repositories) != 1 || len(desktop.library.library.SSHRepositories) != 1 {
+		t.Fatal("从子目录打开应复用规范工作树的窗口和列表记录")
 	}
 }
 

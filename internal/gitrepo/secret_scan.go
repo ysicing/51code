@@ -87,13 +87,7 @@ func (repo *Repository) stagedSecretPatch(ctx context.Context) (string, string, 
 		head = strings.TrimSpace(head)
 	}
 	patch, limited, err := runCapped(ctx, repo.Path, "", 30*time.Second, outputLimit,
-		"-c", "core.quotePath=true", "-c", "diff.suppressBlankEmpty=false",
-		"diff", "--patch", "--no-ext-diff", "--no-textconv", "--no-renames",
-		"--no-color", "--no-relative", "--no-function-context", "--word-diff=none",
-		"--submodule=short", "--ignore-submodules=none", "--diff-filter=ACMT",
-		"--src-prefix=a/", "--dst-prefix=b/", "--output-indicator-new=+",
-		"--output-indicator-old=-", "--output-indicator-context= ", "--unified=0",
-		"--inter-hunk-context=0", head, tree, "--")
+		stagedSecretDiffArgs(head, tree)...)
 	if err != nil {
 		return "", "", errors.New("无法读取用于密钥扫描的暂存差异")
 	}
@@ -101,6 +95,16 @@ func (repo *Repository) stagedSecretPatch(ctx context.Context) (string, string, 
 		return "", "", errors.New("暂存差异超过 4 MiB，请拆分提交后重新扫描")
 	}
 	return token, patch, nil
+}
+
+func stagedSecretDiffArgs(head, tree string) []string {
+	return []string{"-c", "core.quotePath=true", "-c", "diff.suppressBlankEmpty=false",
+		"diff", "--patch", "--no-ext-diff", "--no-textconv", "--no-renames",
+		"--no-color", "--no-relative", "--no-function-context", "--word-diff=none",
+		"--submodule=short", "--ignore-submodules=none", "--diff-filter=ACMT",
+		"--src-prefix=a/", "--dst-prefix=b/", "--output-indicator-new=+",
+		"--output-indicator-old=-", "--output-indicator-context= ", "--unified=0",
+		"--inter-hunk-context=0", head, tree, "--"}
 }
 
 func scanSecretPatch(ctx context.Context, patch string) (SecretScan, error) {

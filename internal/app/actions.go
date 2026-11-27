@@ -22,7 +22,7 @@ func (app *nativeApp) visibleFiles(staged bool) []gitrepo.File {
 
 func (app *nativeApp) checkedFiles(staged bool) []string {
 	var files []string
-	if app.repository == nil || len(app.selectedFiles) == 0 {
+	if len(app.selectedFiles) == 0 {
 		return files
 	}
 	section := app.fileSection(staged)
@@ -36,7 +36,7 @@ func (app *nativeApp) checkedFiles(staged bool) []string {
 
 // hasCheckedFiles 与 checkedFiles 判断一致，但找到第一项即返回，供每遍构建使用。
 func (app *nativeApp) hasCheckedFiles(staged bool) bool {
-	if app.repository == nil || len(app.selectedFiles) == 0 {
+	if len(app.selectedFiles) == 0 {
 		return false
 	}
 	section := app.fileSection(staged)
@@ -70,6 +70,12 @@ func (app *nativeApp) stageSelectedFile() {
 }
 
 func (app *nativeApp) stagePaths(staged bool, files []string) {
+	if state := app.ssh; state != nil {
+		if app.screen == "sshChanges" && app.dialog == nil && len(files) > 0 {
+			app.stageSSHFiles(staged, files)
+		}
+		return
+	}
 	if len(files) == 0 || app.repository == nil || app.busy || !app.writable || app.dialog != nil {
 		return
 	}

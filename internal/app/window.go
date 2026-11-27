@@ -339,6 +339,7 @@ func (app *nativeApp) open() {
 	app.win.OnClosed(func() {
 		app.stopShortcutRecording()
 		app.closed = true
+		app.stopSSHStats()
 		app.stopRepositoryBackground()
 		app.cancelRead()
 		app.stopCommitAI()
@@ -364,7 +365,16 @@ func (app *nativeApp) open() {
 			app.desktop.active = app
 		}
 		app.refreshOnFocus()
+		app.startSSHStats()
 	})
+	if app.ssh != nil {
+		app.win.OnBlur(app.stopSSHStats)
+		app.win.OnHide(app.stopSSHStats)
+		app.win.OnMinimize(app.stopSSHStats)
+		if app.win.IsFocused() {
+			app.startSSHStats()
+		}
+	}
 	cacheDir := ""
 	if directory, err := os.UserCacheDir(); err == nil {
 		cacheDir = filepath.Join(directory, "51code", "repository-languages")
@@ -874,6 +884,7 @@ func (app *nativeApp) showLibrary() {
 		app.cancelRead()
 		app.stopCommitAI()
 		app.stopRepositoryBackground()
+		app.stopSSHStats()
 		app.ssh = nil
 		app.screen = "library"
 		app.refreshRepositoryLanguages(false)
@@ -881,6 +892,10 @@ func (app *nativeApp) showLibrary() {
 }
 
 func (app *nativeApp) commit() {
+	if app.ssh != nil {
+		app.commitSSH()
+		return
+	}
 	// 与提交按钮一致，只在文件变更页可用；其他页面看不到要提交的仓库与暂存内容。
 	if app.repository == nil || app.screen != "changes" || app.busy || !app.writable || app.dialog != nil {
 		return

@@ -4,6 +4,7 @@
 package app
 
 import (
+	"cmp"
 	"fmt"
 	"slices"
 	"strings"
@@ -203,7 +204,11 @@ func (app *nativeApp) view(c *ui.Context) {
 					}
 				}
 			} else if app.ssh != nil {
-				ui.Text(c, locales.SshReadOnlyWorkspace()).FontSize(12).TextColor(c.Theme().TextMuted)
+				label := locales.SshWorkspace()
+				if !app.ssh.snapshot.SSHWritable {
+					label = locales.SshReadOnlyWorkspace()
+				}
+				ui.Text(c, label).FontSize(12).TextColor(c.Theme().TextMuted)
 				ui.Text(c, app.ssh.address()).SingleLine().MinWidth(0).Shrink(1).Selectable().Tooltip(app.ssh.address()).FontSize(12).TextColor(c.Theme().TextMuted)
 				if app.readTask != nil {
 					ui.Spinner(c).Size(14, 14).Label(app.readTask.label)
@@ -216,10 +221,16 @@ func (app *nativeApp) view(c *ui.Context) {
 				app.repositoryPathStatus(c, app.repository.snapshot.Path)
 			} else if app.screen == "library" && app.remoteLibrary {
 				ui.Text(c, locales.SshRepositoryCount(len(app.library.SSHRepositories))).FontSize(12).TextColor(c.Theme().TextMuted)
+			} else if app.screen == "library" && app.group != "" {
+				local, remote := app.library.GroupCounts(app.addRepositoryGroup())
+				ui.Text(c, locales.LocalRepositoryCount(local)+" · "+locales.SshRepositoryCount(remote)).FontSize(12).TextColor(c.Theme().TextMuted)
 			} else {
 				ui.Text(c, locales.LocalRepositoryCount(len(app.library.Repositories))).FontSize(12).TextColor(c.Theme().TextMuted)
 			}
 			ui.Spacer(c)
+			if app.ssh != nil {
+				app.ssh.hostStatus(c)
+			}
 			app.feedbackButton(c)
 			if app.versionButton(c) {
 				app.checkUpdates(c)
@@ -270,12 +281,8 @@ func (app *nativeApp) sidebar(c *ui.Context) {
 				ui.SidebarItem(c, "screen:library", nativeIcons["folder"], locales.LocalRepositories())
 				ui.SidebarItem(c, "ssh-library", nativeIcons["cloud"], locales.RemoteRepositories())
 				ui.SidebarSection(c, locales.RepositoryGroups(), nil, func() {
-					count := 0
-					for _, entry := range app.library.Repositories {
-						if entry.GroupID == "" {
-							count++
-						}
-					}
+					local, remote := app.library.GroupCounts("")
+					count := local + remote
 					ui.SidebarItem(c, "group:"+ungroupedLibraryView, nativeIcons["folder"], locales.Ungrouped()).Children(func() {
 						if count > 0 {
 							ui.Text(c, fmt.Sprint(count)).FontSize(11).Shrink(0)
@@ -413,6 +420,9 @@ func (app *nativeApp) toolbar(c *ui.Context) {
 				if toolButton(c, locales.ScanFolders(), nativeIcons["folder"]).Disabled(disabled).Clicked() {
 					app.chooseScan()
 				}
+				if app.group != "" {
+					toolButton(c, locales.ConnectSshRepository(), nativeIcons["cloud"]).Disabled(disabled).OnClick(app.sshWorkspaceDialog)
+				}
 			}
 		} else if app.repository != nil {
 			ui.Row(c).Children(func() {
@@ -446,6 +456,13 @@ func (app *nativeApp) toolbar(c *ui.Context) {
 			}
 			iconButton(c, locales.More(), nativeIcons["more"]).Disabled(disabled).Menu(app.repositoryActions)
 		} else if app.ssh != nil {
+			snapshot := app.ssh.snapshot
+			if titlebarButton(c, locales.Pull(), nativeIcons["pull"], "", "").Disabled(disabled || !snapshot.SSHWritable || snapshot.Upstream == "").Clicked() {
+				app.sshSyncDialog(false)
+			}
+			if titlebarButton(c, locales.Push(), nativeIcons["push"], "", "").Disabled(disabled || !snapshot.SSHWritable || snapshot.Detached || snapshot.Unborn).Clicked() {
+				app.sshSyncDialog(true)
+			}
 			iconButton(c, locales.More(), nativeIcons["more"]).Disabled(disabled).Menu(func(menu *ui.Menu) {
 				if menu.Item(locales.FindLostCommits()).Chosen() {
 					app.lostCommitsDialog()
@@ -469,19 +486,23 @@ func (app *nativeApp) addRepositoryGroup() string {
 	}
 }
 
-func (app *nativeApp) repositoryInLibraryView(entry workspace.LocalRepository) bool {
+func (app *nativeApp) groupMatches(groupID string) bool {
 	switch app.group {
 	case "":
 		return true
 	case ungroupedLibraryView:
-		return entry.GroupID == ""
+		return groupID == ""
 	default:
-		return entry.GroupID == app.group
+		return groupID == app.group
 	}
 }
 
 func (app *nativeApp) libraryEmpty() bool {
-	return app.query == "" && !slices.ContainsFunc(app.library.Repositories, app.repositoryInLibraryView)
+	if app.group == "" {
+		return app.query == "" && len(app.library.Repositories) == 0
+	}
+	local, remote := app.library.GroupCounts(app.addRepositoryGroup())
+	return app.query == "" && local+remote == 0
 }
 
 func (app *nativeApp) emptyLibraryActions(c *ui.Context) {
@@ -493,6 +514,9 @@ func (app *nativeApp) emptyLibraryActions(c *ui.Context) {
 		ui.Row(c).Gap(8).Children(func() {
 			ui.PrimaryButton(c, locales.Add()).Width(80).Height(36).OnClick(app.chooseLocal)
 			ui.Button(c, locales.Clone()).Width(80).Height(36).OnClick(app.cloneDialog)
+			if app.group != "" {
+				ui.Button(c, locales.ConnectSshRepository()).Height(36).OnClick(app.sshWorkspaceDialog)
+			}
 		})
 		ui.Toolbar(c, func() {
 			ui.Button(c, locales.EnterPath()).TextColor(c.Theme().TextMuted).OnClick(app.pathDialog)
@@ -528,14 +552,15 @@ func (app *nativeApp) libraryView(c *ui.Context) {
 		})
 		var entries []workspace.LocalRepository
 		for _, entry := range app.library.OrderedRepositories(app.prefs.LibraryOrder) {
-			if !app.repositoryInLibraryView(entry) {
+			if !app.groupMatches(entry.GroupID) {
 				continue
 			}
 			if strings.Contains(strings.ToLower(entry.Name+"\n"+entry.Path+"\n"+entry.Branch), strings.ToLower(app.query)) {
 				entries = append(entries, entry)
 			}
 		}
-		if len(entries) == 0 {
+		remoteEntries := app.sshLibraryEntries(app.query)
+		if len(entries) == 0 && len(remoteEntries) == 0 {
 			ui.Column(c).Grow(1).FillWidth().Center().Gap(10).Children(func() {
 				message := locales.EmptyRepositories()
 				if app.query != "" {
@@ -554,46 +579,65 @@ func (app *nativeApp) libraryView(c *ui.Context) {
 		}
 		width, _ := c.Size()
 		showLanguage := width-app.prefs.Sidebar >= 850
+		type repositoryRow struct {
+			lastOpened int64
+			render     func()
+		}
+		rows := make([]repositoryRow, 0, len(entries)+len(remoteEntries))
+		for _, entry := range entries {
+			rows = append(rows, repositoryRow{entry.LastOpenedAt, func() { app.localLibraryRow(c, entry, showLanguage) }})
+		}
+		for _, entry := range remoteEntries {
+			rows = append(rows, repositoryRow{entry.LastOpenedAt, func() { app.sshLibraryRow(c, entry) }})
+		}
+		if app.prefs.LibraryOrder == "recent" {
+			slices.SortStableFunc(rows, func(first, second repositoryRow) int {
+				return cmp.Compare(second.lastOpened, first.lastOpened)
+			})
+		}
 		ui.Scroll(c).Grow(1).MinHeight(0).FillWidth().Children(func() {
-			for _, entry := range entries {
-				entry := entry
-				var languages gitrepo.LanguageSummary
-				if app.languages != nil {
-					languages = app.languages.entries[entry.Path]
-				}
-				ui.Row(c).Key(entry.Path).FillWidth().Padding(4, 0).Gap(8).AlignItems(ui.Center).Children(func() {
-					listRow(c, entry.Name, false).Description(repositoryLanguageTooltip(languages)).Grow(1).Padding(14, 12).Children(func() {
-						ui.Icon(c, nativeIcons["folder"]).FontSize(24).TextColor(c.Theme().TextMuted)
-						ui.Column(c).Grow(1).MinWidth(0).Gap(5).Children(func() {
-							ui.Text(c, entry.Name).FontSize(14).Bold().MaxLines(1)
-							ui.Text(c, entry.Path).TextColor(c.Theme().TextMuted).FontSize(12).MaxLines(1)
-							if entry.Problem != "" {
-								ui.Text(c, entry.Problem).TextColor(c.Theme().Danger).FontSize(12).MaxLines(1).Tooltip(entry.Problem)
-							}
-						})
-						if showLanguage {
-							repositoryLanguageBadge(c, languages)
-						}
-						branchRow := ui.Row(c).Gap(8).MinWidth(0).AlignItems(ui.Center).Justify(ui.End)
-						if showLanguage {
-							branchRow.Width(144).Shrink(0)
-						}
-						branchRow.Children(func() {
-							ui.Icon(c, nativeIcons["branch"]).TextColor(c.Theme().TextMuted)
-							ui.Text(c, entry.Branch).FontSize(12).MaxLines(1).MinWidth(0).MaxWidth(96).Tooltip(entry.Branch)
-							if entry.Changes > 0 {
-								ui.Badge(c, fmt.Sprintf("%d", entry.Changes)).Shrink(0)
-							}
-						})
-					}).OnClick(func() { app.openRepository(entry.Path) })
-					iconButton(c, locales.Manage()+" "+entry.Name, nativeIcons["more"]).
-						Disabled(app.busy || app.closed || app.dialog != nil).
-						Menu(func(menu *ui.Menu) { app.repositoryEntryMenu(menu, entry) })
-				})
-				ui.Divider(c)
+			for _, row := range rows {
+				row.render()
 			}
 		})
 	})
+}
+
+func (app *nativeApp) localLibraryRow(c *ui.Context, entry workspace.LocalRepository, showLanguage bool) {
+	var languages gitrepo.LanguageSummary
+	if app.languages != nil {
+		languages = app.languages.entries[entry.Path]
+	}
+	ui.Row(c).Key(entry.Path).FillWidth().Padding(4, 0).Gap(8).AlignItems(ui.Center).Children(func() {
+		listRow(c, entry.Name, false).Description(repositoryLanguageTooltip(languages)).Grow(1).Padding(14, 12).Children(func() {
+			ui.Icon(c, nativeIcons["folder"]).FontSize(24).TextColor(c.Theme().TextMuted)
+			ui.Column(c).Grow(1).MinWidth(0).Gap(5).Children(func() {
+				ui.Text(c, entry.Name).FontSize(14).Bold().MaxLines(1)
+				ui.Text(c, entry.Path).TextColor(c.Theme().TextMuted).FontSize(12).MaxLines(1)
+				if entry.Problem != "" {
+					ui.Text(c, entry.Problem).TextColor(c.Theme().Danger).FontSize(12).MaxLines(1).Tooltip(entry.Problem)
+				}
+			})
+			if showLanguage {
+				repositoryLanguageBadge(c, languages)
+			}
+			branchRow := ui.Row(c).Gap(8).MinWidth(0).AlignItems(ui.Center).Justify(ui.End)
+			if showLanguage {
+				branchRow.Width(144).Shrink(0)
+			}
+			branchRow.Children(func() {
+				ui.Icon(c, nativeIcons["branch"]).TextColor(c.Theme().TextMuted)
+				ui.Text(c, entry.Branch).FontSize(12).MaxLines(1).MinWidth(0).MaxWidth(96).Tooltip(entry.Branch)
+				if entry.Changes > 0 {
+					ui.Badge(c, fmt.Sprintf("%d", entry.Changes)).Shrink(0)
+				}
+			})
+		}).OnClick(func() { app.openRepository(entry.Path) })
+		iconButton(c, locales.Manage()+" "+entry.Name, nativeIcons["more"]).
+			Disabled(app.busy || app.closed || app.dialog != nil).
+			Menu(func(menu *ui.Menu) { app.repositoryEntryMenu(menu, entry) })
+	})
+	ui.Divider(c)
 }
 
 func (app *nativeApp) repositoryPanel(c *ui.Context) {
@@ -642,7 +686,20 @@ func (app *nativeApp) changesPanel(c *ui.Context) {
 	app.fileControls(c)
 	app.changesFileSections(c)
 	ui.Divider(c)
-	ui.Column(c).FillWidth().Padding(12).Gap(8).Disabled(!app.writable).Children(func() {
+	ui.Column(c).FillWidth().Padding(12).Gap(8).Disabled(!app.changesWritable()).Children(func() {
+		if state := app.ssh; state != nil {
+			key := sshRepositoryKey(state.repo)
+			draft := app.prefs.Drafts[key]
+			if ui.TextArea(c, &draft).Bind(&app.commitInput).Label(locales.CommitMessage()).Placeholder(locales.CommitMessageHint()).Lines(3, 6).FillWidth().Changed() {
+				app.prefs.Drafts[key] = draft
+			}
+			count := app.fileSection(true).total
+			if ui.PrimaryButton(c, locales.CommitFiles(count)).FillWidth().Disabled(count == 0 || strings.TrimSpace(draft) == "" ||
+				slices.ContainsFunc(state.snapshot.Files, func(file gitrepo.File) bool { return file.Conflict })).Clicked() {
+				app.commit()
+			}
+			return
+		}
 		draft := app.prefs.Drafts[app.repository.snapshot.Path]
 		app.commitAIHeader(c)
 		if ui.TextArea(c, &draft).Bind(&app.commitInput).Label(locales.CommitMessage()).Placeholder(locales.CommitMessageHint()).Lines(3, 6).FillWidth().Changed() {
@@ -756,14 +813,11 @@ func (app *nativeApp) changesSection(c *ui.Context, staged bool) {
 			if staged && app.historyWorking && app.screen == "history" {
 				app.diffFileFinderButton(c)
 			}
-			if app.ssh != nil {
-				return
-			}
-			if staged && app.prefs.SecretScanEnabled {
+			if app.ssh == nil && staged && app.prefs.SecretScanEnabled {
 				ui.Button(c, locales.ScanStagedSecrets()).FontSize(12).Disabled(!app.canScanStagedSecrets()).
 					OnClick(app.scanStagedSecrets)
 			}
-			if ui.Button(c, action).FontSize(12).Disabled(!app.writable || app.readTask != nil || count == 0).Clicked() {
+			if ui.Button(c, action).FontSize(12).Disabled(!app.changesWritable() || app.readTask != nil || count == 0).Clicked() {
 				app.stageFiles(staged, true)
 			}
 		}).Label(locales.SectionActions(label)).FillWidth().Padding(4, 12)
@@ -805,7 +859,7 @@ func (app *nativeApp) changesSection(c *ui.Context, staged bool) {
 			count := len(app.checkedFiles(staged))
 			ui.Toolbar(c, func() {
 				if ui.Button(c, fmt.Sprintf("%s (%d)", selectedAction, count)).Label(selectedAction).
-					Disabled(!app.writable || app.readTask != nil).Clicked() {
+					Disabled(!app.changesWritable() || app.readTask != nil).Clicked() {
 					app.stageFiles(staged, false)
 				}
 			}).FillWidth().Padding(4, 12).Label(locales.SectionBatchActions(label))

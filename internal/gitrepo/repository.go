@@ -45,7 +45,10 @@ type Snapshot struct {
 	Unborn    bool      `json:"unborn"`
 	Files     []File    `json:"files"`
 
-	LinkedWorktree bool `json:"-"`
+	LinkedWorktree bool   `json:"-"`
+	SSHWritable    bool   `json:"-"`
+	SSHRemote      string `json:"-"`
+	SSHRemoteRef   string `json:"-"`
 }
 
 type Branch struct {

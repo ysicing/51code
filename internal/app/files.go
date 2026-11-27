@@ -269,7 +269,7 @@ func (app *nativeApp) changeFileCheckbox(c *ui.Context, file gitrepo.File, stage
 	}
 	key := nativeSelectionKey(staged, file.Path)
 	checked := app.selectedFiles[key]
-	if ui.Checkbox(c, &checked, "").Label(label).Disabled(file.Conflict || !app.writable || app.readTask != nil).Changed() {
+	if ui.Checkbox(c, &checked, "").Label(label).Disabled(file.Conflict || !app.changesWritable() || app.readTask != nil).Changed() {
 		if checked {
 			app.selectedFiles[key] = true
 		} else {
@@ -313,13 +313,11 @@ func (app *nativeApp) changeFileSelected(file gitrepo.File, staged bool) bool {
 // changeFileRow 构建平面列表中的文件行。
 func (app *nativeApp) changeFileRow(c *ui.Context, file gitrepo.File, staged bool) {
 	ui.Row(c).Key("file:" + nativeSelectionKey(staged, file.Path)).FillWidth().Gap(2).AlignItems(ui.Center).Children(func() {
-		if app.ssh == nil {
-			app.changeFileCheckbox(c, file, staged)
-		}
+		app.changeFileCheckbox(c, file, staged)
 		selected := app.changeFileSelected(file, staged)
 		row := listRow(c, file.Path, selected)
 		app.changeFileContent(c, row, file, staged, file.Path, c.Theme())
-		if app.ssh == nil && row.DoubleClicked() && app.prefs.DoubleClickStage {
+		if row.DoubleClicked() && app.prefs.DoubleClickStage {
 			app.stageDoubleClickedFile(file, staged)
 		} else if row.Clicked() && (!selected || app.readTask != nil || app.problem != "") {
 			app.chooseChangeFile(file, staged)
@@ -376,9 +374,7 @@ func (app *nativeApp) changesFileTree(c *ui.Context, outline *nativeFileOutline,
 			}
 			file := *node.file
 			ui.Row(c).FillWidth().PaddingStart(float32(node.depth) * 16).Gap(2).AlignItems(ui.Center).Children(func() {
-				if app.ssh == nil {
-					ui.Themed(c, &theme).Shrink(0).Children(func() { app.changeFileCheckbox(c, file, staged) })
-				}
+				ui.Themed(c, &theme).Shrink(0).Children(func() { app.changeFileCheckbox(c, file, staged) })
 				row := ui.Row(c).Radius(5)
 				if active {
 					row.Background(theme.Accent.Alpha(0.12))
@@ -386,7 +382,7 @@ func (app *nativeApp) changesFileTree(c *ui.Context, outline *nativeFileOutline,
 					row.Background(theme.SurfaceHover)
 				}
 				app.changeFileContent(c, row, file, staged, filepath.Base(file.Path), &theme)
-				if app.ssh == nil && row.RowDoubleClicked() && app.prefs.DoubleClickStage {
+				if row.RowDoubleClicked() && app.prefs.DoubleClickStage {
 					handled = true
 					app.stageDoubleClickedFile(file, staged)
 				} else if row.RowClicked() {
